@@ -42,5 +42,5 @@ The principle is explicitly requested; team acceptance and implementation feasib
 
 ## Supporting material
 
-- [Administrator discovery authorization](../../api/src/umbod/mcp/administrator/authorization.py) and [filesystem discovery authorization](../../api/src/umbod/mcp/filesystem/authorization.py): investigated visibility checks.
+- [Administrator discovery authorization](../../api/src/umbod/mcp/administrator/authorization.py) and [filesystem discovery authorization](../../api/src/umbod/mcp/filesystem/discovery/authorization.py): investigated visibility checks.
 - [ADR-008: Event-Synchronized In-Memory Tool Runtime](ADR-008-event-synchronized-tool-runtime.md): discovery lifetime, caller isolation, and execution authority.

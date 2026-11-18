@@ -54,9 +54,9 @@ def test_rest_app_composes_one_shared_metrics_recorder_and_server(
         return server
 
     monkeypatch.setattr(
-        "umbod.rest.main.PrometheusRestMetricsRecorder", create_recorder
+        "umbod.rest.main.create_rest_metrics_recorder", create_recorder
     )
-    monkeypatch.setattr("umbod.rest.main.RestMetricsHttpServer", create_server)
+    monkeypatch.setattr("umbod.rest.main.create_rest_metrics_http_server", create_server)
     settings = APISettings(admin_authentication={"mode": "simulation"})
     app = create_app(settings=settings, connector_registrations=[])
     metrics_middleware = next(
@@ -82,7 +82,7 @@ def test_rest_metrics_server_starts_and_stops_once(
     def create_server(recorder: object, port: int) -> RecordingMetricsServer:
         return server
 
-    monkeypatch.setattr("umbod.rest.main.RestMetricsHttpServer", create_server)
+    monkeypatch.setattr("umbod.rest.main.create_rest_metrics_http_server", create_server)
     app = create_app(settings=settings, connector_registrations=[])
     with TestClient(app) as client:
         assert isinstance(
@@ -102,7 +102,7 @@ def test_rest_metrics_server_is_cleaned_up_when_startup_fails(
     def create_server(recorder: object, port: int) -> RecordingMetricsServer:
         return server
 
-    monkeypatch.setattr("umbod.rest.main.RestMetricsHttpServer", create_server)
+    monkeypatch.setattr("umbod.rest.main.create_rest_metrics_http_server", create_server)
     app = create_app(settings=settings, connector_registrations=[])
     with pytest.raises(RuntimeError, match="startup failed"):
         with TestClient(app):
@@ -114,7 +114,7 @@ def test_rest_metrics_server_is_cleaned_up_when_startup_fails(
 def test_metrics_are_absent_from_rest_traffic_app(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("umbod.rest.main.RestMetricsHttpServer", RecordingMetricsServer)
+    monkeypatch.setattr("umbod.rest.main.create_rest_metrics_http_server", RecordingMetricsServer)
     app = create_app(
         settings=APISettings(admin_authentication={"mode": "simulation"}),
         connector_registrations=[],
@@ -126,7 +126,7 @@ def test_metrics_are_absent_from_rest_traffic_app(
 def test_admin_metrics_middleware_wraps_authentication(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("umbod.rest.main.RestMetricsHttpServer", RecordingMetricsServer)
+    monkeypatch.setattr("umbod.rest.main.create_rest_metrics_http_server", RecordingMetricsServer)
     app = create_app(
         settings=APISettings(admin_authentication={"mode": "simulation"}),
         connector_registrations=[],
@@ -157,7 +157,7 @@ def test_embedded_host_can_disable_metrics_without_changing_server_constructor(m
         servers.append(server)
         return server
 
-    monkeypatch.setattr('umbod.rest.main.RestMetricsHttpServer', create_server)
+    monkeypatch.setattr('umbod.rest.main.create_rest_metrics_http_server', create_server)
     settings = APISettings(admin_authentication={'mode': 'simulation'}, connector_store={'type': 'inmemory'}, rest={'metrics_enabled': False})
     with TestClient(create_app(settings=settings, connector_registrations=[])) as client:
         assert client.get('/api/system/health').status_code == 200

@@ -12,7 +12,7 @@ from umbod.core.persistence import Database
 from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_DEFINITION_TABLE, ConnectorDefinitionStoreService, EncryptedCredentialStoreService, TOOL_CATALOG_TABLE, ToolCatalogStoreService
 from tests.persistence_runtime import create_inmemory_runtime
 from tests.mcp_fixtures import build_test_mcp
-from umbod.mcp.signals.capabilities import McpCapabilityCompleted
+from umbod.mcp.signals import McpCapabilityCompleted
 import asyncio
 import json
 from dataclasses import dataclass
@@ -34,7 +34,8 @@ from umbod.mcp.logging import McpAuditEvent, McpAuditRecorder
 from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder, McpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
+from umbod.mcp.metrics import McpMetricsRecorder
 from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
 from fastmcp import Client, FastMCP
 from fastmcp.tools import InputRequiredToolResult, ToolResult

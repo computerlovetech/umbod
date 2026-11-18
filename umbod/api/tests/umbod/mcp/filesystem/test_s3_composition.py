@@ -11,9 +11,9 @@ from umbod.infrastructure import (
 )
 from umbod.mcp import public_app
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory
-from umbod.mcp.filesystem.caller import CurrentFilesystemCallerCapture
-from umbod.mcp.filesystem.authorization import FilesystemToolVisibility
-from umbod.mcp.filesystem.ports import FilesystemDeletionApproval
+from umbod.mcp.filesystem import CurrentFilesystemCallerCapture
+from umbod.mcp.filesystem.discovery import FilesystemToolVisibility
+from umbod.mcp.filesystem.deletion import FilesystemDeletionApproval
 from umbod.mcp.tools import McpObservedToolRegistrar
 
 

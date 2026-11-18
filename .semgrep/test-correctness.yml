@@ -21,10 +21,10 @@ rules:
         - target: fastmcp.server.auth.oidc_proxy.httpx2.get
           replacement: return_value
           reason: Isolates upstream OIDC discovery HTTP without replacing Umbod authentication behavior.
-        - target: umbod.rest.metrics.http_server.Server
+        - target: umbod.infrastructure.metrics.rest.http_server.Server
           replacements: [FailingServer, CapturingServer, RestartableServer]
           reason: Deterministic Uvicorn failure, configuration capture, and lifecycle simulation.
-        - target: umbod.rest.metrics.http_server.Config
+        - target: umbod.infrastructure.metrics.rest.http_server.Config
           replacement: CapturingConfig
           reason: Records Uvicorn bind configuration while preserving the real metrics lifecycle wrapper.
     patterns:
@@ -62,10 +62,10 @@ rules:
                   metavariable: $FIXTURE
                   regex: '^(mocker|session_mocker|module_mocker|class_mocker|package_mocker)$'
       - pattern-not: unittest.mock.patch("fastmcp.server.auth.oidc_proxy.httpx2.get", return_value=$RESPONSE)
-      - pattern-not: unittest.mock.patch("umbod.rest.metrics.http_server.Server", FailingServer)
-      - pattern-not: unittest.mock.patch("umbod.rest.metrics.http_server.Server", CapturingServer)
-      - pattern-not: unittest.mock.patch("umbod.rest.metrics.http_server.Server", RestartableServer)
-      - pattern-not: unittest.mock.patch("umbod.rest.metrics.http_server.Config", CapturingConfig)
+      - pattern-not: unittest.mock.patch("umbod.infrastructure.metrics.rest.http_server.Server", FailingServer)
+      - pattern-not: unittest.mock.patch("umbod.infrastructure.metrics.rest.http_server.Server", CapturingServer)
+      - pattern-not: unittest.mock.patch("umbod.infrastructure.metrics.rest.http_server.Server", RestartableServer)
+      - pattern-not: unittest.mock.patch("umbod.infrastructure.metrics.rest.http_server.Config", CapturingConfig)
 
   - id: python.tests.review-private-monkeypatch
     languages: [python]

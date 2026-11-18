@@ -34,7 +34,7 @@ from umbod.mcp.connectors.native.tools.invocation.errors import (
 )
 from umbod.mcp.connectors.native.tools.invocation.runner import ConnectorToolInvocationRunner
 from umbod.mcp.connectors.native.tools.invocation.ports import NativeToolExecutionAdmission
-from umbod.mcp.signals.execution import ConnectorInvocationSignalInterceptor
+from umbod.mcp.signals import ConnectorInvocationSignalInterceptor
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.metrics import (
     CompletedToolInvocation,
@@ -48,6 +48,7 @@ from umbod.mcp.logging import (
     McpAuditRecorder,
 )
 from umbod.mcp.signals import (
+    McpInvocationPublisher,
     McpToolInvocationFailureCategory,
     McpToolInvocationOutcome,
 )
@@ -132,11 +133,14 @@ def _runner(
     application_failures = create_application_failure_signal()
     telemetry = ConnectorInvocationSignalInterceptor(
         connector_name=options.connector_name,
-        signals=create_mcp_signals(
-            invocation_log_sink,
-            options.metrics_recorder or RecordingMetricsRecorder(),
-            McpAuditRecorder(audit_sink, "test", application_failures=application_failures),
-         application_failures=application_failures),
+        publisher=McpInvocationPublisher(
+            create_mcp_signals(
+                invocation_log_sink,
+                options.metrics_recorder or RecordingMetricsRecorder(),
+                McpAuditRecorder(audit_sink, "test", application_failures=application_failures),
+                application_failures=application_failures,
+            ),
+        ),
         result_is_error=lambda result: False,
     )
     return ConnectorToolInvocationRunner(
@@ -390,9 +394,12 @@ async def test_result_predicate_failure_preserves_result_and_records_failure() -
 
     telemetry = ConnectorInvocationSignalInterceptor(
         connector_name="Slack",
-        signals=create_mcp_signals(
-            invocation_sink, metrics, McpAuditRecorder(RecordingAuditSink(), "test", application_failures=application_failures)
-        , application_failures=application_failures),
+        publisher=McpInvocationPublisher(
+            create_mcp_signals(
+                invocation_sink, metrics, McpAuditRecorder(RecordingAuditSink(), "test", application_failures=application_failures),
+                application_failures=application_failures,
+            ),
+        ),
         result_is_error=failing_predicate,
     )
     invoker = ConnectorToolInvocationRunner(
@@ -454,9 +461,12 @@ async def test_native_operation_exception_preserves_identity_and_safe_connector_
 
     telemetry = ConnectorInvocationSignalInterceptor(
         connector_name="Slack",
-        signals=create_mcp_signals(
-            invocation_sink, metrics, McpAuditRecorder(RecordingAuditSink(), "test", application_failures=application_failures)
-        , application_failures=application_failures),
+        publisher=McpInvocationPublisher(
+            create_mcp_signals(
+                invocation_sink, metrics, McpAuditRecorder(RecordingAuditSink(), "test", application_failures=application_failures),
+                application_failures=application_failures,
+            ),
+        ),
         result_is_error=lambda result: False,
     )
     invoker = ConnectorToolInvocationRunner(
@@ -525,9 +535,12 @@ async def test_returned_failure_evidence_has_only_supported_origin(
     metrics = RecordingMetricsRecorder()
     telemetry = ConnectorInvocationSignalInterceptor(
         connector_name="Service",
-        signals=create_mcp_signals(
-            invocation_sink, metrics, McpAuditRecorder(RecordingAuditSink(), "test", application_failures=application_failures)
-        , application_failures=application_failures),
+        publisher=McpInvocationPublisher(
+            create_mcp_signals(
+                invocation_sink, metrics, McpAuditRecorder(RecordingAuditSink(), "test", application_failures=application_failures),
+                application_failures=application_failures,
+            ),
+        ),
         result_is_error=lambda result: True,
     )
     returned = ToolResult(content=[], is_error=True)

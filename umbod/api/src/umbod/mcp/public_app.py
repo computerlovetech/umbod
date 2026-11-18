@@ -93,12 +93,20 @@ from umbod.mcp.signals import McpInvocationPublisher, McpSignals, McpToolExecuti
 from umbod.mcp.connectors.downstream_mcp.inventory import shared_tool_inventory
 from umbod.mcp.middleware import McpAuditMiddleware, McpResponseMetadataMiddleware
 from umbod.mcp.middleware.protocol_metrics import McpProtocolMetricsMiddleware
-from umbod.mcp.filesystem.approval import McpFilesystemDeletionApproval
 from umbod.config.identity_policy import filesystem_managed_issuer
-from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory, RuntimeFilesystemGroupClaimFields, StaticFilesystemGroupClaimFields, register_filesystem_resources, register_filesystem_tools
+from umbod.mcp.filesystem import (
+    CurrentFilesystemCallerCapture,
+    DatabaseFilesystemServiceFactory,
+    FilesystemDiscoveryRuntime,
+    FilesystemToolVisibility,
+    FilesystemVisibilityMiddleware,
+    McpFilesystemDeletionApproval,
+    RuntimeFilesystemGroupClaimFields,
+    StaticFilesystemGroupClaimFields,
+    register_filesystem_resources,
+    register_filesystem_tools,
+)
 from umbod.core.filesystem.stores.discovery import DatabaseFilesystemAuthorizationReader
-from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
-from umbod.mcp.filesystem.runtime import FilesystemDiscoveryRuntime
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.core.persistence import Database, PersistenceRuntime
 from umbod.core.connectors.downstream_mcp.adapters.settings import (

@@ -15,8 +15,8 @@ from umbod.config import AppConfig
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem import AccessGrant, ByteStream, Permission, Principal, PrincipalType
 from umbod.infrastructure import LocalContentConfig, create_content_driver, create_access_control_driver
-from umbod.mcp.filesystem.factory import DatabaseFilesystemServiceFactory
-from umbod.mcp.filesystem.upload_sessions import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
+from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory
+from umbod.mcp.filesystem.uploads import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
 from umbod.rest.main import create_app
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories

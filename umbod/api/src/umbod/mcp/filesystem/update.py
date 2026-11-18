@@ -11,10 +11,10 @@ from .argument_errors import argument_json
 from umbod.mcp.responses.progress import operation_completed
 
 from .errors import filesystem_operation
-from .links import file_link_result
-from .models import FilesystemNodeSummary
+from .nodes.links import file_link_result
+from .nodes.models import FilesystemNodeSummary
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
-from .sharing import enrich_projected_nodes
+from .nodes.enrichment import enrich_projected_nodes
 
 
 class UpdateNodeCommand(NodeChanges):

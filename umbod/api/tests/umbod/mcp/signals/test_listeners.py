@@ -6,7 +6,8 @@ from tests.support.signals import InMemorySignalFailureHandler
 from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals, register_mcp_listeners
 from umbod.mcp.logging import McpAuditRecorder, McpToolInvocationLogSink
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder, InvocationScope, McpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
+from umbod.mcp.metrics import InvocationScope, McpMetricsRecorder
 from umbod.mcp.signals import McpInvocationPublisher, McpSignals, McpToolIdentity, McpToolInvocationCompleted, ToolInventoryObserved
 
 

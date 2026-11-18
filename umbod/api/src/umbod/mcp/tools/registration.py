@@ -35,7 +35,7 @@ from umbod.core.invocation.failure_evidence import (
     exception_evidence,
 )
 from umbod.mcp.tools.errors import BuiltinToolRejected, ToolAuthorizationDenied, ToolResponseContractError
-from umbod.mcp.signals import McpInvocationPublisher
+from umbod.mcp.signals import McpInvocationPublisher, McpInvocationPublishing
 from umbod.mcp.signals.lifecycle import UnavailableToolInvocationLifecycle
 from umbod.mcp.signals.events import McpToolIdentity, McpToolInvocationFailureCategory
 
@@ -64,13 +64,13 @@ class ObservedToolOptions(ToolResponseOptions, total=False):
 
 class ObservedFunctionTool(Tool):
     _delegate: Tool = PrivateAttr()
-    _publisher: McpInvocationPublisher = PrivateAttr()
+    _publisher: McpInvocationPublishing = PrivateAttr()
     _result_is_error: Callable[[ToolResult], bool] = PrivateAttr()
     _operation_names: frozenset[str] = PrivateAttr()
     _response_adapter: ToolResponseAdapter = PrivateAttr()
 
     def __init__(
-        self, delegate: Tool, publisher: McpInvocationPublisher,
+        self, delegate: Tool, publisher: McpInvocationPublishing,
         result_is_error: Callable[[ToolResult], bool],
         operation_names: frozenset[str], response_adapter: ToolResponseAdapter,
     ) -> None:

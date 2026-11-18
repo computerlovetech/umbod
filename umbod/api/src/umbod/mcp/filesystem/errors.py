@@ -10,7 +10,7 @@ from umbod.mcp.tools.errors import (
     BuiltinToolApprovalDenied, BuiltinToolAuthorizationDenied, BuiltinToolError, BuiltinToolRejected,
 )
 
-from .approval_state import FileDeletionApprovalDenied
+from .deletion.approval_state import FileDeletionApprovalDenied
 
 from umbod.core.filesystem.authorization.errors import PermissionDenied
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable

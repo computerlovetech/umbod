@@ -17,8 +17,8 @@ from umbod.hosting.shutdown import ProcessShutdownDeadline
 from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider, create_configured_analytics_runtime
 from umbod.logging import configure_logging
 from umbod.rest.main import create_app_with_shared_persistence
-from umbod.rest.metrics import PrometheusRestMetricsRecorder
-from umbod.rest.telemetry.application import create_receiver_app_with_registry
+from umbod.infrastructure.metrics.rest.composition import create_rest_metrics_recorder
+from umbod.infrastructure.metrics.collector.composition import create_receiver_app_with_registry
 from umbod.rest.telemetry.token_authentication import install_telemetry_token_verifier
 
 
@@ -61,7 +61,7 @@ async def serve_api(
             await persistence.readiness.ensure_ready()
         if shutdown_requested.is_set():
             return
-        metrics_recorder = PrometheusRestMetricsRecorder()
+        metrics_recorder = create_rest_metrics_recorder()
         api = create_app_with_shared_persistence(
             persistence, runtime, metrics_recorder, settings=settings,
         )

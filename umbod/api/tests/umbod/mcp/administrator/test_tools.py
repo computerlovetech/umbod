@@ -16,7 +16,7 @@ from umbod.core.administrator.connector_configuration import (
     UpsertConnectorConfiguration,
 )
 from umbod.core.responses import OperationState
-from umbod.mcp.administrator.tools import AdministratorConnectorConfigurationTools
+from umbod.mcp.administrator.connector_configuration import AdministratorConnectorConfigurationTools
 from umbod.mcp.responses.progress import operation_progress_context
 from umbod.mcp.tools.errors import BuiltinToolError
 

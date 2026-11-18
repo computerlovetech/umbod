@@ -9,20 +9,21 @@ from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.tools.registration import tool_result_is_error
 
 from .argument_errors import FilesystemArgumentErrorsTool
-from .authorization import FilesystemToolVisibility
-from .browsing import FilesystemBrowseTool
-from .deletion import FilesystemDeleteFileTool
+from .discovery.authorization import FilesystemToolVisibility
+from .browsing.tool import FilesystemBrowseTool
+from .deletion.tool import FilesystemDeleteFileTool
 from umbod.mcp.responses.progress import operation_completed
 
 from .errors import filesystem_operation
-from .links import file_link_result
-from .models import FilesystemChildren, FilesystemNodeMetadata, FilesystemNodeSummary
-from .ports import FilesystemCallerCapture, FilesystemDeletionApproval, FilesystemServiceFactory
-from .sharing import enrich_nodes
-from .sharing_tools import FilesystemSearchSharingRecipientsTool, FilesystemShareTool
+from .nodes.links import file_link_result
+from .nodes.models import FilesystemChildren, FilesystemNodeMetadata, FilesystemNodeSummary
+from .ports import FilesystemCallerCapture, FilesystemServiceFactory
+from .deletion.ports import FilesystemDeletionApproval
+from .nodes.enrichment import enrich_nodes
+from .sharing.tools import FilesystemSearchSharingRecipientsTool, FilesystemShareTool
 from .update import FilesystemUpdateNodeTool
-from .upload import FilesystemUploadTool
-from .upload_sessions import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
+from .uploads.one_shot import FilesystemUploadTool
+from .uploads.sessions import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
 
 
 def register_filesystem_tools(

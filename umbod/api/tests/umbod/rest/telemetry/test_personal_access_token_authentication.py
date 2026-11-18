@@ -28,7 +28,7 @@ from umbod.core.personal_access_tokens.access import (
     TELEMETRY_INGEST_SCOPE,
     TELEMETRY_TOKEN_AUDIENCE,
 )
-from umbod.rest.telemetry import install_telemetry_receiver
+from umbod.infrastructure.metrics.collector import install_telemetry_receiver
 from umbod.rest.telemetry.dependencies import get_receiver_config, get_telemetry_sink
 from umbod.rest.telemetry.token_authentication import install_telemetry_token_verifier
 from fastapi import FastAPI

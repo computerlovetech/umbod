@@ -34,7 +34,7 @@ from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDisco
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import PersonalDiscoveryMiddleware, PersonalToolReservationMiddleware, personal_tool_permission_check
 from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
 from umbod.mcp.connectors.native.tools import RuntimeConnectorToolRegistry, register_connector_tools
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 
 __all__ = ["runtime_case"]

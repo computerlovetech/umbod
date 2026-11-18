@@ -1,4 +1,21 @@
 rules:
+  - id: python.metrics.infrastructure-only-prometheus
+    languages: [python]
+    severity: ERROR
+    message: Keep Prometheus imports in infrastructure adapters; application metrics depend on recording ports.
+    paths:
+      include:
+        - '**/api/src/umbod/**'
+      exclude:
+        - '**/api/src/umbod/infrastructure/**'
+    patterns:
+      - pattern-either:
+          - pattern: import $MODULE
+          - pattern: from $MODULE import $NAME
+      - metavariable-regex:
+          metavariable: $MODULE
+          regex: '^prometheus_client(?:\.|$)'
+
   - id: python.diagnostics.publish-side-effects
     languages: [python]
     severity: ERROR

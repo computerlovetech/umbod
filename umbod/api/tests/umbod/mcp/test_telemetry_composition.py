@@ -2,9 +2,10 @@ import httpx
 import pytest
 
 from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, InvocationScope
-from umbod.mcp.metrics.http_server import create_metrics_app
+from umbod.infrastructure.metrics.mcp import create_metrics_app
 from umbod.mcp.settings import MCPAppSettings
-from umbod.mcp.telemetry.composition import ConfiguredMcpMetricsServerFactory, create_configured_mcp_telemetry
+from umbod.infrastructure.metrics.mcp import ConfiguredMcpMetricsServerFactory
+from umbod.mcp.telemetry import create_configured_mcp_telemetry
 
 
 @pytest.mark.asyncio

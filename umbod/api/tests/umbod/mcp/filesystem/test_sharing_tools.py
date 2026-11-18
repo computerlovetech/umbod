@@ -23,8 +23,8 @@ from umbod.core.identity_directory.store import DatabaseIdentityDirectory
 from umbod.core.identity_directory.user_models import ScopedUserSearch
 from umbod.infrastructure import create_access_control_driver
 from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
-from umbod.mcp.filesystem.sharing_tools import FilesystemSearchSharingRecipientsTool, FilesystemShareTool
-from umbod.mcp.filesystem.ports import FilesystemCallerCapture, FilesystemServiceFactory
+from umbod.mcp.filesystem.sharing import FilesystemSearchSharingRecipientsTool, FilesystemShareTool
+from umbod.mcp.filesystem import FilesystemCallerCapture, FilesystemServiceFactory
 
 from .conftest import FilesystemMcp, caller_snapshot
 from .test_browsing import create_node

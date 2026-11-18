@@ -5,8 +5,8 @@ import pytest
 
 from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages
 from umbod.core.filesystem.authorization import FilesystemAuthorizationReader, FilesystemOperation
-from umbod.mcp.filesystem.authorization import FilesystemToolVisibility
-from umbod.mcp.filesystem.runtime import FilesystemDiscoveryRuntime
+from umbod.mcp.filesystem.discovery import FilesystemToolVisibility
+from umbod.mcp.filesystem.discovery import FilesystemDiscoveryRuntime
 from umbod.mcp.messaging import RuntimeProjectionHealth, RuntimeProjectionSynchronizer
 from umbod.mcp.messaging.transport import DatabaseProjectionEventReader
 

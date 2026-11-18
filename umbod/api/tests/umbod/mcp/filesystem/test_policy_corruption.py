@@ -8,7 +8,7 @@ from umbod.core.filesystem import AccessGrant, NodeKind, NodeMetadata, Ownership
 from umbod.core.filesystem.models import UnspecifiedContentType
 from umbod.core.filesystem.namespace import ROOT_ID
 from umbod.infrastructure import create_filesystem_transactions
-from umbod.mcp.filesystem.links import file_resource_uri
+from umbod.mcp.filesystem.nodes import file_resource_uri
 
 from .conftest import FilesystemState, create_filesystem_server
 from .test_visibility import select_caller

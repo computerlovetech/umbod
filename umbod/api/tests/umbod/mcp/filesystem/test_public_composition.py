@@ -12,7 +12,7 @@ from umbod.core.filesystem.deletion import FilesystemDeletion
 from umbod.core.filesystem.sharing import FilesystemSharing
 from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory
 from umbod.core.filesystem.authorization.discovery import FilesystemOperation
-from umbod.mcp.filesystem.authorization import FilesystemToolVisibility
+from umbod.mcp.filesystem.discovery import FilesystemToolVisibility
 
 
 @pytest.mark.asyncio

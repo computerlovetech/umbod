@@ -13,7 +13,7 @@ from umbod.core.filesystem.uploads.errors import (
 )
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.responses import OperationState, RetryAdvice
-from umbod.mcp.filesystem.approval_state import FileDeletionApprovalDenied
+from umbod.mcp.filesystem.deletion import FileDeletionApprovalDenied
 from umbod.mcp.filesystem.errors import (
     InvalidReadEncoding, ReadTooLarge, filesystem_operation, filesystem_preflight, filesystem_resource_operation,
 )

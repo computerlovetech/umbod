@@ -10,11 +10,9 @@ from prometheus_client.samples import Sample
 
 from umbod.logging import create_application_failure_signal
 from umbod.rest.factories import SubApiAppFactory
-from umbod.rest.metrics import (
-    AdminRestMetricsMiddleware,
-    PrometheusRestMetricsRecorder,
-    create_rest_metrics_app,
-)
+from umbod.rest.metrics import AdminRestMetricsMiddleware
+from umbod.infrastructure.metrics.rest import PrometheusRestMetricsRecorder
+from umbod.infrastructure.metrics.rest import create_rest_metrics_app
 
 
 @pytest.fixture(params=[0, 1, 2], ids=["leaf-router", "included-router", "nested-included-router"])

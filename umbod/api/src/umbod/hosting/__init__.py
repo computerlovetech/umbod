@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from umbod.hosting.applications import create_mcp_app, create_rest_app
     from umbod.config.telemetry import TelemetryAppConfig
-    from umbod.rest.telemetry.application import create_telemetry_app
+    from umbod.infrastructure.metrics.collector.composition import create_telemetry_app
     from umbod.hosting.contracts import (
         AccessToken,
         AppConfig,
@@ -53,7 +53,7 @@ _EXPORTS: dict[str, str] = {
     "OAuthService": ".contracts",
     "TokenVerifier": ".contracts",
     "TelemetryAppConfig": "umbod.config.telemetry",
-    "create_telemetry_app": "umbod.rest.telemetry.application",
+    "create_telemetry_app": "umbod.infrastructure.metrics.collector.composition",
     "create_mcp_app": ".applications",
     "create_rest_app": ".applications",
 }

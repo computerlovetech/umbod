@@ -23,13 +23,13 @@ from umbod.core.callers import (
 )
 from umbod.core.filesystem.browsing import NodeSummary
 from umbod.core.filesystem.models import NodeKind, NodeMetadata, RootParent
-from umbod.mcp.filesystem.approval import McpFilesystemDeletionApproval
-from umbod.mcp.filesystem.approval_state import (
+from umbod.mcp.filesystem.deletion import McpFilesystemDeletionApproval
+from umbod.mcp.filesystem.deletion import (
     FileDeletionApprovalDenied,
     FileDeletionApprovalStateCodec,
 )
-from umbod.mcp.filesystem.models import DeleteFileCommand, FileDeletionConfirmation
-from umbod.mcp.filesystem.ports import FileDeletionApproval
+from umbod.mcp.filesystem.deletion import DeleteFileCommand, FileDeletionConfirmation
+from umbod.mcp.filesystem.deletion import FileDeletionApproval
 
 
 class ApprovalContext(Context):

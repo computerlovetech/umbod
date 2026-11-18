@@ -13,7 +13,7 @@ from umbod.core.connectors.openapi.stores.factories import ConfiguredOpenApiConn
 from umbod.core.invocation import DatabaseConnectorInvocationPolicyStore
 from umbod.core.permissions.factories import create_group_permission_store
 from umbod.core.persistence import PersistenceRuntime
-from umbod.mcp.administrator.catalog import AdministratorConfigurationCatalog
+from umbod.mcp.administrator.connector_configuration.catalog import AdministratorConfigurationCatalog
 from umbod.mcp.administrator.connector_configuration import register_administrator_connector_configuration_tools
 from umbod.mcp.settings import MCPAppSettings
 from umbod.mcp.tools import McpObservedToolRegistrar

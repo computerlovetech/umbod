@@ -84,7 +84,7 @@ from umbod.mcp.live_permission_updates import (
     GroupPermissionStateReloader,
 )
 from umbod.mcp.messaging import RuntimeProjectionHealth, RuntimeProjectionSynchronizer
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 
 __all__ = ["runtime_case"]

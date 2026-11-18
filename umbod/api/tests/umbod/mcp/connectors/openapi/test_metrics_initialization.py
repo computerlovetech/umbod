@@ -9,7 +9,8 @@ from umbod.core.connectors.openapi.stores import OpenApiConnectorReader
 from umbod.logging import OpenTelemetryJsonFormatter
 from umbod.mcp.connectors.openapi.inventory import read_openapi_tool_inventory
 from tests.umbod.mcp.connectors.downstream_mcp.signal_support import invocation_signals
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder, McpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
+from umbod.mcp.metrics import McpMetricsRecorder
 
 
 @pytest.fixture

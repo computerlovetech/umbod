@@ -43,7 +43,7 @@ from umbod.core.permissions.stores.schema import (
     CONNECTOR_PERMISSION_TABLE,
 )
 from umbod.core.permissions.stores.service import GroupPermissionStoreService
-from umbod.mcp.administrator.tools import AdministratorConnectorConfigurationTools
+from umbod.mcp.administrator.connector_configuration import AdministratorConnectorConfigurationTools
 
 ConnectorKind = Literal["native", "openapi", "downstream_mcp"]
 

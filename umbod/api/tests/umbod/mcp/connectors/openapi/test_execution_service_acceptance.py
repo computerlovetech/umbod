@@ -29,12 +29,12 @@ from umbod.core.invocation.tools.execution import (
     ToolExecutionRequest,
     ToolExecutionFailed,
 )
-from umbod.mcp.signals import ConnectorInvocationSignalInterceptor
+from umbod.mcp.signals import ConnectorInvocationSignalInterceptor, McpInvocationPublisher
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.logging import McpAuditRecorder
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 from tests.umbod.core.connectors.openapi.test_openapi_http_adapters import (
     FakeStreamResponse,
     RaisingAsyncHttpClient,
@@ -455,7 +455,7 @@ async def test_openapi_failure_evidence_preserves_origin_and_one_safe_completion
     audit_sink = RecordingAuditSink()
     signals = create_mcp_signals(sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, "test", application_failures=application_failures), application_failures=application_failures)
     recorder = FailureEvidenceRecorder()
-    observer = ConnectorInvocationSignalInterceptor("Inventory", signals, lambda result: False)
+    observer = ConnectorInvocationSignalInterceptor("Inventory", McpInvocationPublisher(signals), lambda result: False)
     transport: OutboundOperationTransport = RecordingTransport(events)
     authenticator: OpenApiRequestAuthenticator = CanaryAuthenticator("private-bearer-canary")
     normalizer: OpenApiResponseNormalizer = RecordingNormalizer(events)
@@ -550,7 +550,7 @@ async def test_openapi_http_error_status_is_a_successful_completion_without_fail
     audit_sink = RecordingAuditSink()
     signals = create_mcp_signals(sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, "test", application_failures=application_failures), application_failures=application_failures)
     recorder = FailureEvidenceRecorder()
-    observer = ConnectorInvocationSignalInterceptor("Inventory", signals, lambda result: False)
+    observer = ConnectorInvocationSignalInterceptor("Inventory", McpInvocationPublisher(signals), lambda result: False)
     service = OpenApiCapabilityExecutionService(
         store, RecordingAuthorizer(events, True), AggregateOpenApiOperationResolver(),
         RecordingCompiler(events),

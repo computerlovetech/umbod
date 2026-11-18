@@ -28,7 +28,7 @@ from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryRuntime, DownstreamDiscoveryStores, create_downstream_discovery_runtime
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 from umbod.core.callers import AuthenticationProvenance, CallerContext, UnavailableSubject
 from umbod.core.invocation import ConnectorInvocation, ConnectorInvocationPolicy, PermitAllConnectorInvocationPolicy

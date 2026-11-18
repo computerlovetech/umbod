@@ -19,7 +19,7 @@ from importlib import import_module
 from typing import Any
 
 __all__ = [
-    "McpSignals", "McpInvocationPublisher", "McpInvocationContext",
+    "McpSignals", "McpInvocationPublisher", "McpInvocationPublishing", "McpInvocationContext",
     "McpCapabilityCompleted", "McpCapabilityMethod", "McpCapabilityOutcome",
     "McpToolExecutionPipelineFactory", "SignalToolExecutionPipelineFactory", "ConnectorInvocationSignalInterceptor",
     "current_mcp_invocation_context", "reset_mcp_invocation_context", "set_mcp_invocation_context",
@@ -34,6 +34,7 @@ __all__ = [
 def __getattr__(name: str) -> Any:
     modules = {
         "McpInvocationPublisher": ".publisher",
+        "McpInvocationPublishing": ".ports",
         "McpToolExecutionPipelineFactory": ".execution",
         "SignalToolExecutionPipelineFactory": ".execution",
         "ConnectorInvocationSignalInterceptor": ".execution",

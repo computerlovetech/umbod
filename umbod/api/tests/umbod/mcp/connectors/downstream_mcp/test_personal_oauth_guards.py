@@ -52,7 +52,7 @@ from umbod.mcp.connectors.downstream_mcp.discovery_execution import (
     ConnectorDiscoveryExecutionDependencies,
     ConnectorDiscoveryExecutor,
 )
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 
 
 class RejectingDownstreamFactory:

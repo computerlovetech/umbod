@@ -29,9 +29,9 @@ from tests.support.telemetry_runtime import InMemoryTelemetryAnalyticsRuntime
 from umbod.core.persistence import PersistenceRuntime
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError
 from umbod.rest.main import create_app_with_shared_metrics
-from umbod.rest.metrics import PrometheusRestMetricsRecorder
-from umbod.rest.metrics.http_server import create_rest_metrics_app
-from umbod.rest.telemetry.application import create_receiver_app_with_registry
+from umbod.infrastructure.metrics.rest import PrometheusRestMetricsRecorder
+from umbod.infrastructure.metrics.rest import create_rest_metrics_app
+from umbod.infrastructure.metrics.collector import create_receiver_app_with_registry
 from umbod.rest.telemetry.dependencies import get_analytics_writer, get_telemetry_sink
 
 BASE = "/api/admin/telemetry/log-counts"

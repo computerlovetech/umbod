@@ -18,9 +18,8 @@ from umbod.core.filesystem.deletion import FilesystemDeletion
 from umbod.core.filesystem.browsing import FilesystemBrowsing, NodeSummary
 from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
 from umbod.mcp.filesystem.deletion import FilesystemDeleteFileTool
-from umbod.mcp.filesystem.ports import (
-    FileDeletionApproval, FilesystemCallerCapture, FilesystemDeletionApproval, FilesystemServiceFactory,
-)
+from umbod.mcp.filesystem.deletion import FileDeletionApproval, FilesystemDeletionApproval
+from umbod.mcp.filesystem import FilesystemCallerCapture, FilesystemServiceFactory
 
 from .conftest import FilesystemMcp, caller_snapshot
 from .test_browsing import create_node

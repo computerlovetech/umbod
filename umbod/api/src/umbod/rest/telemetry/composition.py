@@ -1,10 +1,9 @@
 from fastapi import FastAPI
-from prometheus_client import CollectorRegistry
 
 from umbod.core.diagnostics import PublishingSignalFailureHandler
 from umbod.core.signals import Signal, SignalPublisher
 from umbod.logging import create_application_failure_signal
-from umbod.rest.telemetry.metrics import PrometheusCollectorMetrics
+from umbod.rest.telemetry.metrics import CollectorMetricsRecorder
 from umbod.rest.telemetry.middleware import CollectorObservationsMiddleware
 from umbod.rest.telemetry.observations import (
     AcceptedCollectorLogs, CompletedCollectorRequest, get_accepted_logs_publisher,
@@ -29,12 +28,8 @@ from umbod.rest.telemetry.routes import router
 from umbod.rest.telemetry.token_authentication import install_unavailable_telemetry_token_verifier
 
 
-def install_telemetry_receiver(app: FastAPI, config: AppConfig | TelemetryAppConfig) -> None:
-    install_telemetry_receiver_with_registry(app, config, CollectorRegistry())
-
-
-def install_telemetry_receiver_with_registry(
-    app: FastAPI, config: AppConfig | TelemetryAppConfig, registry: CollectorRegistry,
+def install_telemetry_receiver(
+    app: FastAPI, config: AppConfig | TelemetryAppConfig, metrics: CollectorMetricsRecorder,
 ) -> None:
     if config.otlp_receiver.allow_unauthenticated and config.runtime.profile != "local":
         raise ValueError("Unauthenticated telemetry ingestion is only allowed locally")
@@ -42,7 +37,6 @@ def install_telemetry_receiver_with_registry(
     failure_handler = PublishingSignalFailureHandler(create_application_failure_signal())
     completed_requests = Signal[CompletedCollectorRequest](failure_handler)
     accepted_logs = Signal[AcceptedCollectorLogs](failure_handler)
-    metrics = PrometheusCollectorMetrics(registry)
     completed_requests.connect("collector.requests.metrics", metrics.record_request)
     accepted_logs.connect("collector.logs.metrics", metrics.record_logs)
 

@@ -18,8 +18,8 @@ from umbod.core.filesystem.models import StorageKey
 from umbod.core.filesystem.ports import ByteStream
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory, register_filesystem_resources
 from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
-from umbod.mcp.filesystem.links import FILE_RESOURCE_TEMPLATE, file_resource_uri
-from umbod.mcp.filesystem.ports import FilesystemServiceFactory
+from umbod.mcp.filesystem.nodes import FILE_RESOURCE_TEMPLATE, file_resource_uri
+from umbod.mcp.filesystem import FilesystemServiceFactory
 from umbod.mcp.filesystem.resources import FilesystemFileResource, FilesystemFileResourceTemplate
 
 from .conftest import FilesystemMcp, caller_snapshot

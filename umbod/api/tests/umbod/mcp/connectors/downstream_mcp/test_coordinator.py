@@ -28,7 +28,7 @@ from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonal
 from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.connectors.downstream_mcp.capability_notifications import CapabilityListChangeNotifier, NativeCapabilityProjection
 from umbod.mcp.connectors.downstream_mcp.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinator, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 from fastmcp import Client, FastMCP
 from fastmcp.client.messages import MessageHandler
 NOW = datetime(2026, 1, 2, tzinfo=UTC)

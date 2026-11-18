@@ -11,7 +11,7 @@ from pytest import MonkeyPatch
 from umbod.config import AppConfig, OtlpReceiverConfig, RuntimeConfig
 from umbod.core.telemetry import TelemetryExport, TelemetrySink, TelemetryUnavailable
 from umbod.rest.main import create_app
-from umbod.rest.telemetry import install_telemetry_receiver
+from umbod.infrastructure.metrics.collector import install_telemetry_receiver
 from umbod.rest.telemetry.dependencies import get_telemetry_sink
 
 

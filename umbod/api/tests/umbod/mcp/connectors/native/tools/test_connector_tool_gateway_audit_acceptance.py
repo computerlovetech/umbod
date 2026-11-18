@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from io import StringIO
 from typing import Any
 from umbod.mcp.listeners import create_mcp_signals
-from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
-from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
+from umbod.mcp.signals import SignalToolExecutionPipelineFactory
+from umbod.infrastructure.metrics.mcp import PrometheusMcpMetricsRecorder
 
 import pytest
 from fastmcp import Client, FastMCP

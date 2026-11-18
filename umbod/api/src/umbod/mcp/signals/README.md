@@ -12,6 +12,7 @@ description: "Application-scoped tool, resource, prompt, and inventory facts sep
 - [context.py](./context.py) — Request-local correlation and nested failure classification for gateway audit records.
 - [diagnostics.py](./diagnostics.py) — Invocation-local failure diagnostics.
 - [events.py](./events.py) — Invocation and inventory facts with captured opaque trusted usage ownership.
-- [execution.py](./execution.py) — Execution pipeline composition and expected rejection versus backend failure classification.
+- [execution.py](./execution.py) — MCP execution observation, protocol rejection translation, and completion publication.
 - [lifecycle.py](./lifecycle.py) — Completion timing.
+- [ports.py](./ports.py) — Focused invocation lifecycle publishing contract.
 - [publisher.py](./publisher.py) — Lifecycle and inventory publication.

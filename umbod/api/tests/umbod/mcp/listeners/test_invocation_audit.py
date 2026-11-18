@@ -14,7 +14,7 @@ from umbod.mcp.logging import (
 )
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink, McpToolInvocationLogSink
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 from umbod.mcp.signals import (
     McpInteractionType,
     McpInvocationActor,

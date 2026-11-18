@@ -20,7 +20,7 @@ from umbod.core.connectors.downstream_mcp.stores.factory import create_downstrea
 from umbod.core.connectors.downstream_mcp.stores.ports import (
     ConnectorDefinitionStore, ToolCatalogStore, ReplaceToolCatalog, SaveConnectorDefinition,
 )
-from umbod.mcp.administrator.catalog import AdministratorConfigurationCatalog
+from umbod.mcp.administrator.connector_configuration import AdministratorConfigurationCatalog
 
 
 class EmptyConfiguration(Model):

@@ -6,8 +6,8 @@ from typing import cast
 
 from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals
-from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
-from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
+from umbod.mcp.signals import SignalToolExecutionPipelineFactory
+from umbod.infrastructure.metrics.mcp import PrometheusMcpMetricsRecorder
 from umbod.mcp.logging import create_default_mcp_audit_recorder
 
 import pytest

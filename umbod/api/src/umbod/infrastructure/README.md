@@ -1,7 +1,7 @@
 ---
 type: Software Module
 title: "Infrastructure"
-description: "Concrete storage adapters and composition boundaries for persistence, filesystem and key-value services."
+description: "Concrete storage and metrics adapters with explicit infrastructure composition boundaries."
 ---
 
 # Files
@@ -10,6 +10,7 @@ description: "Concrete storage adapters and composition boundaries for persisten
 - [connections/](./connections/README.md) — Infrastructure-owned connection leases, bounded pooling and driver cleanup.
 - [filesystem/](./filesystem/README.md) — Filesystem composition and content storage.
 - [key_value/](./key_value/README.md) — Key-value driver composition.
+- [metrics/](./metrics/README.md) — Metrics exporters, vendor clients, and HTTP scrape listeners.
 - [persistence/](./persistence/README.md) — Database drivers, schema readiness and explicit personal-discovery preparation.
 - [telemetry/](./telemetry/README.md) — Independently configured SQLite analytics drivers and runtime composition.
 

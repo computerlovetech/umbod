@@ -26,7 +26,7 @@ from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedDownst
 from tests.umbod.mcp.connectors.downstream_mcp.signal_support import DiscardingAuditSink
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.logging import McpAuditRecorder
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 from umbod.mcp.signals import McpSignals, McpToolIdentity, SignalToolExecutionPipelineFactory
 from umbod.mcp.logging.invocation.sink import create_default_mcp_tool_invocation_log_sink
 

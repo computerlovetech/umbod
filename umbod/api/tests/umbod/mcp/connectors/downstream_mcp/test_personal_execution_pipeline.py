@@ -30,7 +30,7 @@ from umbod.mcp.connectors.downstream_mcp.personal_runtime import personal_tool_p
 from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
 from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedPersonalTool
 from umbod.mcp.signals import McpToolInvocationCompleted
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 
 from tests.umbod.mcp.connectors.downstream_mcp.test_personal_oauth_guards import RejectingDownstreamFactory
 

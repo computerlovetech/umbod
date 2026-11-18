@@ -8,6 +8,12 @@ from umbod.mcp.telemetry.ports import McpApplicationMetricsRecorder, McpMetricsS
 
 
 @dataclass(frozen=True)
+class McpMetricsDependencies:
+    recorder: McpApplicationMetricsRecorder
+    server_factory: McpMetricsServerFactory
+
+
+@dataclass(frozen=True)
 class McpTelemetryDependencies:
     application_failures: SignalPublisher[ApplicationFailure]
     invocation_log_sink: McpToolInvocationLogSink

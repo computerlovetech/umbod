@@ -12,7 +12,7 @@ from umbod.core.telemetry import TelemetryExport, TelemetrySink
 from umbod.core.persistence import PersistenceRuntime
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.main import create_app_with_dependency_factories
-from umbod.rest.telemetry import install_telemetry_receiver
+from umbod.infrastructure.metrics.collector import install_telemetry_receiver
 from umbod.rest.telemetry.dependencies import get_telemetry_sink
 from umbod.rest.telemetry.token_authentication import (
     DatabaseTelemetryTokenVerifier,

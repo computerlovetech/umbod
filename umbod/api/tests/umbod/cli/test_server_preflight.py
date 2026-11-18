@@ -38,8 +38,8 @@ def test_serve_rejects_blank_root_before_logging_or_listener_binding(
         monkeypatch.setattr(mcp, "run_mcp_server", run)
     monkeypatch.setattr(module, "configure_logging", configure)
     monkeypatch.setattr("socket.socket.bind", bind)
-    monkeypatch.setattr("umbod.rest.metrics.RestMetricsHttpServer.start", metrics)
-    monkeypatch.setattr("umbod.mcp.metrics.http_server.McpMetricsHttpServer.start", metrics)
+    monkeypatch.setattr("umbod.infrastructure.metrics.rest.http_server.RestMetricsHttpServer.start", metrics)
+    monkeypatch.setattr("umbod.infrastructure.metrics.mcp.http_server.McpMetricsHttpServer.start", metrics)
     arguments = [service, "serve", "--reload"] if reload else [service, "serve"]
     result = CliRunner().invoke(app, arguments)
     assert result.exit_code == 1

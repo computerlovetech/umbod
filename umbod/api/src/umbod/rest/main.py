@@ -55,11 +55,11 @@ from umbod.rest.instance_configuration.dependencies import get_app_config
 from umbod.rest.mcp_permissions import router as mcp_permission_router
 from umbod.rest.groups import router as groups_router
 from umbod.rest.identity_directory.routes import admin_router as identity_directory_admin_router, personal_router as identity_directory_personal_router
-from umbod.rest.metrics import (
-    AdminRestMetricsMiddleware,
-    PrometheusRestMetricsRecorder,
-    RestMetricsHttpServer,
-)
+from umbod.rest.metrics import AdminRestMetricsMiddleware
+from umbod.infrastructure.metrics.rest.composition import create_rest_metrics_recorder
+from umbod.infrastructure.metrics.rest.prometheus import PrometheusRestMetricsRecorder
+from umbod.infrastructure.metrics.rest.composition import create_rest_metrics_http_server
+from umbod.infrastructure.metrics.rest.http_server import RestMetricsHttpServer
 from umbod.config import AppConfig, load_server_app_config
 from umbod.logging import create_application_failure_signal, flush_logging
 from umbod.core.diagnostics import ApplicationFailure
@@ -358,7 +358,7 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     app_settings = create_app_arguments.settings or load_server_app_config(".env")
     return _create_application(
         create_app_arguments, app_settings,
-        create_configured_analytics_runtime(app_settings), True, PrometheusRestMetricsRecorder(),
+        create_configured_analytics_runtime(app_settings), True, create_rest_metrics_recorder(),
     )
 
 
@@ -373,7 +373,7 @@ def create_app_with_dependency_factories(
     return _assemble_application(
         create_app_arguments, app_settings,
         create_configured_analytics_runtime(app_settings), True,
-        PrometheusRestMetricsRecorder(), dependency_factories, True,
+        create_rest_metrics_recorder(), dependency_factories, True,
     )
 
 
@@ -381,7 +381,7 @@ def create_app_with_analytics_runtime(
     analytics_runtime: TelemetryAnalyticsRuntime, *args: Any, **kwargs: Any,
 ) -> FastAPI:
     return create_app_with_shared_metrics(
-        analytics_runtime, PrometheusRestMetricsRecorder(), *args, **kwargs,
+        analytics_runtime, create_rest_metrics_recorder(), *args, **kwargs,
     )
 
 
@@ -445,7 +445,7 @@ def _assemble_application(
     app_settings.validate_rest_authentication()
     persistence_runtime = dependency_factories.persistence_runtime
     dependency_factories.validate_startup()
-    metrics_server = RestMetricsHttpServer(
+    metrics_server = create_rest_metrics_http_server(
         metrics_recorder, app_settings.rest.metrics_port
     )
     app = LifespanRootApiAppFactory(

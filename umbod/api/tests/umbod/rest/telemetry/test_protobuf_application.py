@@ -19,7 +19,7 @@ from umbod.core.telemetry.analytics import (
     TimeRange,
 )
 from umbod.rest.telemetry import application as telemetry_application
-from umbod.rest.telemetry.application import create_telemetry_app
+from umbod.infrastructure.metrics.collector import create_telemetry_app
 from umbod.rest.telemetry.dependencies import get_analytics_reader, get_telemetry_sink
 
 from tests.persistence_runtime import create_inmemory_runtime

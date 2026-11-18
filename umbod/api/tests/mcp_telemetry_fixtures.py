@@ -1,5 +1,6 @@
 from umbod.mcp.logging import McpAuditEvent
-from umbod.mcp.metrics import CompletedProtocolRequest, CompletedToolInvocation, InMemoryMcpMetricsRecorder, SuccessfulToolsList, ToolInvocationMetricIdentity
+from tests.support import InMemoryMcpMetricsRecorder
+from umbod.mcp.metrics import CompletedProtocolRequest, CompletedToolInvocation, SuccessfulToolsList, ToolInvocationMetricIdentity
 from umbod.mcp.telemetry import McpApplicationMetricsRecorder, McpMetricsServer, McpMetricsServerFactory
 
 

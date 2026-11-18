@@ -6,6 +6,8 @@ description: Test-only adapters and acceptance drivers for backend behavior test
 
 # Files
 
+- [__init__.py](./__init__.py) — Public test-only MCP metric support exports.
+
 - [activation.py](./activation.py) — In-memory capability activation store.
 - [admin_overview.py](./admin_overview.py) — In-memory administration snapshot reader.
 - [administrator_configuration.py](./administrator_configuration.py) — In-memory administrator connector configuration catalogue.
@@ -17,6 +19,7 @@ description: Test-only adapters and acceptance drivers for backend behavior test
 - [filesystem](./filesystem/) — Filesystem acceptance drivers, policy decoding failures, and test adapters.
 - [groups.py](./groups.py) — In-memory group catalogue with transactional rollback.
 - [icons.py](./icons.py) — Scripted favicon HTTP and discovery adapters.
+- [mcp_metrics.py](./mcp_metrics.py) — Test-only in-memory invocation metric aggregation.
 - [messaging.py](./messaging.py) — In-memory event stream, factory, and database event append failure injection.
 - [native_tool_states.py](./native_tool_states.py) — Native tool state test support.
 - [normalized_log_v1.json](./normalized_log_v1.json) — Frozen canonical version-1 evidence for backward-read, replay and persistence checks.

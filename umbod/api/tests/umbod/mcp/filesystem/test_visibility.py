@@ -23,11 +23,11 @@ from umbod.core.groups.stores.composition import create_group_management
 from umbod.infrastructure import create_filesystem_namespace_management
 from umbod.mcp.connectors.downstream_mcp.provider import _REQUEST_CONNECTOR_SCOPE
 from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, StaticFilesystemGroupClaimFields, register_filesystem_tools
-from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
+from umbod.mcp.filesystem.discovery import FilesystemToolVisibility, FilesystemVisibilityMiddleware
 from umbod.mcp.signals import McpInvocationPublisher
 from umbod.mcp.tools import McpObservedToolRegistrar
-from umbod.mcp.filesystem.links import FILE_RESOURCE_TEMPLATE, file_resource_uri
-from umbod.mcp.filesystem.runtime import FilesystemDiscoveryRuntime
+from umbod.mcp.filesystem.nodes import FILE_RESOURCE_TEMPLATE, file_resource_uri
+from umbod.mcp.filesystem.discovery import FilesystemDiscoveryRuntime
 
 from .conftest import FilesystemMcp, caller_snapshot
 from .test_browsing import create_node

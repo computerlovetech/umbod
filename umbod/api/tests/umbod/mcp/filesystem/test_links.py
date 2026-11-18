@@ -7,7 +7,7 @@ from fastmcp import Client
 from jsonschema import ValidationError, validate
 from mcp.types import ResourceLink, TextResourceContents
 
-from umbod.mcp.filesystem.links import FilesystemViewUrls, file_resource_uri
+from umbod.mcp.filesystem.nodes import FilesystemViewUrls, file_resource_uri
 
 from .conftest import FilesystemMcp
 from .test_tools import METADATA, root_id

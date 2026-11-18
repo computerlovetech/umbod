@@ -6,10 +6,10 @@ from fastmcp.exceptions import ValidationError
 
 from umbod.core.responses import OperationState
 from umbod.mcp.filesystem.argument_errors import FilesystemArgumentErrorsTool
-from umbod.mcp.filesystem.ports import FilesystemCallerCapture, FilesystemServiceFactory
+from umbod.mcp.filesystem import FilesystemCallerCapture, FilesystemServiceFactory
 from umbod.mcp.filesystem.update import FilesystemUpdateNodeTool
-from umbod.mcp.filesystem.upload import FilesystemUploadTool
-from umbod.mcp.filesystem.upload_sessions import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
+from umbod.mcp.filesystem.uploads import FilesystemUploadTool
+from umbod.mcp.filesystem.uploads import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
 from umbod.mcp.responses.progress import operation_progress_context
 from umbod.mcp.tools.errors import BuiltinToolError
 

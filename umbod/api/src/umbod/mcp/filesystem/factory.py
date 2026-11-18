@@ -20,8 +20,8 @@ from umbod.infrastructure import (
     create_filesystem_transactions, create_filesystem_uploads,
 )
 
-from .links import FilesystemViewUrls
-from .upload_models import MAX_UPLOAD_BYTES
+from .nodes.links import FilesystemViewUrls
+from .uploads.one_shot_models import MAX_UPLOAD_BYTES
 
 
 class DatabaseFilesystemServiceFactory:

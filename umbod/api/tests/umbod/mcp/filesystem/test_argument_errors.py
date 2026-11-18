@@ -17,11 +17,11 @@ from umbod.mcp.filesystem.argument_errors import (
     argument_json,
     invalid_content_error,
 )
-from umbod.mcp.filesystem.browsing_models import BROWSE_COMMAND, browse_input_schema
-from umbod.mcp.filesystem.sharing_models import SEARCH_RECIPIENTS_COMMAND, SHARE_COMMAND
+from umbod.mcp.filesystem.browsing import BROWSE_COMMAND, browse_input_schema
+from umbod.mcp.filesystem.sharing import SEARCH_RECIPIENTS_COMMAND, SHARE_COMMAND
 from umbod.mcp.filesystem.update import UpdateNodeCommand
-from umbod.mcp.filesystem.upload_models import UploadCommand
-from umbod.mcp.filesystem.upload_session_models import BeginUploadCommand
+from umbod.mcp.filesystem.uploads import UploadCommand
+from umbod.mcp.filesystem.uploads import BeginUploadCommand
 
 
 SENTINEL = "private-payload-sentinel"

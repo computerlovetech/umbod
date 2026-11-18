@@ -16,7 +16,7 @@ from umbod.core.filesystem.ports import ByteStream
 from umbod.mcp.connectors.downstream_mcp.provider import _REQUEST_CONNECTOR_SCOPE
 
 from .errors import FILESYSTEM_ACCESS_DENIED, InvalidReadEncoding, ReadTooLarge, filesystem_resource_operation
-from .links import FILE_RESOURCE_TEMPLATE, file_resource_uri
+from .nodes.links import FILE_RESOURCE_TEMPLATE, file_resource_uri
 from .ports import ClosableByteStream, FilesystemCallerCapture, FilesystemServiceFactory
 
 

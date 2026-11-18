@@ -44,5 +44,5 @@ The filesystem regression and Pi rendering checks support this decision; a cross
 
 - [Filesystem discovery tests](../../api/tests/umbod/mcp/filesystem/test_tools.py) — Published contracts across all 13 filesystem tools.
 - [Browse discovery tests](../../api/tests/umbod/mcp/filesystem/test_browsing.py) — Independently usable operation branches and target variants.
-- [Browse input schemas](../../api/src/umbod/mcp/filesystem/browsing_models.py) — Typed operation inputs and schema publication.
+- [Browse input schemas](../../api/src/umbod/mcp/filesystem/browsing/models.py) — Typed operation inputs and schema publication.
 - [Node update tool](../../api/src/umbod/mcp/filesystem/update.py) — Essential update requirements in the tool description.

@@ -33,12 +33,12 @@ Umbod uses immutable DTOs, safe diagnostics, progress markers, and built-in opt-
 
 ### Confirmation and elicitation
 
-Follow [filesystem_delete_file](../../api/src/umbod/mcp/filesystem/deletion.py) and its [approval adapter](../../api/src/umbod/mcp/filesystem/approval.py):
+Follow [filesystem_delete_file](../../api/src/umbod/mcp/filesystem/deletion/tool.py) and its [approval adapter](../../api/src/umbod/mcp/filesystem/deletion/approval.py):
 
 1. Validate arguments, current eligibility, and expected revision before requesting confirmation. Describe the authorized target and irreversible effects; escape untrusted names. Deletion removes the namespace entry, ownership, and grants, not stored bytes; it has no trash or restore.
 2. Follow the negotiated branch. Modern calls return `InputRequiredToolResult` containing `InputRequiredResult`: a `filesystem_delete_approval` elicitation request requiring boolean `value`, plus opaque `requestState`. Legacy calls use `Context.elicit` with strict `FileDeletionConfirmation`. Unsupported approval fails closed; the current adapter rejects approval through `execute_code`.
 3. Return input-required results unchanged through observation, response adaptation, and middleware. Do not wrap them as ordinary tool content, attach a terminal success/failure classification, or mutate while awaiting approval. Clients echo continuation state unchanged; never ask the model to manufacture approval or parse that state.
-4. Accept only explicit acceptance with boolean `true`. The [approval state](../../api/src/umbod/mcp/filesystem/approval_state.py) binds caller, client, command, a five-minute expiry, and a single-use nonce; the framework seals continuation state at the wire boundary. Verify bindings and consume the nonce, recapture the caller, and recheck current authorization and revision in the deletion service. Decline, cancellation, invalid/expired/replayed state, or unavailable elicitation must never authorize deletion.
+4. Accept only explicit acceptance with boolean `true`. The [approval state](../../api/src/umbod/mcp/filesystem/deletion/approval_state.py) binds caller, client, command, a five-minute expiry, and a single-use nonce; the framework seals continuation state at the wire boundary. Verify bindings and consume the nonce, recapture the caller, and recheck current authorization and revision in the deletion service. Decline, cancellation, invalid/expired/replayed state, or unavailable elicitation must never authorize deletion.
 5. Only after deletion returns, mark completion and construct `FileDeletionResult` with success text. Preserve native protocol errors and cancellations where applicable; render terminal tool failures through the common failure path. Approval is not permission and does not make deletion idempotent.
 
 ## Alternatives considered

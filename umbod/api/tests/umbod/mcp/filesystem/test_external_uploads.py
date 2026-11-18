@@ -5,9 +5,9 @@ import pytest
 from fastmcp import Client, FastMCP
 
 from umbod.core.filesystem.uploads.models import ExternalTransfer
-from umbod.mcp.filesystem.factory import DatabaseFilesystemServiceFactory
-from umbod.mcp.filesystem.upload import FilesystemUploadTool
-from umbod.mcp.filesystem.upload_sessions import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
+from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory
+from umbod.mcp.filesystem.uploads import FilesystemUploadTool
+from umbod.mcp.filesystem.uploads import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
 from tests.umbod.core.filesystem.test_external_uploads import MemoryExternalContent
 
 from .conftest import FilesystemState

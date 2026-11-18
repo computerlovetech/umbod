@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from umbod.config.telemetry import load_telemetry_app_config
 from umbod.logging import configure_logging
-from umbod.rest.telemetry.application import create_telemetry_app
+from umbod.infrastructure.metrics.collector.composition import create_telemetry_app
 
 
 def create_app() -> FastAPI:

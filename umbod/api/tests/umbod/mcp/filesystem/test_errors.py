@@ -22,9 +22,10 @@ from umbod.core.filesystem.uploads.errors import (
 from umbod.core.filesystem.errors import InvalidName, MissingNode, NameCollision, RevisionConflict, StorageFailure, WrongNodeKind
 from umbod.mcp.filesystem import register_filesystem_tools
 from umbod.mcp.filesystem.errors import filesystem_operation
-from umbod.mcp.filesystem.ports import FilesystemCallerCapture, FilesystemDeletionApproval, FilesystemServiceFactory
-from umbod.mcp.filesystem.authorization import FilesystemToolVisibility
-from umbod.mcp.metrics.in_memory import InMemoryMcpMetricsRecorder
+from umbod.mcp.filesystem import FilesystemCallerCapture, FilesystemServiceFactory
+from umbod.mcp.filesystem.deletion import FilesystemDeletionApproval
+from umbod.mcp.filesystem.discovery import FilesystemToolVisibility
+from tests.support import InMemoryMcpMetricsRecorder
 from umbod.core.callers import AuthenticationProvenance
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.listeners import create_mcp_signals

@@ -25,7 +25,7 @@ from umbod.mcp.logging import (
 )
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import McpToolInvocationCompleted, SignalToolExecutionPipelineFactory
 from umbod.mcp.middleware import McpAuditMiddleware

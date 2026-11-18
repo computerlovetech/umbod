@@ -35,10 +35,10 @@ from umbod.core.filesystem.ports import ContentDriver, ByteStream
 from umbod.core.filesystem.models import ContentRef, StorageKey
 from umbod.core.filesystem.stores.discovery import DatabaseFilesystemAuthorizationReader
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory, register_filesystem_resources, register_filesystem_tools
-from umbod.mcp.filesystem.approval import McpFilesystemDeletionApproval
-from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
-from umbod.mcp.filesystem.runtime import FilesystemDiscoveryRuntime
-from umbod.mcp.metrics.in_memory import InMemoryMcpMetricsRecorder
+from umbod.mcp.filesystem.deletion import McpFilesystemDeletionApproval
+from umbod.mcp.filesystem.discovery import FilesystemToolVisibility, FilesystemVisibilityMiddleware
+from umbod.mcp.filesystem.discovery import FilesystemDiscoveryRuntime
+from tests.support import InMemoryMcpMetricsRecorder
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import McpInvocationPublisher

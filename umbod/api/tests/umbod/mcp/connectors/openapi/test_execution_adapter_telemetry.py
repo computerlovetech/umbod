@@ -29,8 +29,8 @@ from umbod.mcp.logging import (
 from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
-from umbod.mcp.metrics.in_memory import INVOCATION_COUNT_METRIC, INVOCATION_DURATION_COUNT_METRIC
+from tests.support import InMemoryMcpMetricsRecorder
+from tests.support import INVOCATION_COUNT_METRIC, INVOCATION_DURATION_COUNT_METRIC
 from umbod.mcp.connectors.openapi import OpenApiCodeModeExecutionAdapter
 
 

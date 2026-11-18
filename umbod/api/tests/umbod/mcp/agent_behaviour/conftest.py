@@ -12,7 +12,7 @@ from umbod.core.callers import AuthenticationProvenance, CallerContext, Declared
 from umbod.logging import create_application_failure_signal
 from umbod.mcp.agent_behaviour.composition import register_agent_behaviour
 from umbod.mcp.listeners import create_mcp_signals
-from umbod.mcp.metrics.in_memory import InMemoryMcpMetricsRecorder
+from tests.support import InMemoryMcpMetricsRecorder
 from umbod.mcp.signals import McpInvocationPublisher
 from umbod.mcp.tools import McpObservedToolRegistrar
 

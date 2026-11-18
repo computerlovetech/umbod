@@ -6,7 +6,7 @@ from umbod.core.administrator.connector_configuration import (
     ConfigurationRejected,
 )
 from umbod.core.responses import RetryAdvice
-from umbod.mcp.administrator.errors import configuration_rejection_error
+from umbod.mcp.administrator.connector_configuration import configuration_rejection_error
 from umbod.mcp.tools.errors import BuiltinToolError, BuiltinToolRejected
 
 
