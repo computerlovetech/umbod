@@ -79,6 +79,111 @@ describe('neutral dashboard visualizations', (): void => {
     expect(document.body.innerHTML).not.toMatch(/NaN|Infinity/);
   });
 
+  it('shows the daily breakdown on hover, follows days and dismisses on leaving the plot', (): void => {
+    const data: ActivityChart = {
+      axisMaximum: 50, total: 74, label: '74 tool calls in total. UTC.',
+      days: [
+        { date: '2026-11-15', label: 'Nov 15', success: 28, failure: 4, cancelled: 0, total: 32 },
+        { date: '2026-11-17', label: 'Nov 17', success: 41, failure: 1, cancelled: 0, total: 42 },
+        { date: '2026-11-18', label: 'Nov 18', success: 0, failure: 0, cancelled: 0, total: 0 }
+      ]
+    };
+    component = mount(DailyActivityChart, { target: document.body, props: { data } });
+    flushSync();
+    const buttons = document.querySelectorAll('button');
+    expect(buttons).toHaveLength(3);
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    expect(document.querySelector('[title]')).toBeNull();
+    buttons[0].dispatchEvent(new PointerEvent('pointerenter'));
+    flushSync();
+    const tooltip = document.querySelector('[role="tooltip"]');
+    expect(tooltip?.textContent).toContain('Nov 15, 2026');
+    expect(tooltip?.textContent).toContain('UTC');
+    expect(Array.from(tooltip?.querySelectorAll('dt') ?? [], (cell) => cell.textContent)).toEqual(['Successful', 'Failed', 'Cancelled']);
+    expect(Array.from(tooltip?.querySelectorAll('dd') ?? [], (cell) => cell.textContent)).toEqual(['28', '4', '0']);
+    expect(tooltip?.querySelector('.dv-tooltip-total')?.textContent).toBe('Total calls32');
+    expect(buttons[0].getAttribute('aria-describedby')).toBe(tooltip?.id);
+    expect(buttons[0].classList.contains('dv-day-active')).toBe(true);
+    buttons[1].dispatchEvent(new PointerEvent('pointerenter'));
+    flushSync();
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain('Nov 17, 2026');
+    expect(document.querySelector('.dv-tooltip-total')?.textContent).toBe('Total calls42');
+    expect(buttons[0].classList.contains('dv-day-active')).toBe(false);
+    buttons[2].dispatchEvent(new PointerEvent('pointerenter'));
+    flushSync();
+    expect(document.querySelector('.dv-tooltip-total')?.textContent).toBe('Total calls0');
+    expect(Array.from(document.querySelectorAll('.dv-tooltip-values dd'), (cell) => cell.textContent)).toEqual(['0', '0', '0']);
+    const plot = document.querySelector('.dv-plot');
+    expect(plot).not.toBeNull();
+    plot!.dispatchEvent(new PointerEvent('pointerleave'));
+    flushSync();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    expect(document.querySelector('.dv-day-active')).toBeNull();
+  });
+
+  it('prioritizes new keyboard focus over a previous pointer hover', (): void => {
+    const data: ActivityChart = {
+      axisMaximum: 50, total: 74, label: '74 tool calls in total. UTC.',
+      days: [
+        { date: '2026-11-15', label: 'Nov 15', success: 28, failure: 4, cancelled: 0, total: 32 },
+        { date: '2026-11-17', label: 'Nov 17', success: 41, failure: 1, cancelled: 0, total: 42 }
+      ]
+    };
+    component = mount(DailyActivityChart, { target: document.body, props: { data } });
+    flushSync();
+    const buttons = document.querySelectorAll('button');
+    expect(buttons).toHaveLength(2);
+    buttons[0].dispatchEvent(new PointerEvent('pointerenter'));
+    flushSync();
+    expect(document.querySelector('.dv-tooltip-total')?.textContent).toBe('Total calls32');
+    buttons[1].focus();
+    flushSync();
+    const tooltip = document.querySelector('[role="tooltip"]');
+    expect(tooltip?.textContent).toContain('Nov 17, 2026');
+    expect(buttons[1].getAttribute('aria-describedby')).toBe(tooltip?.id);
+    expect(buttons[0].hasAttribute('aria-describedby')).toBe(false);
+    const plot = document.querySelector('.dv-plot');
+    expect(plot).not.toBeNull();
+    plot!.dispatchEvent(new PointerEvent('pointerleave'));
+    flushSync();
+    expect(document.querySelector('.dv-tooltip-total')?.textContent).toBe('Total calls42');
+  });
+
+  it('supports keyboard focus, Escape, blur and current data without stale tooltip values', (): void => {
+    const props = new VisualizationProps<ActivityChart>({
+      axisMaximum: 50, total: 32, label: '32 tool calls in total. UTC.',
+      days: [{ date: '2026-11-15', label: 'Nov 15', success: 28, failure: 4, cancelled: 0, total: 32 }]
+    });
+    component = mount(DailyActivityChart, { target: document.body, props: { get data(): ActivityChart { return props.value; } } });
+    flushSync();
+    const button = document.querySelector('button');
+    expect(button).not.toBeNull();
+    button!.focus();
+    flushSync();
+    expect(document.querySelector('[role="tooltip"]')).not.toBeNull();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    flushSync();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    expect(document.activeElement).toBe(button);
+    button!.blur();
+    button!.focus();
+    flushSync();
+    expect(document.querySelector('[role="tooltip"]')).not.toBeNull();
+    props.replace({ ...props.value, total: 33, days: [{ ...props.value.days[0], success: 29, total: 33 }] });
+    flushSync();
+    expect(document.querySelector('.dv-tooltip-values dd')?.textContent).toBe('29');
+    expect(document.querySelector('.dv-tooltip-total')?.textContent).toBe('Total calls33');
+    button!.blur();
+    flushSync();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    button!.focus();
+    flushSync();
+    props.replace({ ...props.value, total: 0, days: [] });
+    flushSync();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    expect(document.querySelector('button')).toBeNull();
+  });
+
   it('keeps tool identities, connectors and counts visible and updates entries', (): void => {
     const props = new VisualizationProps<readonly RankedTool[]>([
       { id: 'one', name: 'search', connector: 'First', count: 12, barWidth: 100 },

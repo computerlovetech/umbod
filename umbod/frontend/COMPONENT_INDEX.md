@@ -71,7 +71,7 @@ tags:
 
 - [OutcomeRing](src/lib/components/shared/dashboard/visualizations/OutcomeRing.svelte) — Tool-outcome ring and labelled counts from prepared projections; renders a neutral empty state, not an implied success rate.
 - [OperationMixChart](src/lib/components/shared/dashboard/visualizations/OperationMixChart.svelte) — Proportion bar with category labels, percentages and counts; caller supplies prepared operation totals and shares.
-- [DailyActivityChart](src/lib/components/shared/dashboard/visualizations/DailyActivityChart.svelte) — Stacked daily tool outcomes with accessible per-day values; caller supplies UTC labels and a positive axis maximum.
+- [DailyActivityChart](src/lib/components/shared/dashboard/visualizations/DailyActivityChart.svelte) — Stacked daily tool outcomes with hover/focus breakdowns and totals; caller supplies UTC labels and a positive axis maximum.
 - [ToolRankingList](src/lib/components/shared/dashboard/visualizations/ToolRankingList.svelte) — Ranked tool bars and counts with five static silhouettes when empty; caller owns sorting, filtering and limiting.
 
 ## Files presentation
