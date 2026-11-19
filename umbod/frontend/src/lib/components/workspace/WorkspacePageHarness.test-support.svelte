@@ -2,6 +2,7 @@
   import type { Component } from 'svelte';
   import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
   import type { WorkspaceApi } from '#lib/workspace/api.js';
+  import ToastProvider from '#lib/components/feedback/ToastProvider.svelte';
   import WorkspaceFrame from './WorkspaceFrame.svelte';
 
   let { Page, pageProps, inputs, pathname }: {
@@ -12,6 +13,8 @@
   } = $props();
 </script>
 
-<WorkspaceFrame {pathname} accountIdentity={inputs.accountIdentity ?? { kind: 'hidden' }} createWorkspaceApi={inputs.createWorkspaceApi}>
-  <Page {...pageProps} />
-</WorkspaceFrame>
+<ToastProvider>
+  <WorkspaceFrame {pathname} accountIdentity={inputs.accountIdentity ?? { kind: 'hidden' }} createWorkspaceApi={inputs.createWorkspaceApi}>
+    <Page {...pageProps} />
+  </WorkspaceFrame>
+</ToastProvider>

@@ -92,7 +92,7 @@ describe('Files locations panel', (): void => {
     await loading;
     await tick();
     expect(detail?.querySelector('.delayed-loading-overlay__scrim')).toBeNull();
-    expect(locations().querySelectorAll('a')).toHaveLength(2);
+    expect(locations().querySelectorAll('a')).toHaveLength(3);
   });
 
   test('renders grouped native links, selected decorative checks and escaped wrapping labels reactively', async (): Promise<void> => {
@@ -130,9 +130,9 @@ describe('Files locations panel', (): void => {
     vi.mocked(api.filesystem.listNamespaces).mockResolvedValue([inventory[0]]);
     await state.load(null);
     await tick();
-    expect(locations().querySelectorAll('a')).toHaveLength(1);
+    expect(locations().querySelectorAll('a')).toHaveLength(2);
     expect(locations().querySelector('h2')?.textContent).toBe('Personal');
-    expect(locations().textContent).not.toContain('Shared');
+    expect(locations().textContent).not.toContain('Shared namespaces');
     expect(link(rootId).getAttribute('aria-current')).toBe('page');
   });
 
@@ -209,7 +209,7 @@ describe('Files locations panel', (): void => {
     await tick();
     expect(state.phase).toBe('ready');
     expect(locations().textContent).toContain(message);
-    expect(locations().querySelector('a, h2')).toBeNull();
+    expect(locations().querySelector('section a, h2')).toBeNull();
     expect(document.body.textContent).not.toContain('Private diagnostic');
     recoveryButton(action).click();
     if (action === 'Sign in') expect(signIn).toHaveBeenCalledOnce();
@@ -369,8 +369,8 @@ describe('Files locations panel', (): void => {
     vi.mocked(api.filesystem.listNamespaces).mockResolvedValue([]);
     await state.load(fileId);
     await tick();
-    expect(locations().textContent).toContain('No locations available.');
-    expect(locations().querySelector('a, h2, button, [role="alert"]')).toBeNull();
+    expect(locations().textContent).toContain('No namespace locations available.');
+    expect(locations().querySelector('section a, h2, button, [role="alert"]')).toBeNull();
     expect(document.querySelector('#files-heading')?.textContent).toBe('Files');
   });
 });

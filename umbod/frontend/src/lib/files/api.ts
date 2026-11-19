@@ -2,6 +2,7 @@ import type { BrowseResult, UpdateNode, UpdateDescription, Breadcrumbs, CreateFo
 
 export interface FilesystemApi {
   listNamespaces(signal?: AbortSignal): Promise<import('./domain/schemas').FilesystemNamespace[]>;
+  listSharedWithMe(signal?: AbortSignal): Promise<NodeSummary[]>;
   getHome(signal?: AbortSignal): Promise<NodeSummary>;
   browse(target: string | null, signal?: AbortSignal): Promise<BrowseResult>;
   getNode(id: string, signal?: AbortSignal): Promise<NodeSummary>;

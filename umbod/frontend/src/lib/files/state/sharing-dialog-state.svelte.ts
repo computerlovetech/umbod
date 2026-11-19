@@ -22,7 +22,6 @@ export class SharingDialogState {
   private originalScopes = new Map<string, boolean>();
   private banner = $state('');
   private recovery = $state(false);
-  private announcement = $state('');
   private generation = 0;
   private controller: AbortController | undefined;
   private trigger: HTMLElement | undefined;
@@ -47,7 +46,6 @@ export class SharingDialogState {
   get error(): string { return this.banner; }
   get needsReload(): boolean { return this.recovery; }
   get filter(): string { return this.search.query; }
-  get status(): string { return this.announcement; }
   get editable(): boolean { return this.stage === 'ready' && !this.saving && !this.recovery && !this.confirmingSwitch && !this.search.unavailable; }
   get canSave(): boolean { return this.editable && replaceAccessSchema.safeParse(this.body()).success; }
   get dirty(): boolean { return JSON.stringify(this.body()) !== this.original; }
@@ -141,7 +139,7 @@ export class SharingDialogState {
     this.draft = Object.freeze(this.draft.map((entry) => entry.id === id ? Object.freeze({ ...entry, recursive }) : entry));
   };
 
-  save = async (): Promise<void> => {
+  save = async (): Promise<string | undefined> => {
     if (!this.canSave || !this.target) return;
     const id = this.target.id;
     const generation = this.generation;
@@ -154,11 +152,12 @@ export class SharingDialogState {
       if (!this.current(generation)) return;
       if (view.node_id !== id) throw new Error('Unexpected node access');
       this.accept(view);
-      this.announcement = `Sharing updated for “${this.nodeName}”.`;
+      const message = `Sharing updated for “${this.nodeName}”.`;
       this.revoke(id);
       this.recheck(id);
       this.saving = false;
       await this.close();
+      return message;
     } catch (error) {
       if (!this.current(generation)) return;
       if (error instanceof AuthenticationRequiredError || error instanceof HttpError && [401, 403, 404].includes(error.status)) this.failRead(error, id);

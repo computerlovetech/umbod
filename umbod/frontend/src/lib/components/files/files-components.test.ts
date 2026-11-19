@@ -83,7 +83,7 @@ describe('Files user composition', () => {
         document.body.innerHTML = content(state, folder, upload);
         const navigation = document.querySelector('nav[aria-label="File locations"]');
         expect(navigation).not.toBeNull();
-        expect(navigation?.querySelectorAll('a')).toHaveLength(2);
+        expect(navigation?.querySelectorAll('a')).toHaveLength(3);
         expect(navigation?.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(name);
         expect(navigation?.querySelector(`a[href="${filesHref(id)}"]`)).not.toBeNull();
         expect(document.querySelector('h1')?.textContent).toBe('Files');
@@ -196,7 +196,7 @@ describe('Files user composition', () => {
     expect(body).toContain('Updated');
     expect(body).toContain('href="' + filesHref(folderId) + '"');
     expect(body).toContain('Upload file');
-    expect(body).not.toMatch(/Download|Share|Search|Next page|Create file|New file/);
+    expect(body).not.toMatch(/Download|\bShare\b|Search|Next page|Create file|New file/);
   });
 
   test.each([null, folderId])('item rows retain one native navigation link and a separate actions menu in %s', async (selection: string | null): Promise<void> => {
@@ -240,7 +240,7 @@ describe('Files user composition', () => {
     expect(body).not.toContain('<h2>Notes.txt');
     expect(body).not.toContain('Open parent folder');
     expect(body).not.toContain('New folder');
-    expect(body).not.toMatch(/Upload|Download|Share|Search/);
+    expect(body).not.toMatch(/Upload|Download|\bShare\b|Search/);
   });
 
   test('a stalled browse exposes no partial heading, path or mutations', async (): Promise<void> => {

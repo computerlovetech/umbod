@@ -20,6 +20,11 @@ export class InMemoryFilesystem implements FilesystemApi {
     return [{ id: home.id, root_node_id: home.id, name: 'My files', description: home.metadata.attributes.description ?? '', kind: 'personal', permissions: ['discover', 'read', 'write', 'delete'] }];
   };
 
+  listSharedWithMe = async (signal?: AbortSignal): Promise<NodeSummary[]> => {
+    signal?.throwIfAborted();
+    return [];
+  };
+
   getHome = async (signal?: AbortSignal): Promise<NodeSummary> => {
     signal?.throwIfAborted();
     const home = this.nodes.get(this.rootId);

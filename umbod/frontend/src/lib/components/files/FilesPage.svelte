@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { useToast } from '#lib/components/feedback/index.js';
   import { useWorkspace } from '#lib/workspace/workspace-context.js';
   import { WorkspaceIdentityBinding } from '#lib/workspace/workspace-scope.svelte.js';
   import { afterNavigate, goto } from '$app/navigation';
@@ -6,7 +7,7 @@
   import { navigateToSignIn } from '#lib/admin/infrastructure/transport.js';
   import type { FilesApi } from '#lib/files/api.js';
   import { browserFilesApi } from '#lib/files/infrastructure/files-api.js';
-  import { FilesState, filesHref } from '#lib/files/state/files-state.svelte.js';
+  import { FilesState, filesTarget } from '#lib/files/state/files-state.svelte.js';
   import { UploadState } from '#lib/files/state/upload-state.svelte.js';
   import { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
   import FilesContent from './FilesContent.svelte';
@@ -45,10 +46,11 @@
 
   const api = createFilesApi();
   const preview = createPreview();
-  const state = new FilesState(api, async (id: string): Promise<void> => { await goto(filesHref(id)); }, preview);
+  const state = new FilesState(api, async (href: string): Promise<void> => { await goto(href); }, preview);
   const folder = new NewFolderState(api, state);
   const upload = new UploadState(api, state);
   const workspace = useWorkspace();
+  const toast = useToast();
   const identity = new WorkspaceIdentityBinding(workspace.access, (identity, changed): void => {
     if (changed) { folder.navigate(); upload.navigate(); }
     state.observeAccountIdentity(identity, changed);
@@ -66,15 +68,15 @@
   afterNavigate(({ to, shallow }) => {
     if (shallow) return;
     if (to?.url.pathname !== '/files') { preview.reset(); state.deletion.reset(); state.rowDeletion.reset(); state.sharing.reset(); return; }
-    const target = to.url.searchParams.get('node');
-    if (state.isCurrentTarget(target)) return;
+    const { node, sharedEntry } = filesTarget(to.url);
+    if (state.isCurrentTarget(node, sharedEntry)) return;
     folder.navigate();
     upload.navigate();
-    void state.load(target);
+    void state.load(node, sharedEntry);
   });
 
   onMount(() => dispose);
 </script>
 
 <svelte:head><title>Files · Umbod</title></svelte:head>
-<FilesContent {state} {folder} {upload} {signIn} />
+<FilesContent {state} {folder} {upload} {signIn} onSharingSaved={toast.success} />

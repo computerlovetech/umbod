@@ -43,6 +43,21 @@ function fixture(respond: (request: TransportRequest<unknown>) => Promise<unknow
   return { files: new FilesState(api), api, transport };
 }
 
+describe('Shared with me adapter', (): void => {
+  test('reads a validated node collection via the existing transport and forwards cancellation', async (): Promise<void> => {
+    const nodes = filesystemFixture.slice(1);
+    const { api, transport } = fixture(async () => ({ nodes }));
+    const signal = new AbortController().signal;
+    await expect(api.filesystem.listSharedWithMe(signal)).resolves.toEqual(nodes);
+    expect(transport.requests).toEqual([expect.objectContaining({ method: 'GET', path: '/me/filesystem/shared-with-me', signal })]);
+  });
+
+  test('rejects malformed node summaries rather than treating them as empty', async (): Promise<void> => {
+    const { api } = fixture(async () => ({ nodes: [{ id: 'invalid' }] }));
+    await expect(api.filesystem.listSharedWithMe()).rejects.toMatchObject({ direction: 'inbound' });
+  });
+});
+
 describe('coherent filesystem browse', (): void => {
   test('namespace listing validates personal and shared summaries through the transport boundary', async (): Promise<void> => {
     const entries = [

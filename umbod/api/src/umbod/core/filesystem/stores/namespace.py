@@ -6,6 +6,7 @@ from umbod.core.persistence import (
     AllOf,
     Database,
     DatabaseSession,
+    ReadSession,
     DeleteQuery,
     Equals,
     InsertCommand,
@@ -121,8 +122,23 @@ class DatabaseNamespace:
             await SessionNamespace(session).delete_node(node_id, expected_revision=expected_revision)
 
 
-class SessionNamespace:
+class SessionNodeReader:
+    def __init__(self, session: ReadSession) -> None:
+        self._reader = session
+
+    async def get_node(self, node_id: NodeId) -> Node:
+        record = await self._reader.find_one(
+            NODE_TABLE,
+            Query(filter=Equals(NODE_ID, str(node_id)), projection=AllFields(), ordering=Unordered()),
+        )
+        if record is None:
+            raise MissingNode(str(node_id))
+        return record.payload.model_copy(deep=True)
+
+
+class SessionNamespace(SessionNodeReader):
     def __init__(self, session: DatabaseSession) -> None:
+        super().__init__(session)
         self._session = session
 
     async def update_metadata(
@@ -215,19 +231,6 @@ class SessionNamespace:
         if record is None:
             await self._session.insert(NODE_TABLE, InsertCommand(row=node_record(initial_root())))
             await append_discovery_changed(self._session)
-
-    async def get_node(self, node_id: NodeId) -> Node:
-        record = await self._session.find_one(
-            NODE_TABLE,
-            Query(
-                filter=Equals(NODE_ID, str(node_id)),
-                projection=AllFields(),
-                ordering=Unordered(),
-            ),
-        )
-        if record is None:
-            raise MissingNode(str(node_id))
-        return record.payload.model_copy(deep=True)
 
     async def get_root(self) -> Node:
         return await self.get_node(ROOT_ID)

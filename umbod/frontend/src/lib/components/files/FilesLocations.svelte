@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from '#lib/components/admin/shared/Button.svelte';
-  import type { FilesState } from '#lib/files/state/files-state.svelte.js';
+  import { sharedWithMeHref, type FilesState } from '#lib/files/state/files-state.svelte.js';
 
   let { state, signIn }: { state: FilesState; signIn: () => void } = $props();
 </script>
@@ -25,6 +25,14 @@
       </ul>
     </section>
   {/each}
+    <ul>
+      <li>
+        <a href={sharedWithMeHref} aria-current={state.atSharedWithMe ? 'page' : state.inSharedWithMe ? 'location' : undefined}>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="3" /><circle cx="18" cy="5" r="3" /><circle cx="18" cy="19" r="3" /><path d="m9 10.5 6-4m-6 7 6 4" /></svg>
+          <span>Shared with me</span>
+        </a>
+      </li>
+    </ul>
   </div>
   {#if state.discoveryPhase !== 'ready' && state.discoveryPhase !== 'loading'}
     <div class="recovery">
@@ -32,7 +40,7 @@
       {#if state.discoveryPhase === 'sign-in'}<Button variant="secondary" onclick={signIn}>Sign in</Button>{:else}<Button variant="secondary" onclick={state.reload}>Retry locations</Button>{/if}
     </div>
   {:else if state.discoveryPhase === 'ready' && state.locationGroups.length === 0}
-    <p role="status">No locations available.</p>
+    <p role="status">No namespace locations available.</p>
   {/if}
 </nav>
 

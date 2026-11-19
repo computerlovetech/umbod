@@ -20,6 +20,10 @@ The directory can be incomplete or historical. Search is not an account-activity
 
 See the [built-in tool reference](../reference/built-in-tools.md#filesystem-sharing-tools) for recipient search and additive sharing inputs, outputs, and schema compatibility.
 
+## List incoming shares with REST
+
+`GET /api/me/filesystem/shared-with-me` returns `nodes` for the current caller. It lists discoverable items with explicit user or group grants to the caller, once per item. Descendants visible only through a recursive folder share are browsed within that folder instead. The list does not grant additional access or change either the containing namespace or the original item link.
+
 ## Search recipients with REST
 
 `GET /api/me/filesystem/nodes/{node_id}/access/recipients` accepts required `query` and optional `recipient_type=group|user`. Omission searches both types. It uses the same core search, validation, authorization and typed `recipients`/`has_more` result as `filesystem_search_sharing_recipients`.

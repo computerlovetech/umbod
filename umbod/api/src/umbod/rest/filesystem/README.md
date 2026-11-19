@@ -17,7 +17,7 @@ description: "Authenticated namespace filesystem browsing, item sharing, creatio
 - [uploads.py](./uploads.py) — Authorized S3-direct or API-transfer begin, no-store session instructions and idempotent verified completion.
 - [upload_transfers.py](./upload_transfers.py) — Capability-only PUT under /api/filesystem; request-local services and no-store success/error responses.
 - [models.py](./models.py) — Strict upload requests, explicit transfer authorization and unavailable descriptors, metadata and child envelopes.
-- [routes.py](./routes.py) — Caller namespace listing, personal browse defaults, private homes and authorized node/content delivery.
+- [routes.py](./routes.py) — Caller namespace and incoming share listings, personal browse defaults, private homes and authorized node/content delivery.
 
 # Related links
 

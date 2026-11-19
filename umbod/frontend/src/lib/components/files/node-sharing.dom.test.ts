@@ -27,7 +27,7 @@ afterEach(async (): Promise<void> => {
 const view: NodeAccess = { node_id: fileId, revision: 'opaque', grants: [{ recipient: { type: 'group', group_id: ' Provider Team ', label: 'Design' }, recursive: false, permissions: ['write', 'share'] }, { recipient: { type: 'user', user_id: 'person-a', label: 'Hidden person' }, recursive: false, permissions: ['read'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }, { type: 'user', user_id: 'protected-person' }] };
 const recipients: SharingRecipient[] = [{ type: 'group', group_id: ' Provider Team ', label: 'Design' }, { type: 'group', group_id: 'second', label: 'Readers' }, { type: 'user', user_id: 'person-a', label: 'Hidden person' }, { type: 'user', user_id: 'person-b', label: 'New person' }];
 
-async function setup(id: string = folderId, configure = true): Promise<{ api: InMemoryFilesApi; state: FilesState; signIn: ReturnType<typeof vi.fn> }> {
+async function setup(id: string = folderId, configure = true): Promise<{ api: InMemoryFilesApi; state: FilesState; signIn: ReturnType<typeof vi.fn>; onSharingSaved: ReturnType<typeof vi.fn> }> {
   const api = new InMemoryFilesApi(rootId, filesystemFixture);
   if (configure) for (const node of filesystemFixture) api.sharing.configure({ ...view, node_id: node.id }, recipients);
   const state = new FilesState(api);
@@ -35,10 +35,11 @@ async function setup(id: string = folderId, configure = true): Promise<{ api: In
   const signIn = vi.fn();
   const target = document.createElement('div');
   document.body.append(target);
-  component = mount(FilesContent, { target, props: { state, folder: new NewFolderState(api, state), upload: new UploadState(api, state), signIn } });
+  const onSharingSaved = vi.fn();
+  component = mount(FilesContent, { target, props: { state, folder: new NewFolderState(api, state), upload: new UploadState(api, state), signIn, onSharingSaved } });
   await state.load(id);
   await tick();
-  return { api, state, signIn };
+  return { api, state, signIn, onSharingSaved };
 }
 
 function button(label: string): HTMLButtonElement {
@@ -130,13 +131,14 @@ describe('Files group sharing UI', (): void => {
       share.click();
       await vi.waitFor(() => expect(sharing.dialog.phase).toBe('ready'));
       await unmount(component);
-      component = mount(NodeSharingDialog, { target, props: { state: sharing.dialog, signIn: vi.fn() } });
+      const onSaved = vi.fn();
+      component = mount(NodeSharingDialog, { target, props: { state: sharing.dialog, signIn: vi.fn(), onSaved } });
       await tick();
       expect(document.querySelector('dialog h2')?.textContent).toBe('Share “Files”');
       expect(sharing.dialog.node?.name).toBe('Renamed home');
       button('Save group sharing').click();
       await vi.waitFor(() => expect(sharing.dialog.open).toBe(false));
-      expect(sharing.dialog.status).toBe('Sharing updated for “Files”.');
+      expect(onSaved).toHaveBeenCalledExactlyOnceWith('Sharing updated for “Files”.');
       expect(home.name).toBe('Renamed home');
     } finally {
       sharing.dispose();
@@ -247,7 +249,7 @@ describe('Files group sharing UI', (): void => {
   });
 
   test('adds, edits and removes permissions through DOM and saves exact IDs without replacing the workspace', async (): Promise<void> => {
-    const { api, state } = await setup();
+    const { api, state, onSharingSaved } = await setup();
     const heading = document.querySelector('h1');
     const replace = vi.spyOn(api.sharing, 'replaceAccess');
     await open();
@@ -275,7 +277,8 @@ describe('Files group sharing UI', (): void => {
     expect((await api.sharing.inspectAccess(fileId, 'user')).grants).toEqual([view.grants[1]]);
     expect(document.querySelector('h1')).toBe(heading);
     expect(state.node?.id).toBe(folderId);
-    expect(document.body.textContent).toContain('Sharing updated for “Notes.txt”');
+    expect(onSharingSaved).toHaveBeenCalledExactlyOnceWith('Sharing updated for “Notes.txt”.');
+    expect(document.body.textContent).not.toContain('Sharing updated for “Notes.txt”');
   });
 
   test('shows matching groups directly in one custom searchable dropdown', async (): Promise<void> => {

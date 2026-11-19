@@ -9,11 +9,20 @@ import { RowEditingState } from './row-editing-state.svelte';
 import { DragMoveState } from './drag-move-state.svelte';
 import { DeletionState } from './deletion-state.svelte';
 import type { FilesApi } from '../api';
-import { browseResultSchema, filesystemNamespacesSchema, nodeIdSchema, type FilesystemNamespace, type NodeSummary } from '../domain/schemas';
+import { browseResultSchema, childrenSchema, filesystemNamespacesSchema, nodeIdSchema, type FilesystemNamespace, type NodeSummary } from '../domain/schemas';
 import { readFailure, type FilesPhase } from '../errors';
 
-export function filesHref(id?: string): string {
-  return id ? '/files?node=' + encodeURIComponent(id) : '/files';
+const sharedWithMeParam = 'shared-with-me';
+export const sharedWithMeHref = '/files?' + sharedWithMeParam;
+
+export function filesHref(id?: string, sharedEntry: string | null = null): string {
+  if (!id) return sharedEntry === null ? '/files' : sharedWithMeHref;
+  const href = '/files?node=' + encodeURIComponent(id);
+  return sharedEntry === null ? href : href + '&' + sharedWithMeParam + '=' + encodeURIComponent(sharedEntry);
+}
+
+export function filesTarget(url: URL): { node: string | null; sharedEntry: string | null } {
+  return { node: url.searchParams.get('node'), sharedEntry: url.searchParams.get(sharedWithMeParam) };
 }
 
 export interface FilesLocation {
@@ -57,14 +66,19 @@ export class FilesState {
   private updateSequence = 0;
   private readonly updatedNodes = new Map<string, { node: NodeSummary; sequence: number }>();
   private readonly confirmedDeletedIds = new Set<string>();
-  private target: string | null = null;
+  private target = $state<string | null>(null);
+  private sharedEntry = $state<string | null>(null);
+  get inSharedWithMe(): boolean { return this.sharedEntry !== null; }
+  get atSharedWithMe(): boolean { return this.inSharedWithMe && this.target === null; }
+  childHref = (id: string): string => filesHref(id, this.atSharedWithMe ? id : this.sharedEntry);
   private rootId = $state<string | undefined>(undefined);
   private identityFingerprint: string | undefined;
   private generation = $state(0);
   get navigationVersion(): number { return this.generation; }
 
-  isCurrentTarget = (target: string | null): boolean => {
-    if (this.generation === 0) return false;
+  isCurrentTarget = (target: string | null, sharedEntry: string | null = null): boolean => {
+    if (this.generation === 0 || sharedEntry !== this.sharedEntry) return false;
+    if (sharedEntry !== null) return target === this.target;
     return target === this.target || !!this.rootId && (target ?? this.rootId) === (this.target ?? this.rootId);
   };
 
@@ -89,14 +103,18 @@ export class FilesState {
   readonly dragMove: DragMoveState;
   readonly sharing: SharingEligibilityState;
 
-  constructor(private readonly api: FilesApi, openParent?: (id: string) => Promise<void>, readonly preview?: FilePreviewState) {
+  constructor(private readonly api: FilesApi, navigate?: (href: string) => Promise<void>, readonly preview?: FilePreviewState) {
     this.update = new NodeUpdateState(api.filesystem, this.acceptUpdate, this.reload, () => this.rootId);
     this.description = new DescriptionState(api.filesystem, this.acceptDescription, this.reload);
     this.rowEditing = new RowEditingState(api.filesystem, this.acceptUpdate, this.reload, () => this.rootId);
     this.sharing = new SharingEligibilityState(api.sharing);
-    this.navigation = new FilesNavigationState(api.filesystem, () => this.rootId, this.namespaceLabel);
+    this.navigation = new FilesNavigationState(api.filesystem, () => this.rootId, this.namespaceLabel, () => this.sharedEntry, this.childHref);
     const deletionOperations = new SvelteMap<string, symbol>();
-    this.deletion = new DeletionState(api, openParent ?? ((id) => this.load(id)), this.reload, this.acceptDeleted, true, deletionOperations);
+    const leaveDeletedFile = (parentId: string): Promise<void> => {
+      if (this.inSharedWithMe) return navigate ? navigate(sharedWithMeHref) : this.load(null, '');
+      return navigate ? navigate(filesHref(parentId)) : this.load(parentId);
+    };
+    this.deletion = new DeletionState(api, leaveDeletedFile, this.reload, this.acceptDeleted, true, deletionOperations);
     this.rowDeletion = new RowDeletionState(api, this.reload, this.acceptRowDeleted, deletionOperations);
     this.dragMove = new DragMoveState(
       () => this.children,
@@ -118,10 +136,28 @@ export class FilesState {
     this.rootId = undefined;
     this.mutationNotice = '';
     this.clearContent();
-    void this.load(this.target);
+    void this.reload();
   };
 
-  load = async (target: string | null): Promise<void> => {
+  private discoverNamespaces = async (signal: AbortSignal): Promise<{ error: unknown } | undefined> => {
+    try {
+      const listing = filesystemNamespacesSchema.parse({ namespaces: await this.api.filesystem.listNamespaces(signal) });
+      if (signal.aborted) return;
+      this.namespaceEntries = listing.namespaces;
+      this.rootId = listing.namespaces.find((entry) => entry.kind === 'personal')?.root_node_id;
+      if (!listing.namespaces.some((entry) => entry.id === this.selectedNamespaceId)) this.selectedNamespaceId = undefined;
+      this.discoveryPhase = 'ready';
+    } catch (error) {
+      if (signal.aborted) return;
+      this.namespaceEntries = [];
+      this.rootId = undefined;
+      this.selectedNamespaceId = undefined;
+      this.discoveryPhase = readFailure(error);
+      return { error };
+    }
+  };
+
+  load = async (target: string | null, sharedEntry: string | null = null): Promise<void> => {
     if (this.disposed) return;
     this.preview?.reset();
     this.dragMove.reset();
@@ -135,28 +171,28 @@ export class FilesState {
     this.controller?.abort();
     this.controller = new AbortController();
     const signal = this.controller.signal;
-    this.navigation.suspend();
+    if (sharedEntry !== null || this.sharedEntry !== null) this.clearContent();
+    else this.navigation.suspend();
     this.discoveryPhase = 'loading';
     this.target = target;
+    this.sharedEntry = sharedEntry;
     this.phase = 'loading';
     const listingStartSequence = this.updateSequence;
     try {
       const selectedId = target === null ? null : nodeIdSchema.parse(target);
-      try {
-        const listing = filesystemNamespacesSchema.parse({ namespaces: await this.api.filesystem.listNamespaces(signal) });
-        if (this.disposed || generation !== this.generation || signal.aborted) return;
-        this.namespaceEntries = listing.namespaces;
-        this.rootId = listing.namespaces.find((entry) => entry.kind === 'personal')?.root_node_id;
-        if (!listing.namespaces.some((entry) => entry.id === this.selectedNamespaceId)) this.selectedNamespaceId = undefined;
-        this.discoveryPhase = 'ready';
-      } catch (error) {
-        if (this.disposed || generation !== this.generation || signal.aborted) return;
-        this.namespaceEntries = [];
-        this.rootId = undefined;
-        this.selectedNamespaceId = undefined;
-        this.discoveryPhase = readFailure(error);
+      const discovery = this.discoverNamespaces(signal);
+      if (this.atSharedWithMe) {
+        const { nodes } = childrenSchema.parse({ nodes: await this.api.filesystem.listSharedWithMe(signal) });
+        if (signal.aborted) return;
+        this.children = [...new Map(nodes.filter((node) => node.permissions.can_discover && !this.confirmedDeletedIds.has(node.id)).map((node) => [node.id, node])).values()];
+        this.phase = 'ready';
+        return;
+      }
+      const failure = await discovery;
+      if (signal.aborted) return;
+      if (failure) {
         this.clearContent();
-        if (selectedId === null) throw error;
+        if (selectedId === null) throw failure.error;
       }
       const browseId = selectedId ?? this.rootId;
       if (!browseId) throw new Error('Home unavailable');
@@ -175,7 +211,7 @@ export class FilesState {
       const current = capabilities.get(node.id)!;
       const namespaceRoot = [...result.breadcrumbs.items].reverse().map((item) => this.namespaceEntries.find((entry) => entry.root_node_id === item.id)).find((entry) => entry !== undefined);
       const visibility = node.visible_to;
-      this.selectedNamespaceId = namespaceRoot?.id ?? (!result.breadcrumbs.complete && visibility.type === 'namespace' ? this.namespaceEntries.find((entry) => entry.id === visibility.namespace_id)?.id : undefined);
+      this.selectedNamespaceId = this.inSharedWithMe ? undefined : namespaceRoot?.id ?? (!result.breadcrumbs.complete && visibility.type === 'namespace' ? this.namespaceEntries.find((entry) => entry.id === visibility.namespace_id)?.id : undefined);
       this.uploadAvailability = 'hidden';
       this.createDirectoryAllowed = false;
       this.node = node;
@@ -198,7 +234,7 @@ export class FilesState {
     } catch (error) {
       if (this.disposed || generation !== this.generation || signal.aborted) return;
       this.clearContent();
-      if (this.discoveryPhase === 'loading') this.discoveryPhase = readFailure(error);
+      if (!this.atSharedWithMe && this.discoveryPhase === 'loading') this.discoveryPhase = readFailure(error);
       this.phase = readFailure(error);
     }
   };
@@ -272,7 +308,7 @@ export class FilesState {
       return;
     }
     if (parentChanged) {
-      void this.load(this.target);
+      void this.reload();
       return;
     }
     this.node = node;
@@ -298,12 +334,19 @@ export class FilesState {
     if (this.disposed) return;
     this.confirmedDeletedIds.add(node.id);
     const selectedId = this.target === null ? this.rootId : this.target;
-    if (selectedId === node.parent_id) this.acceptDeleted(node);
+    if (selectedId === node.parent_id || this.atSharedWithMe && this.children.some((child) => child.id === node.id)) this.acceptDeleted(node);
+  };
+
+  nodeForDetails = (node: NodeSummary): NodeSummary => {
+    const visibility = node.visible_to;
+    if (!this.inSharedWithMe || visibility.type === 'restricted' || this.namespaceEntries.some((entry) => entry.id === visibility.namespace_id)) return node;
+    return { ...node, visible_to: { type: 'restricted' } };
   };
 
   nodePresentation = (node: NodeSummary): Readonly<{ name: string; isHome: boolean; iconKind: 'home' | 'file' | 'directory' }> => {
     const isHome = node.kind === 'directory' && node.id === this.rootId;
-    return { name: this.namespaceLabel(node.id) ?? node.name, isHome, iconKind: isHome ? 'home' : node.kind };
+    const name = this.atSharedWithMe ? node.name : this.namespaceLabel(node.id) ?? node.name;
+    return { name, isHome, iconKind: isHome ? 'home' : node.kind };
   };
 
   get contentLoading(): boolean {
@@ -322,7 +365,7 @@ export class FilesState {
     return this.node ? this.navigation.label(this.node) || 'Files' : 'Files';
   }
 
-  reload = async (): Promise<void> => this.load(this.target);
+  reload = async (): Promise<void> => this.load(this.target, this.sharedEntry);
 
   rejectUploadAccess = (parentId: string, phase: 'denied' | 'sign-in'): void => {
     if (this.disposed || this.node?.id !== parentId) return;
@@ -354,6 +397,7 @@ export class FilesState {
     this.updatedNodes.clear();
     this.confirmedDeletedIds.clear();
     this.target = null;
+    this.sharedEntry = null;
     this.mutationNotice = '';
     this.namespaceEntries = [];
     this.selectedNamespaceId = undefined;

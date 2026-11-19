@@ -12,6 +12,11 @@ export class FilesystemRoute implements FilesystemApi {
     return result.namespaces;
   };
 
+  listSharedWithMe = async (signal?: AbortSignal): Promise<NodeSummary[]> => {
+    const result = await this.transport.request({ method: 'GET', path: '/me/filesystem/shared-with-me', outputSchema: childrenSchema, signal });
+    return result.nodes;
+  };
+
   getHome = (signal?: AbortSignal): Promise<NodeSummary> =>
     this.transport.request({ method: 'POST', path: '/me/filesystem/home', outputSchema: nodeSummarySchema, signal });
 

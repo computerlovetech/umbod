@@ -73,7 +73,11 @@ async def test_personal_child_user_shares_cross_workers_without_namespace_member
     })
     node = tool_payload(created)
     path = FILESYSTEM + "/nodes/" + node["id"]
+    incoming_path = FILESYSTEM + "/shared-with-me"
     try:
+        incoming = runtime.other_api.get(incoming_path)
+        assert incoming.status_code == 200, incoming.text
+        assert node["id"] not in {item["id"] for item in incoming.json()["nodes"]}
         assert runtime.other_api.get(path).status_code == 403
         assert runtime.other_api.get(FILESYSTEM + "/nodes/" + directory["id"]).status_code == 403
         search = runtime.api.get(path + "/access/recipients", params={"query": sharing_runtime.recipient["label"], "recipient_type": "user"})
@@ -82,6 +86,9 @@ async def test_personal_child_user_shares_cross_workers_without_namespace_member
         recipient = {"type": "user", "user_id": sharing_runtime.recipient["user_id"]}
         shared = replace_access(runtime.api, node["id"], "user", [{"recipient": recipient, "permissions": ["discover", "read"]}])
         assert shared.status_code == 200, shared.text
+        incoming = runtime.other_api.get(incoming_path)
+        assert incoming.status_code == 200, incoming.text
+        assert [item["name"] for item in incoming.json()["nodes"] if item["id"] == node["id"]] == ["direct-user.txt"]
         assert runtime.other_api.get(path + "/content?delivery=stream").content == "Original personal bytes 東京\n".encode()
         inspected = tool_payload(await runtime.other_client.call_tool("get_filesystem_node", {"node_id": node["id"]}))
         assert inspected["permissions"]["can_read"] is True
@@ -94,6 +101,9 @@ async def test_personal_child_user_shares_cross_workers_without_namespace_member
         assert resources[0].text == "Original personal bytes 東京\n"
         revoked = replace_access(runtime.api, node["id"], "user", [])
         assert revoked.status_code == 200
+        incoming = runtime.other_api.get(incoming_path)
+        assert incoming.status_code == 200, incoming.text
+        assert node["id"] not in {item["id"] for item in incoming.json()["nodes"]}
         assert runtime.other_api.get(path).status_code == 403
         rejected = await runtime.other_client.call_tool("get_filesystem_node", {"node_id": node["id"]}, raise_on_error=False)
         assert rejected.is_error

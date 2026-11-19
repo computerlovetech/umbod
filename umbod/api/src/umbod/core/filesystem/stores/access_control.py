@@ -6,7 +6,9 @@ from umbod.core.persistence import (
     DatabaseSession,
     DeleteQuery,
     Equals,
+    OneOf,
     Query,
+    ReadSession,
     PersistenceDecodingError,
     TransactionMode,
     Unordered,
@@ -41,6 +43,36 @@ def grant_key(node_id: NodeId, principal: Principal) -> GrantKey:
     )
 
 
+async def granted_node_ids(
+    session: ReadSession, principals: frozenset[Principal],
+) -> frozenset[NodeId]:
+    by_authority: dict[tuple[PrincipalType, str], set[str]] = {}
+    for principal in principals:
+        by_authority.setdefault((principal.type, principal.issuer), set()).add(principal.id)
+
+    node_ids: set[NodeId] = set()
+    try:
+        for (principal_type, issuer), principal_ids in by_authority.items():
+            ids = sorted(principal_ids)
+            for offset in range(0, len(ids), 200):
+                rows = await session.find_many(
+                    GRANT_TABLE,
+                    Query(
+                        filter=AllOf((
+                            Equals(GRANT_TYPE, principal_type.value),
+                            Equals(GRANT_ISSUER, issuer),
+                            OneOf(GRANT_PRINCIPAL, tuple(ids[offset:offset + 200])),
+                        )),
+                        projection=AllFields(),
+                        ordering=Unordered(),
+                    ),
+                )
+                node_ids.update(row.payload.node_id for row in rows)
+    except PersistenceDecodingError as error:
+        raise PolicyDecodingFailure("Stored filesystem policy cannot be decoded") from error
+    return frozenset(node_ids)
+
+
 class DatabaseAccessControl:
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -62,6 +94,10 @@ class DatabaseAccessControl:
         async with storage_session(self._database, TransactionMode.READ_WRITE) as session:
             return await SessionAccessControl(session).list_grants(node_id)
 
+    async def list_granted_node_ids(self, principals: frozenset[Principal]) -> frozenset[NodeId]:
+        async with self._database.read_session() as session:
+            return await granted_node_ids(session, principals)
+
     async def add_grant(self, grant: AccessGrant) -> None:
         async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
             return await SessionAccessControl(session).add_grant(grant)
@@ -75,21 +111,16 @@ class DatabaseAccessControl:
             await SessionAccessControl(session).clear_node(node_id)
 
 
-class SessionAccessControl:
-    def __init__(self, session: DatabaseSession) -> None:
-        self._session = session
+class SessionAccessReader:
+    def __init__(self, session: ReadSession) -> None:
+        self._reader = session
 
     async def list_namespace_policies(self) -> list[NamespacePolicy]:
         from .namespaces import namespace_policies
-        return await namespace_policies(self._session)
-
-    async def clear_node(self, node_id: NodeId) -> None:
-        await self._session.delete(GRANT_TABLE, DeleteQuery(filter=Equals(GRANT_NODE, str(node_id))))
-        await self._session.delete(OWNER_TABLE, DeleteQuery(filter=Equals(OWNER_NODE, str(node_id))))
-        await append_discovery_changed(self._session)
+        return await namespace_policies(self._reader)
 
     async def get_owner(self, node_id: NodeId) -> Ownership:
-        record = await self._session.find_one(
+        record = await self._reader.find_one(
             OWNER_TABLE,
             Query(
                 filter=Equals(OWNER_NODE, str(node_id)),
@@ -100,6 +131,34 @@ class SessionAccessControl:
         if record is None:
             raise OwnershipNotFound(str(node_id))
         return record.payload.model_copy(deep=True)
+
+    async def list_grants(self, node_id: NodeId) -> list[AccessGrant]:
+        try:
+            records = await self._reader.find_many(
+                GRANT_TABLE,
+                Query(
+                    filter=Equals(GRANT_NODE, str(node_id)),
+                    projection=AllFields(),
+                    ordering=Unordered(),
+                ),
+            )
+        except PersistenceDecodingError as error:
+            raise PolicyDecodingFailure("Stored filesystem policy cannot be decoded") from error
+        return [record.payload.model_copy(deep=True) for record in records]
+
+    async def list_granted_node_ids(self, principals: frozenset[Principal]) -> frozenset[NodeId]:
+        return await granted_node_ids(self._reader, principals)
+
+
+class SessionAccessControl(SessionAccessReader):
+    def __init__(self, session: DatabaseSession) -> None:
+        super().__init__(session)
+        self._session = session
+
+    async def clear_node(self, node_id: NodeId) -> None:
+        await self._session.delete(GRANT_TABLE, DeleteQuery(filter=Equals(GRANT_NODE, str(node_id))))
+        await self._session.delete(OWNER_TABLE, DeleteQuery(filter=Equals(OWNER_NODE, str(node_id))))
+        await append_discovery_changed(self._session)
 
     async def set_owner(self, ownership: Ownership) -> None:
         if ownership.owner.type == PrincipalType.GROUP:
@@ -116,20 +175,6 @@ class SessionAccessControl:
         )
 
         await append_discovery_changed(self._session)
-
-    async def list_grants(self, node_id: NodeId) -> list[AccessGrant]:
-        try:
-            records = await self._session.find_many(
-                GRANT_TABLE,
-                Query(
-                    filter=Equals(GRANT_NODE, str(node_id)),
-                    projection=AllFields(),
-                    ordering=Unordered(),
-                ),
-            )
-        except PersistenceDecodingError as error:
-            raise PolicyDecodingFailure("Stored filesystem policy cannot be decoded") from error
-        return [record.payload.model_copy(deep=True) for record in records]
 
     async def add_grant(self, grant: AccessGrant) -> None:
         if grant.principal.type == PrincipalType.GROUP:

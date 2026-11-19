@@ -11,10 +11,15 @@ export class FilesNavigationState {
   private controller: AbortController | undefined;
   private disposed = false;
 
-  constructor(private readonly api: FilesystemApi, private readonly personalRoot: () => string | undefined = () => undefined, private readonly namespaceLabel: (id: string) => string | undefined = () => undefined) {}
+  constructor(private readonly api: FilesystemApi, private readonly personalRoot: () => string | undefined = () => undefined, private readonly namespaceLabel: (id: string) => string | undefined = () => undefined, private readonly sharedEntry: () => string | null = () => null, private readonly sharedHref: (id: string) => string = (id) => '/files?node=' + encodeURIComponent(id)) {}
 
   readonly displayItems: readonly BreadcrumbItem[] = $derived.by(() => {
     const items = this.path?.items ?? [];
+    const entry = this.sharedEntry();
+    if (entry !== null) {
+      const index = items.findIndex((item) => item.id === entry);
+      return index < 0 ? items.slice(-1) : items.slice(index);
+    }
     const index = items.findLastIndex((item) => this.isPersonalRoot(item) || this.namespaceLabel(item.id) !== undefined);
     return index < 0 ? items : items.slice(index);
   });
@@ -28,6 +33,7 @@ export class FilesNavigationState {
 
   get displayComplete(): boolean {
     const root = this.displayItems[0];
+    if (this.sharedEntry() !== null) return !!root;
     return !!root && (this.isPersonalRoot(root) || this.namespaceLabel(root.id) !== undefined || this.path?.complete === true);
   }
 
@@ -101,12 +107,12 @@ export class FilesNavigationState {
 
   get atRoot(): boolean {
     const items = this.displayItems;
-    return items.length === 1 && items[0].kind === 'directory' && this.displayComplete;
+    return items.length === 1 && (this.sharedEntry() !== null || items[0].kind === 'directory') && this.displayComplete;
   }
 
   label = (item: BreadcrumbItem): string => this.namespaceLabel(item.id) ?? (this.isPersonalRoot(item) ? 'My files' : item.name || 'Files');
 
-  href = (item: BreadcrumbItem): string => this.isPersonalRoot(item) ? '/files' : '/files?node=' + encodeURIComponent(item.id);
+  href = (item: BreadcrumbItem): string => this.sharedEntry() !== null ? this.sharedHref(item.id) : this.isPersonalRoot(item) ? '/files' : '/files?node=' + encodeURIComponent(item.id);
 
   readonly visibleItems: readonly BreadcrumbItem[] = $derived.by(() => {
     const items = this.displayItems;

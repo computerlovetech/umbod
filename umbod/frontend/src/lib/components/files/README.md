@@ -28,10 +28,10 @@ description: "Namespace browsing, per-item sharing, node details, folder creatio
 
 - [files-components.test.ts](./files-components.test.ts) — Stable Files heading, coherent browse loading, fail-closed paths, navigation and creation form tests.
 - [files-navigation-rendering.dom.test.ts](./files-navigation-rendering.dom.test.ts) — Retained controls, SVGs and rows, inert pending content and refresh-scoped menu/details dismissal.
-- [files-route-navigation.dom.test.ts](./files-route-navigation.dom.test.ts) — Same-target hash, unrelated query and personal-root alias navigation preserve creation drafts without refetching.
+- [files-route-navigation.dom.test.ts](./files-route-navigation.dom.test.ts) — Same-target draft retention and Shared with me loading, recovery, preview and return navigation.
 - [files-description.dom.test.ts](./files-description.dom.test.ts) — Description editing, clear, cancel, pending, denied, conflict and creation input interactions.
 - [Shared page container](../shared/workspace/PageContainer.svelte) — Common header, action and content slots shared with Connectors; Files owns action labels and eligibility.
-- [FilesContent.svelte](./FilesContent.svelte) — Files workspace with aligned headers, readable preview metadata, retained navigation, delayed loading and flush preview content.
+- [FilesContent.svelte](./FilesContent.svelte) — Files workspace, Shared with me collection, folder rows and file preview with destination-specific controls.
 - [FilesLocations.svelte](./FilesLocations.svelte) — Feature-owned grouped namespace links, selected location checks and independent discovery recovery.
 - [files-locations.dom.test.ts](./files-locations.dom.test.ts) — Grouped links, recovery, matching list/preview fields, safe metadata and stable frames through preview loading and retries.
 - [FileTypeIcon.svelte](./FileTypeIcon.svelte) — Accessible format, folder and home icons shared by file rows, preview metadata and filename-based drag previews.

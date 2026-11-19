@@ -69,8 +69,7 @@ describe('sharing eligibility', (): void => {
       await eligibility.dialog.show(home);
       expect(eligibility.dialog.nodeName).toBe('Files');
       expect(eligibility.dialog.node?.name).toBe('Renamed home');
-      await eligibility.dialog.save();
-      expect(eligibility.dialog.status).toBe('Sharing updated for “Files”.');
+      await expect(eligibility.dialog.save()).resolves.toBe('Sharing updated for “Files”.');
       expect(home.name).toBe('Renamed home');
     } finally {
       eligibility.dispose();
@@ -168,10 +167,9 @@ describe('sharing dialog state', (): void => {
     expect(state.recipients[1].permissions).toEqual(['discover', 'read']);
     state.changePermission('team-b', 'delete', true);
     state.remove(' Team A ');
-    await state.save();
+    await expect(state.save()).resolves.toBe('Sharing updated for “Notes.txt”.');
     expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'hash-1', { grants: [{ recipient: { type: 'group', group_id: 'team-b' }, recursive: false, permissions: ['discover', 'read', 'delete'] }] }, 'group');
     expect(state.open).toBe(false);
-    expect(state.status).toContain('Notes.txt');
     expect(revoke).toHaveBeenCalledWith(fileId);
     expect(recheck).toHaveBeenCalledWith(fileId);
     await state.show(filesystemFixture[2]);
@@ -341,9 +339,8 @@ describe('sharing dialog state', (): void => {
     const saving = second.state.save();
     second.state[action]();
     response.resolve(access);
-    await saving;
+    await expect(saving).resolves.toBeUndefined();
     expect(second.state.open).toBe(false);
-    expect(second.state.status).toBe('');
     expect(second.recheck).not.toHaveBeenCalled();
   });
 
@@ -476,8 +473,7 @@ describe('sharing dialog state', (): void => {
     await eligibility.dialog.show(filesystemFixture[2]);
     vi.spyOn(api.sharing, 'replaceAccess').mockImplementationOnce(async (): Promise<NodeAccess> => { api.sharing.revoke(fileId); return { ...access, revision: 'revoked', grants: [] }; });
     eligibility.dialog.remove(' Team A ');
-    await eligibility.dialog.save();
+    await expect(eligibility.dialog.save()).resolves.toBe('Sharing updated for “Notes.txt”.');
     await vi.waitFor(() => expect(eligibility.available(fileId)).toBe(false));
-    expect(eligibility.dialog.status).toContain('Sharing updated');
   });
 });

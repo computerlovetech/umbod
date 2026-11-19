@@ -1,7 +1,7 @@
 <script lang="ts">
   import Button from '#lib/components/admin/shared/Button.svelte';
   import DelayedLoadingOverlay from '#lib/components/admin/shared/DelayedLoadingOverlay.svelte';
-  import { filesHref, type FilesState } from '#lib/files/state/files-state.svelte.js';
+  import { sharedWithMeHref, type FilesState } from '#lib/files/state/files-state.svelte.js';
   import type { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
   import type { UploadState } from '#lib/files/state/upload-state.svelte.js';
   import { FileDropState } from '#lib/files/state/file-drop-state.svelte.js';
@@ -18,7 +18,7 @@
   import NewFolderForm from './NewFolderForm.svelte';
   import FilePreview from './preview/FilePreview.svelte';
 
-  let { state, folder, upload, signIn }: { state: FilesState; folder: NewFolderState; upload: UploadState; signIn: () => void } = $props();
+  let { state, folder, upload, signIn, onSharingSaved }: { state: FilesState; folder: NewFolderState; upload: UploadState; signIn: () => void; onSharingSaved?: (message: string) => void } = $props();
 
   const pageDrop = new FileDropState((files) => { void upload.drop(files); }, (message) => upload.rejectDrop(message), () => !upload.canDrop);
 
@@ -82,6 +82,11 @@
     <div class="node-identity">
       <h1 id="files-heading" class="admin-title" tabindex="-1" {@attach state.rowDeletion.attachFocus}>Files</h1>
       <div class="location-navigation">
+        {#if state.atSharedWithMe}
+          <h2 class="shared-heading">Shared with me</h2>
+        {:else if state.inSharedWithMe}
+          <a class="shared-back" href={sharedWithMeHref}>Back to Shared with me</a>
+        {/if}
         {#if state.node}
           <FilesNavigation state={state.navigation} {signIn} />
         {/if}
@@ -89,6 +94,7 @@
     </div>
   {/snippet}
   {#snippet actions()}
+    {#if !state.atSharedWithMe}
     <div class="location-actions" role="group" aria-label="Location actions">
     {#if state.node?.kind === 'directory'}
       {#if state.uploadAvailability === 'allowed'}
@@ -102,8 +108,9 @@
         </Button>
       {/if}
     {/if}
-    {#if state.node}<NodeActions disabled={state.phase !== 'ready'} contextKey={state.navigationVersion} update={state.update} description={state.description} name={state.locationName} displayName={state.atPersonalRoot ? state.locationName : undefined} node={state.node} sharing={state.atNamespaceRoot ? undefined : state.sharing} deletion={state.node.kind === 'file' ? state.deletion : undefined} mutationsAllowed={!state.atPersonalRoot} {signIn} />{/if}
+    {#if state.node}<NodeActions disabled={state.phase !== 'ready'} contextKey={state.navigationVersion} update={state.update} description={state.description} name={state.locationName} displayName={state.atPersonalRoot ? state.locationName : undefined} node={state.nodeForDetails(state.node)} sharing={state.atNamespaceRoot ? undefined : state.sharing} deletion={state.node.kind === 'file' ? state.deletion : undefined} mutationsAllowed={!state.atPersonalRoot} {signIn} />{/if}
     </div>
+    {/if}
   {/snippet}
   {#snippet children()}
 <AdminSplitWorkspace ariaLabel="Files workspace" sidebarLabel="Locations" sidebarHeading="Locations" mobileSidebar detailLabel="Files content" --split-workspace-detail-padding="0">
@@ -111,7 +118,8 @@
     <FilesLocations {state} {signIn} />
   {/snippet}
   {#snippet detail()}
-    {#if state.contentLoading}<p class="visually-hidden" role="status">{state.phase === 'loading' ? 'Loading files…' : 'Loading preview…'}</p>{/if}
+    {#if state.atSharedWithMe && state.phase === 'loading'}<p class="empty-folder" role="status">Loading Shared with me…</p>
+    {:else if state.contentLoading}<p class="visually-hidden" role="status">{state.phase === 'loading' ? 'Loading files…' : 'Loading preview…'}</p>{/if}
     <div class="files-view">
     <DelayedLoadingOverlay active={state.contentLoading} label={state.phase === 'loading' ? 'Loading files…' : 'Loading preview…'}>
     <div aria-busy={state.contentLoading} inert={state.contentLoading}>
@@ -123,15 +131,15 @@
 {#if state.dragMove.needsReload}<Button variant="secondary" onclick={state.dragMove.reload} disabled={state.dragMove.pending}>Reload folder</Button>{/if}
 
 {#if state.phase !== 'ready' && state.phase !== 'loading'}
-  <p role="alert">{state.phase === 'denied' ? "You don't have access to this location." : state.phase === 'sign-in' ? 'Sign in to view files.' : state.phase === 'missing' ? 'This location is unavailable.' : "Couldn't load files."}</p>
+  <p role="alert">{state.phase === 'denied' ? "You don't have access to this location." : state.phase === 'sign-in' ? 'Sign in to view files.' : state.phase === 'missing' ? 'This location is unavailable.' : state.atSharedWithMe ? "Couldn't load Shared with me." : "Couldn't load files."}</p>
   {#if state.phase === 'sign-in'}
     <Button variant="secondary" onclick={signIn}>Sign in</Button>
   {:else}
     <Button variant="secondary" onclick={folder.reload}>Retry</Button>
   {/if}
 {/if}
-{#if state.node}
-  {#if state.node.kind === 'directory'}
+{#if state.node?.kind === 'directory' || state.atSharedWithMe && state.phase === 'ready'}
+    {#if !state.atSharedWithMe}
     <div class="directory-tools">
     {#if !upload.available && upload.error}<p role="alert">{upload.error}</p>{/if}
     {#if state.uploadAvailability === 'sign-in'}
@@ -140,13 +148,14 @@
     {#if upload.open && upload.available}<FileUploadForm state={upload} destination={state.locationName} {signIn} />{/if}
     {#if folder.open}<NewFolderForm state={folder} />{/if}
     </div>
+    {/if}
     {#if state.children.length === 0}
-      <p class="empty-folder" role="status">This folder is empty.</p>
+      <p class="empty-folder" role="status">{state.atSharedWithMe ? 'Nothing has been shared with you yet.' : 'This folder is empty.'}</p>
     {:else}
       <div class="items">
-        <table role="table" aria-label="Files and folders">
-          <colgroup><col /><col class="type-column" /><col class="updated-column" /><col class="actions-column" /></colgroup>
-          <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Updated</th><th scope="col" class="row-actions">Actions</th></tr></thead>
+        <table role="table" aria-label={state.atSharedWithMe ? 'Files and folders shared with me' : 'Files and folders'}>
+          <colgroup><col /><col class="type-column" /><col class="updated-column" />{#if !state.atSharedWithMe}<col class="actions-column" />{/if}</colgroup>
+          <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Updated</th>{#if !state.atSharedWithMe}<th scope="col" class="row-actions">Actions</th>{/if}</tr></thead>
           <tbody role="rowgroup">
             {#each state.children as item (item.id)}
               {@const deletion = state.rowDeletion.controllers.get(item.id)}
@@ -154,15 +163,16 @@
               {@const presentation = state.nodePresentation(item)}
               <tr role="row" class={['item-row', presentation.isHome && 'home-row', state.dragMove.isSource(item.id) && 'drag-source', state.dragMove.isTarget(item.id) && 'drop-target']} draggable={state.dragMove.canDrag(item.id)} {@attach state.dragMove.attachRow(item.id)} ondragstart={(event) => state.dragMove.start(item.id, event)} ondragover={(event) => state.dragMove.over(item.id, event)} ondragleave={(event) => state.dragMove.leave(item.id, event)} ondrop={(event) => state.dragMove.drop(item.id, event)}>
                 <td role="cell" class="name-cell">
-                  <div class="row-name"><a class="item-name" href={filesHref(item.id)} title={presentation.name} draggable="false">
+                  <div class="row-name"><a class="item-name" href={state.childHref(item.id)} title={presentation.name} draggable="false">
                     <FileTypeIcon kind={presentation.iconKind} name={presentation.name} contentType={item.metadata.content_type} />
                     <span class="item-name-label">{presentation.name}</span>
                   </a><PermissionBadge permissions={item.permissions} /></div>
                 </td>
                 <td role="cell" class="type-cell">{item.kind === 'directory' ? 'Folder' : 'File'}</td>
                 <td role="cell" class="updated-cell"><time datetime={item.updated_at} title={item.updated_at}>{updatedAt(item.updated_at)}</time></td>
+                {#if !state.atSharedWithMe}
                 <td role="cell" class="row-actions">
-                  {#if editing}<NodeActions disabled={state.phase !== 'ready'} contextKey={state.navigationVersion} update={editing.update} description={editing.description} name={presentation.name} displayName={presentation.isHome ? presentation.name : undefined} node={item} sharing={state.sharing} {deletion} onconfirm={() => { void state.rowDeletion.confirm(item.id); }} {signIn} />{/if}
+                  {#if editing}<NodeActions disabled={state.phase !== 'ready'} contextKey={state.navigationVersion} update={editing.update} description={editing.description} name={presentation.name} displayName={presentation.isHome ? presentation.name : undefined} node={state.nodeForDetails(item)} sharing={state.sharing} {deletion} onconfirm={() => { void state.rowDeletion.confirm(item.id); }} {signIn} />{/if}
                   {#if item.kind === 'file' && deletion}
                     {#if deletion.pending}<span class="visually-hidden" role="status">Deleting “{item.name}”…</span>{/if}
                     {#if deletion.message}<p role="alert">{deletion.message}</p>{/if}
@@ -170,17 +180,18 @@
                     {#if deletion.signInRequired}<Button variant="secondary" onclick={signIn}>Sign in</Button>{/if}
                   {/if}
                 </td>
+                {/if}
               </tr>
             {/each}
           </tbody>
         </table>
       </div>
     {/if}
-  {:else}
+{:else if state.node}
     <section aria-label="File details">
       {#if state.deletion.pending}<p role="status">Deleting file…</p>{/if}
       {#if state.deletion.message}<p role="alert">{state.deletion.message}</p>{/if}
-      {#if state.deletion.needsReload}<Button variant="secondary" onclick={state.deletion.reconcile}>{state.deletion.mutationSucceeded ? 'Reload parent folder' : 'Reload file'}</Button>{/if}
+      {#if state.deletion.needsReload}<Button variant="secondary" onclick={state.deletion.reconcile}>{state.deletion.mutationSucceeded ? state.inSharedWithMe ? 'Open Shared with me' : 'Reload parent folder' : 'Reload file'}</Button>{/if}
       {#if state.deletion.signInRequired}<Button variant="secondary" onclick={signIn}>Sign in</Button>{/if}
       {#if !state.contentLoading}
       <div class="file-preview-surface">
@@ -202,11 +213,9 @@
       </div>
       {/if}
     </section>
-  {/if}
 {/if}
 
-{#if state.sharing.dialog.open}<NodeSharingDialog state={state.sharing.dialog} {signIn} />{/if}
-<p role="status" aria-atomic="true">{state.sharing.dialog.status}</p>
+{#if state.sharing.dialog.open}<NodeSharingDialog state={state.sharing.dialog} {signIn} onSaved={onSharingSaved} />{/if}
     </div>
     </DelayedLoadingOverlay>
     </div>
@@ -219,6 +228,8 @@
   .location-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: inherit; width: calc(76px + 2.75rem + 1.2rem); min-height: 2.75rem; }
   .files-view { --files-type-width: 10rem; --files-updated-width: 12rem; --files-actions-width: 5rem; --files-cell-padding: 1rem; display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; height: 100%; }
   .location-navigation { flex: 1; min-width: 0; }
+  .shared-heading { margin: 0; font-size: 1rem; }
+  .shared-back { display: inline-block; margin: 0.25rem 0 0.5rem; font-size: 0.85rem; }
   .file-drag-image { position: fixed; top: 0; left: 0; width: 1px; height: 1px; pointer-events: none; }
   .file-drag-preview { position: fixed; top: 0; left: 0; transform: translate(var(--preview-x), var(--preview-y)); z-index: 40; display: flex; align-items: center; gap: 0.75rem; box-sizing: border-box; width: min(18rem, calc(100vw - 1rem)); padding: 0.75rem; border: 1px solid var(--admin-accent); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-accent); box-shadow: var(--admin-shadow); pointer-events: none; }
   .file-drag-label { min-width: 0; display: grid; gap: 0.2rem; }

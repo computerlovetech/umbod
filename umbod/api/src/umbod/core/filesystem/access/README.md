@@ -9,4 +9,4 @@ description: Fresh namespace-bounded permissions and discover-gated namespace lo
 - [__init__.py](./__init__.py) — Public contracts and service exports.
 
 - [models.py](./models.py) — Caller permission flags and namespace or restricted visibility.
-- [service.py](./service.py) — Namespace-bounded additive rights and mutation-result flags with restricted visibility after discovery loss.
+- [service.py](./service.py) — Caller permission projection and incoming item shares with discover-gated parent and namespace location.

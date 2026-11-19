@@ -12,7 +12,7 @@ Umbod's filesystem is a virtual workspace for files and folders, not access to t
 
 Open **Files** in the workspace navigation. **My files** is your personal namespace, private by default and provisioned on first use. Administrators have no automatic access; explicitly shared files and folders remain accessible to their recipients.
 
-The **Locations** panel separates **Personal → My files** from **Shared namespaces**. Select a location to open its root; the highlighted location stays selected while you browse its folders and file previews. Locations appear beside the file browser on larger screens and above it on smaller screens. The page title stays **Files**, with file actions above the panel.
+The **Locations** panel includes **My files**, **Shared with me**, and any **Shared namespaces** you can access. Select a namespace to open its root, or choose **Shared with me** to find files and folders shared with you. Locations appear beside the file browser on larger screens and above it on smaller screens. The page title stays **Files**, with file actions above the panel.
 
 Use the file list and breadcrumbs to navigate folders within a location. Breadcrumbs stop at that namespace's root and remain separate from location switching. Only accessible namespaces appear. Shared files follow the namespace's group policy, including files uploaded by you.
 
@@ -52,7 +52,9 @@ Open an item's sharing dialog to share it with registered **Groups** or observed
 
 Folder shares can **Include contents**, applying recursively to existing and future descendants within the namespace. Folder-only shares do not inherit. Permissions add together: removing a direct read grant cannot remove write access supplied by a namespace or another recursive share.
 
-Recipients can follow an item's UUID link without access to its parent or namespace root. Such items do not automatically add the containing namespace to their namespace list. Observed-user discovery uses verified identities and is not a complete or live identity-provider directory. Use returned opaque recipient IDs, not names or email addresses, as mutation targets.
+Recipients can find explicitly shared items in **Files → Shared with me**, or open them using the original link. Items stay in their original locations: sharing a file does not add it to **My files** or reveal its private parent folder. Open a shared folder to browse the contents you can access. If a share is removed, the item disappears from this list unless another share still qualifies; the original link works only while you still have access.
+
+Observed-user discovery uses verified identities and is not a complete or live identity-provider directory. Use returned opaque recipient IDs, not names or email addresses, as mutation targets.
 
 See [File and folder sharing](../operations/filesystem-sharing.md) for recipient, revision and API contracts.
 

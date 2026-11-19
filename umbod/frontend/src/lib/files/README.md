@@ -22,10 +22,11 @@ description: "Namespace browsing, per-item sharing, directory creation, uploads 
 - [state/description-state.test.ts](./state/description-state.test.ts) — Authoritative reconciliation, creation descriptions, duplicate protection and stale-result tests.
 - [description-api.test.ts](./description-api.test.ts) — Conditional description transport, validation, upload metadata and authority tests.
 - [browse-api.test.ts](./browse-api.test.ts) — Real state and route request-budget, coherent response validation, denied actions and cancellation tests.
-- [state/files-state.svelte.ts](./state/files-state.svelte.ts) — Committed browse retention, memoized locations, semantic target guards, identity fences and mutation reconciliation.
+- [state/files-state.svelte.ts](./state/files-state.svelte.ts) — Namespace and Shared with me destinations, URL targets, identity fences and mutation reconciliation.
+- [state/shared-with-me-state.test.ts](./state/shared-with-me-state.test.ts) — Collection isolation, account and navigation races, private parent exclusion and post-deletion return.
 - [state/namespaces-state.test.ts](./state/namespaces-state.test.ts) — Grouped locations, pending selection, direct UUID access, discovery recovery, revocation and identity response fences.
 - [state/personal-root-state.test.ts](./state/personal-root-state.test.ts) — Personal-root navigation, home lookup failures, renamed homes, creation targets and stale responses.
-- [api.ts](./api.ts) — Namespace browsing, filesystem mutation and per-item recipient sharing ports.
+- [api.ts](./api.ts) — Namespace and shared-item discovery, filesystem mutation and per-item recipient sharing ports.
 - [domain/sharing.ts](./domain/sharing.ts) — Typed recipient grants, scope, revisions and namespace-aware sharing write responses.
 - [state/sharing-eligibility-state.svelte.ts](./state/sharing-eligibility-state.svelte.ts) — Browse-seeded sharing availability, bounded inspections and lifecycle fences.
 - [state/sharing-dialog-state.svelte.ts](./state/sharing-dialog-state.svelte.ts) — Group/user recipient drafts, explicit recursive scope, conflict recovery and recipient switching.

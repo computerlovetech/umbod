@@ -2,7 +2,7 @@ from umbod.core.callers import CallerSnapshot
 
 from ..errors import MissingNode, OwnershipNotFound, PolicyDecodingFailure
 from ..models import AccessGrant, NodeId, Ownership, Permission, RootParent
-from ..ports import AccessControlDriver, NamespaceDriver
+from ..ports import AccessControlReader, NodeReader
 from ..namespaces.models import NamespacePolicy
 from .discovery import AuthorizationNode, EffectivePermissionEvaluator
 from .errors import PermissionDenied
@@ -14,8 +14,8 @@ class AuthorizationService:
     def __init__(
         self,
         resolver: FilesystemIdentityResolver,
-        namespace: NamespaceDriver,
-        access_control: AccessControlDriver,
+        namespace: NodeReader,
+        access_control: AccessControlReader,
     ) -> None:
         self._resolver = resolver
         self._namespace = namespace
@@ -49,8 +49,8 @@ async def allows_resolved(
     identity: ResolvedIdentity,
     node_id: NodeId,
     permission: Permission,
-    namespace: NamespaceDriver,
-    access_control: AccessControlDriver,
+    namespace: NodeReader,
+    access_control: AccessControlReader,
 ) -> bool:
     return permission in await resolved_permissions(identity, node_id, namespace, access_control)
 
@@ -58,16 +58,16 @@ async def allows_resolved(
 async def resolved_permissions(
     identity: ResolvedIdentity,
     node_id: NodeId,
-    namespace: NamespaceDriver,
-    access_control: AccessControlDriver,
+    namespace: NodeReader,
+    access_control: AccessControlReader,
 ) -> frozenset[Permission]:
     _, permissions = await resolved_access(identity, node_id, namespace, access_control)
     return permissions
 
 
 async def resolved_access(
-    identity: ResolvedIdentity, node_id: NodeId, namespace: NamespaceDriver,
-    access_control: AccessControlDriver,
+    identity: ResolvedIdentity, node_id: NodeId, namespace: NodeReader,
+    access_control: AccessControlReader,
 ) -> tuple[NamespacePolicy | None, frozenset[Permission]]:
     nodes: list[AuthorizationNode] = []
     visited: set[NodeId] = set()

@@ -6,10 +6,14 @@
   import Select from '#lib/components/admin/shared/Select.svelte';
   import type { SharingDialogState } from '#lib/files/state/sharing-dialog-state.svelte.js';
 
-  let { state, signIn }: { state: SharingDialogState; signIn: () => void } = $props();
+  let { state, signIn, onSaved }: { state: SharingDialogState; signIn: () => void; onSaved?: (message: string) => void } = $props();
   const id = $props.id();
 
-  function submit(event: SubmitEvent): void { event.preventDefault(); void state.save(); }
+  async function submit(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    const message = await state.save();
+    if (message) onSaved?.(message);
+  }
 </script>
 
   {#snippet fields()}

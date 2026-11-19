@@ -7,7 +7,7 @@ description: "Database-neutral namespace and access-policy persistence."
 # Files
 
 - [__init__.py](./__init__.py) — Public module exports.
-- [access_control.py](./access_control.py) — Ownership, grants and complete per-node policy cleanup.
+- [access_control.py](./access_control.py) — Ownership, node and principal-scoped grants, and complete per-node policy cleanup.
 - [authorization_facts.py](./authorization_facts.py) — Bounded ACL reads scoped to validated managed descendants.
 - [discovery.py](./discovery.py) — Coherent read-only authorization snapshots without root initialization or writer reservations.
 - [discovery_events.py](./discovery_events.py) — Sanitized durable invalidation events appended within namespace and policy transactions.

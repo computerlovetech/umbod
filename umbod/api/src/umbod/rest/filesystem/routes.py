@@ -58,6 +58,18 @@ async def browse(
         )
 
 
+@router.get(
+    "/shared-with-me", response_model=ChildrenResponse,
+    description="Lists discoverable items with a direct user or group grant. An undiscoverable parent "
+    "is represented by an empty object; namespace location is restricted if its root is undiscoverable.",
+)
+async def list_shared_with_me(caller: Caller, access: Access, response: Response) -> ChildrenResponse:
+    with filesystem_errors():
+        nodes = await access.list_shared_with_me(caller)
+    response.headers["Cache-Control"] = "no-store"
+    return ChildrenResponse(nodes=nodes)
+
+
 @router.get("/namespaces")
 async def list_namespaces(
     caller: Caller, response: Response,
