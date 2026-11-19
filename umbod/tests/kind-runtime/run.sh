@@ -6,8 +6,7 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 app_directory="$(cd "${script_directory}/../.." && pwd)"
 repository_directory="$(cd "${app_directory}/.." && pwd)"
 chart_directory="${app_directory}/deploy/helm/umbod"
-cluster_name="${UMBOD_TEST_KIND_CLUSTER_NAME:-umbod-runtime-tests}"
-kube_context="kind-${cluster_name}"
+cluster_name="${UMBOD_TEST_KIND_CLUSTER_NAME:-}"
 release_name="umbod"
 cluster_created=false
 export UMBOD_TEST_FILESYSTEM_PREVIEW_MAX_BYTES="${UMBOD_TEST_FILESYSTEM_PREVIEW_MAX_BYTES:-2097152}"
@@ -41,21 +40,38 @@ export UMBOD_TEST_ROOT_SECRET="$(python3 -c 'import secrets; import sys; sys.std
 export UMBOD_TEST_BEARER_TOKEN="eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJraW5kLWNpIiwiaXNzIjoiaHR0cDovL2FnZW50LWNlbnRyYWwta2luZC5pbnZhbGlkIiwiZW1haWwiOiJraW5kLWNpQGV4YW1wbGUuaW52YWxpZCIsImdyb3VwcyI6WyJhZG1pbiJdfQ."
 
 export UMBOD_TEST_BEARER_TOKEN_B="$(python3 -c 'import base64,json; encode=lambda value: base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=").decode(); print(encode({"alg":"none","typ":"JWT"})+"."+encode({"sub":"kind-ci-b","iss":"http://agent-central-kind.invalid","email":"kind-ci-b@example.invalid","groups":["admin"]})+".")')"
-export UMBOD_TEST_KUBE_CONTEXT="${kube_context}"
 export UMBOD_TEST_BOOTSTRAP_PATH="${script_directory}/bootstrap.py"
 export UMBOD_TEST_API_B_BASE_URL="http://127.0.0.1:${UMBOD_TEST_API_B_PORT:-28015}"
 export UMBOD_TEST_MCP_B_URL="http://127.0.0.1:${UMBOD_TEST_MCP_B_PORT:-28013}/mcp"
 export UMBOD_TEST_PERSONAL_URL="https://127.0.0.1:${UMBOD_TEST_PERSONAL_PORT:-28443}"
 
-for command_name in docker helm kind kubectl curl uv openssl; do
+for command_name in docker helm kind kubectl curl uv openssl python3; do
     command -v "${command_name}" >/dev/null
- done
+done
+
+lock_directory="${HOME}/.cache/umbod"
+mkdir -p "${lock_directory}"
+exec 9>>"${lock_directory}/kind-runtime.lock"
+python3 -c '
+import fcntl
+import sys
+
+try:
+    fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    sys.exit("Another Umbod Kind runtime run is active. Wait for it to finish before retrying; host ports and image tags are shared.")
+'
 
 docker info >/dev/null
-if kind get clusters | grep -Fxq "${cluster_name}"; then
-    printf 'Kind cluster already exists: %s\n' "${cluster_name}" >&2
+cluster_name="${cluster_name:-umbod-runtime-tests-$(openssl rand -hex 6)}"
+kube_context="kind-${cluster_name}"
+export UMBOD_TEST_KUBE_CONTEXT="${kube_context}"
+existing_clusters="$(kind get clusters)"
+if grep -Fxq -- "${cluster_name}" <<< "${existing_clusters}"; then
+    printf 'Kind cluster already exists: %s. Choose a different UMBOD_TEST_KIND_CLUSTER_NAME.\n' "${cluster_name}" >&2
     exit 1
 fi
+printf 'Kind runtime cluster: %s\n' "${cluster_name}"
 
 finish() {
     exit_status=$?
@@ -75,7 +91,14 @@ finish() {
                 | python3 "${script_directory}/check_secret_logs.py" --diagnostics || true
         fi
         if [[ "${UMBOD_TEST_KIND_KEEP_CLUSTER:-false}" != "true" ]]; then
-            kind delete cluster --name "${cluster_name}" || true
+            if ! kind delete cluster --name "${cluster_name}"; then
+                printf 'Failed to clean up Kind cluster: %s\n' "${cluster_name}" >&2
+                if [[ ${exit_status} -eq 0 ]]; then
+                    exit_status=1
+                fi
+            fi
+        else
+            printf 'Retained Kind cluster: %s. Use kind export kubeconfig --name %s to access it.\n' "${cluster_name}" "${cluster_name}"
         fi
     fi
     if [[ -n "${host_temporary_directory}" ]]; then
@@ -84,7 +107,10 @@ finish() {
     exit "${exit_status}"
 }
 trap finish EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 host_temporary_directory="$(mktemp -d)"
+export KUBECONFIG="${host_temporary_directory}/kubeconfig"
 export UMBOD_TEST_PERSONAL_CA="${host_temporary_directory}/ca.crt"
 export UMBOD_TEST_PERSONAL_PROXY_TOKENS="${host_temporary_directory}/proxy-tokens"
 
