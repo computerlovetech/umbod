@@ -30,8 +30,8 @@ describe('admin shell logout', () => {
     }
     const document = new Window().document;
     document.body.innerHTML = shell.body;
-    expect(document.querySelector('button')?.textContent).toBe('Log out');
-    expect(document.querySelector('button')?.type).toBe('button');
+    const logoutButton = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Log out');
+    expect(logoutButton?.type).toBe('button');
     expect(shell.body).toContain('aria-label="Administration sidebar"');
     expect(shell.body).toContain('aria-label="Administration navigation"');
     expect(document.querySelector('.workspace-back')?.textContent).toBe('←Back to workspace');
@@ -91,8 +91,8 @@ describe('admin shell logout', () => {
     } });
     const document = new Window().document;
     document.body.innerHTML = body;
-    expect(document.querySelector('button')?.type).toBe('button');
-    expect(document.querySelector('button')?.textContent).toBe('Log out');
+    const logoutButton = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Log out');
+    expect(logoutButton?.type).toBe('button');
     expect(logout).not.toHaveBeenCalled();
   });
 });

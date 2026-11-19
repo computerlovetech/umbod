@@ -216,7 +216,7 @@ describe('Files user composition', () => {
       expect(links[0].getAttribute('href')).toBe(filesHref(item.id));
       expect(links[0].classList.contains('item-name')).toBe(true);
       expect(row.hasAttribute('tabindex')).toBe(false);
-      expect(row.hasAttribute('role')).toBe(false);
+      expect(row.getAttribute('role')).toBe('row');
       expect(row.hasAttribute('aria-selected')).toBe(false);
       const actions = row.querySelector('button[aria-haspopup="menu"]');
       expect(actions?.getAttribute('aria-label')).toBe(`Actions for “${item.name}”`);

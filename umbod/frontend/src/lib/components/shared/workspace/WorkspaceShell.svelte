@@ -9,6 +9,8 @@
   import { WorkspaceShellState, type WorkspaceNavigationItem } from './workspace-shell-state.svelte';
   import { useWorkspaceNavigationHistory } from '#lib/workspace/navigation-history-context.js';
   import WorkspaceNavigationIcon from './WorkspaceNavigationIcon.svelte';
+  import { attachMobileNavigation } from './mobile-navigation';
+  import '#lib/styles/mobile-navigation.css';
 
   type Props = {
     workspaceLabel: string;
@@ -36,6 +38,7 @@
     contentWidth = 'default', contentLoading = false, navigationScope, children, logout = logoutNavigation
   }: Props = $props();
 
+  const sidebarId = $props.id();
   const navigationHistory = useWorkspaceNavigationHistory();
   const state = new WorkspaceShellState(() => ({
     activeItem,
@@ -49,7 +52,18 @@
 </script>
 
 <div class="workspace-shell">
-  <aside class="sidebar" aria-label={sidebarLabel}>
+  <div class="mobile-navigation-trigger mobile-workspace-bar">
+    <Button variant="quiet" iconOnly aria-label="Open workspace menu" popovertarget={sidebarId}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+    </Button>
+    <span aria-hidden="true">Umbod</span>
+  </div>
+  <aside class="sidebar mobile-navigation-panel" id={sidebarId} aria-label={sidebarLabel} {@attach attachMobileNavigation}>
+    <div class="mobile-navigation-close">
+      <Button variant="quiet" iconOnly aria-label="Close workspace menu" popovertarget={sidebarId} popovertargetaction="hide">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
+      </Button>
+    </div>
     <div class="sidebar-top">
       <a class="brand" href={homeHref}><img src="/umbod-logo.svg" alt="" width="40" height="40" /><span>Umbod</span></a>
       <div class={["sidebar-navigation", state.sidebarTransition === 'forward' && "enter-forward", state.sidebarTransition === 'backward' && "enter-backward"]}>
@@ -343,13 +357,26 @@
       grid-template-columns: minmax(0, 1fr);
       height: auto;
       min-height: 100vh;
+      grid-template-rows: auto 1fr;
       overflow: visible;
     }
 
+    .mobile-workspace-bar {
+      align-items: center;
+      gap: 0.5rem;
+      padding: 4px 12px;
+      background: var(--admin-sidebar);
+      border-bottom: 1px solid var(--admin-border);
+      font-weight: 650;
+    }
+
     .sidebar {
-      height: auto;
-      min-height: auto;
+      min-height: 0;
       padding: 12px;
+    }
+
+    .sidebar-top {
+      flex: 1;
     }
 
     .content-shell {

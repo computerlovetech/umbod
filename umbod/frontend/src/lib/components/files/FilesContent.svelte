@@ -106,7 +106,7 @@
     </div>
   {/snippet}
   {#snippet children()}
-<AdminSplitWorkspace ariaLabel="Files workspace" sidebarLabel="Locations" sidebarHeading="Locations" detailLabel="Files content" --split-workspace-detail-padding="0">
+<AdminSplitWorkspace ariaLabel="Files workspace" sidebarLabel="Locations" sidebarHeading="Locations" mobileSidebar detailLabel="Files content" --split-workspace-detail-padding="0">
   {#snippet sidebar()}
     <FilesLocations {state} {signIn} />
   {/snippet}
@@ -144,25 +144,24 @@
       <p class="empty-folder" role="status">This folder is empty.</p>
     {:else}
       <div class="items">
-        <table>
-          <caption class="visually-hidden">Files and folders</caption>
+        <table role="table" aria-label="Files and folders">
           <colgroup><col /><col class="type-column" /><col class="updated-column" /><col class="actions-column" /></colgroup>
           <thead><tr><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Updated</th><th scope="col" class="row-actions">Actions</th></tr></thead>
-          <tbody>
+          <tbody role="rowgroup">
             {#each state.children as item (item.id)}
               {@const deletion = state.rowDeletion.controllers.get(item.id)}
               {@const editing = state.rowEditing.controllers.get(item.id)}
               {@const presentation = state.nodePresentation(item)}
-              <tr class={['item-row', presentation.isHome && 'home-row', state.dragMove.isSource(item.id) && 'drag-source', state.dragMove.isTarget(item.id) && 'drop-target']} draggable={state.dragMove.canDrag(item.id)} {@attach state.dragMove.attachRow(item.id)} ondragstart={(event) => state.dragMove.start(item.id, event)} ondragover={(event) => state.dragMove.over(item.id, event)} ondragleave={(event) => state.dragMove.leave(item.id, event)} ondrop={(event) => state.dragMove.drop(item.id, event)}>
-                <td>
+              <tr role="row" class={['item-row', presentation.isHome && 'home-row', state.dragMove.isSource(item.id) && 'drag-source', state.dragMove.isTarget(item.id) && 'drop-target']} draggable={state.dragMove.canDrag(item.id)} {@attach state.dragMove.attachRow(item.id)} ondragstart={(event) => state.dragMove.start(item.id, event)} ondragover={(event) => state.dragMove.over(item.id, event)} ondragleave={(event) => state.dragMove.leave(item.id, event)} ondrop={(event) => state.dragMove.drop(item.id, event)}>
+                <td role="cell" class="name-cell">
                   <div class="row-name"><a class="item-name" href={filesHref(item.id)} title={presentation.name} draggable="false">
                     <FileTypeIcon kind={presentation.iconKind} name={presentation.name} contentType={item.metadata.content_type} />
                     <span class="item-name-label">{presentation.name}</span>
                   </a><PermissionBadge permissions={item.permissions} /></div>
                 </td>
-                <td>{item.kind === 'directory' ? 'Folder' : 'File'}</td>
-                <td><time datetime={item.updated_at} title={item.updated_at}>{updatedAt(item.updated_at)}</time></td>
-                <td class="row-actions">
+                <td role="cell" class="type-cell">{item.kind === 'directory' ? 'Folder' : 'File'}</td>
+                <td role="cell" class="updated-cell"><time datetime={item.updated_at} title={item.updated_at}>{updatedAt(item.updated_at)}</time></td>
+                <td role="cell" class="row-actions">
                   {#if editing}<NodeActions disabled={state.phase !== 'ready'} contextKey={state.navigationVersion} update={editing.update} description={editing.description} name={presentation.name} displayName={presentation.isHome ? presentation.name : undefined} node={item} sharing={state.sharing} {deletion} onconfirm={() => { void state.rowDeletion.confirm(item.id); }} {signIn} />{/if}
                   {#if item.kind === 'file' && deletion}
                     {#if deletion.pending}<span class="visually-hidden" role="status">Deleting “{item.name}”…</span>{/if}
@@ -290,6 +289,35 @@
     .metadata-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .metadata-grid > div:first-child { grid-column: 1 / -1; }
     .metadata-grid dd { white-space: normal; overflow-wrap: anywhere; }
+  }
+  @media (max-width: 720px) {
+    .node-identity { flex-wrap: wrap; gap: 0.5rem 1rem; }
+    .items { --node-actions-trigger-size: 2.75rem; }
+    table, tbody { display: block; min-width: 0; }
+    colgroup { display: none; }
+    thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .item-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-rows: auto auto;
+      column-gap: 0.5rem;
+      align-content: center;
+      align-items: center;
+      box-sizing: border-box;
+      min-height: 52px;
+      padding: 0.25rem 0.5rem 0.25rem 0.75rem;
+    }
+    .item-row td { min-width: 0; padding: 0; }
+    .name-cell { grid-column: 1 / 3; }
+    .row-name { display: block; }
+    .item-name-label { overflow: visible; overflow-wrap: anywhere; white-space: normal; }
+    .row-name > :global(.permission-badge) { display: none; }
+    .type-cell, .updated-cell { color: var(--admin-muted); font-size: 0.75rem; }
+    .type-cell { grid-column: 1; grid-row: 2; margin-left: 1.85rem; }
+    .updated-cell { grid-column: 2; grid-row: 2; }
+    .items time { white-space: normal; }
+    .item-row > .row-actions { grid-column: 3; grid-row: 1 / 3; max-width: 6.5rem; white-space: normal; overflow-wrap: anywhere; }
+    .row-actions > :global(button) { max-width: 100%; white-space: normal; }
   }
   @media (max-width: 480px) {
     .preview-document { padding: 1rem; }
