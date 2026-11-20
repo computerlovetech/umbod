@@ -2,6 +2,8 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from umbod.infrastructure.http import OutboundHttpClientFactory
+    from umbod.infrastructure.mcp_registry import open_official_mcp_registry
     from umbod.infrastructure.metrics.mcp.composition import create_mcp_metrics
     from umbod.infrastructure.metrics.rest.composition import (
         create_rest_metrics_recorder,
@@ -47,6 +49,8 @@ from umbod.infrastructure.filesystem import (
 )
 
 __all__ = [
+    "OutboundHttpClientFactory",
+    "open_official_mcp_registry",
     "create_mcp_metrics",
     "create_rest_metrics_recorder",
     "create_rest_metrics_http_server",
@@ -83,6 +87,8 @@ __all__ = [
 ]
 
 _EXPORTS: dict[str, str] = {
+    "OutboundHttpClientFactory": ".http",
+    "open_official_mcp_registry": ".mcp_registry",
     "create_mcp_metrics": ".metrics.mcp.composition",
     "create_rest_metrics_recorder": ".metrics.rest.composition",
     "create_rest_metrics_http_server": ".metrics.rest.composition",

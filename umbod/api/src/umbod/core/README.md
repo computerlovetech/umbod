@@ -26,6 +26,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [identity_directory](./identity_directory/README.md) — Observed identities and membership values.
 - [invocation](./invocation/README.md) — Invocation policy, approval, and transport-neutral failure assessment.
 - [key_value](./key_value/README.md) — Key-value storage contracts.
+- [mcp_registry](./mcp_registry/README.md) — Provider-independent remote MCP server lookup.
 - [messaging](./messaging/) — Events and stream contracts.
 - [network](./network/) — Shared network validation.
 - [permissions](./permissions/README.md) — Group grants and runtime access.

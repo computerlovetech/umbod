@@ -18,7 +18,6 @@ from umbod.core.connectors.openapi.execution import (
     ExactHttpsDestinationPolicy,
     HttpxOutboundOperationAdapter,
     HttpxSpecificationFetcher,
-    OutboundHttpClientFactory,
     OutboundNetworkError,
     OutboundOperationTransport,
     OutboundPolicyError,
@@ -385,18 +384,6 @@ async def test_outbound_transport_returns_only_allowlisted_normalized_response_h
     )
     response = await transport.send(_outbound_request(False))
     assert response.headers == expected_headers
-
-
-@pytest.mark.asyncio
-async def test_outbound_http_client_factory_configures_hardened_client() -> None:
-    factory = OutboundHttpClientFactory(1.0, 2.0, 3.0, 4.0)
-    client = factory.create()
-    try:
-        assert client.trust_env is False
-        assert client.follow_redirects is False
-        assert client.timeout == httpx.Timeout(connect=1.0, read=2.0, write=3.0, pool=4.0)
-    finally:
-        await client.aclose()
 
 
 @pytest.mark.parametrize(

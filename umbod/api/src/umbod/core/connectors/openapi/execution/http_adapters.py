@@ -161,25 +161,6 @@ class HttpxOutboundOperationAdapter:
         return False
 
 
-class OutboundHttpClientFactory:
-    def __init__(
-        self,
-        connect_timeout_seconds: float,
-        read_timeout_seconds: float,
-        write_timeout_seconds: float,
-        pool_timeout_seconds: float,
-    ) -> None:
-        self._timeout = httpx.Timeout(
-            connect=connect_timeout_seconds,
-            read=read_timeout_seconds,
-            write=write_timeout_seconds,
-            pool=pool_timeout_seconds,
-        )
-
-    def create(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=self._timeout)
-
-
 class SpecificationFetchRequest(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from umbod.core.connectors.downstream_mcp.adapters.composition import create_downstream_mcp_client_factory
 from umbod.core.connectors.downstream_mcp.adapters.settings import downstream_mcp_infrastructure_settings_from_app_config
 from umbod.core.connectors.downstream_mcp.stores import create_downstream_mcp_stores
-from umbod.core.connectors.openapi.execution import OutboundHttpClientFactory
+from umbod.infrastructure import OutboundHttpClientFactory
 from umbod.core.persistence import Database
 from umbod.mcp.connectors.downstream_mcp.ports import DownstreamClientFactory
 from umbod.mcp.connectors.openapi import OutboundHttpClientFactoryPort
