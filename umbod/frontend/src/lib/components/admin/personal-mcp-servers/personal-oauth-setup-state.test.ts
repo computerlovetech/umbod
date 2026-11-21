@@ -354,6 +354,24 @@ describe('personal OAuth pre-publication setup', (): void => {
     expect(state.message).not.toContain('provider-secret');
   });
 
+  test('a rejected status read clears protected state without releasing a mutation lock', async (): Promise<void> => {
+    const { state, setup, accessLost, lockChanged, validationChanged } = harness();
+    setup.current = setup.validation;
+    await state.load('personal');
+    expect(state.validated).toBe(true);
+    vi.spyOn(setup, 'status').mockRejectedValueOnce(new AuthenticationRequiredError());
+
+    await state.refresh();
+
+    expect(state.pending).toBeNull();
+    expect(state.accessDenied).toBe(true);
+    expect(state.policy).toBeNull();
+    expect(state.status).toBeNull();
+    expect(validationChanged).toHaveBeenLastCalledWith('personal', false);
+    expect(accessLost).toHaveBeenCalledOnce();
+    expect(lockChanged).not.toHaveBeenCalled();
+  });
+
   test('unknown registration outcome blocks replay until an explicit authoritative status refresh', async (): Promise<void> => {
     const { state, setup } = harness();
     await state.load('personal');

@@ -84,7 +84,7 @@ export class DownstreamMcpWorkspaceState {
 
   constructor(failedMode?: string, values?: DownstreamMcpCreateValues, initialBundle?: DownstreamMcpWorkspaceBundle, bundleLoader: DownstreamBundleLoader = loadDownstreamBundle, initialConnectorId?: string, initialDetailFailed?: boolean, connectors: { connector_id: string }[] = initialBundle ? [initialBundle.connector] : [], selectionUrl: SelectionUrlPort = new InMemorySelectionUrlAdapter(), readonly operations: DownstreamMcpMutationState = new DownstreamMcpMutationState()) {
     const api = adminApi();
-    this.personalSetup = new PersonalOAuthSetupState(api.personalOAuthSetup, api.personalServers, this.operations.setPersonalValidation, this.operations.reconcilePublication, this.operations.loseAccess, this.operations.setFormLocked, () => !this.operations.locked);
+    this.personalSetup = new PersonalOAuthSetupState(api.personalOAuthSetup, api.personalServers, this.operations.setPersonalValidation, this.operations.reconcilePublication, this.operations.loseAccess, this.operations.setSetupLocked, () => !this.operations.locked);
     this.selection = new SelectionDetailController({
       items: connectors,
       itemId: (connector) => connector.connector_id,
@@ -134,6 +134,12 @@ export class DownstreamMcpWorkspaceState {
     this.#createDraft = { ...draft };
     this.setAuthMode(mode);
     this.suggestCreateIdentifiers(draft.displayName);
+  };
+
+  returnToAccess = (): void => {
+    if (this.operations.locked || this.submitting || (this.modal !== 'personal' && (this.modal !== 'create' || !this.#createDraft))) return;
+    this.submitError = null;
+    this.modal = 'choose';
   };
 
   open = (modal: Exclude<DownstreamMcpModal, null>, trigger: HTMLElement, connector?: DownstreamMcpConnector): void => {

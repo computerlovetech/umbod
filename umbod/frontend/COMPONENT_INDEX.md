@@ -93,8 +93,11 @@ tags:
 
 ## Connector and catalogue presentation
 
+- [AddConnector](src/lib/components/admin/connectors/AddConnector.svelte) — Persistent connector setup trigger and type picker; the active connector route supplies setup eligibility and opens its own form.
+
 - [ConnectorIcon](src/lib/components/admin/connectors/ConnectorIcon.svelte) — Decorative image or initials in standard sizes; use for connector identity, with accessible naming supplied elsewhere.
-- [ConnectorSidebarList](src/lib/components/admin/connectors/ConnectorSidebarList.svelte) — Controlled connector selector with metadata and action slots; use for connector lists without coupling presentation to inventory fetching.
+- [ConnectorSidebarList](src/lib/components/admin/connectors/ConnectorSidebarList.svelte) — Controlled connector rows with optional linked peers; use to combine local selection and navigation in one sidebar.
+- [UnifiedConnectorWorkspace](src/lib/components/admin/connectors/UnifiedConnectorWorkspace.svelte) — Shared admin connector layout; use for mixed inventories with route-owned selection, details, and actions.
 - [ConnectorDetailSummary](src/lib/components/admin/connectors/ConnectorDetailSummary.svelte) — Connector header and slotted detail layout; use for consistent connector identity, descriptions, and technical details.
 - [ConnectorDetailItem](src/lib/components/admin/connectors/ConnectorDetailItem.svelte) — Definition-list label/value row with indicator tones; use for connector summary or technical-detail properties.
 - [ConnectorListEmptyState](src/lib/components/admin/connectors/ConnectorListEmptyState.svelte) — Empty connector split workspace with a centred sidebar icon, accessible message and blank detail pane; use for empty connector inventories.

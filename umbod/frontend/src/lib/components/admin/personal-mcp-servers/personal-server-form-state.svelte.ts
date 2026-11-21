@@ -116,7 +116,7 @@ export class PersonalServerFormState {
     if (this.busy || this.disposed || this.authenticationLost || !this.targetId && this.blocked) return;
     const token = ++this.epoch;
     this.loading = true;
-    this.lockChanged(true);
+    if (this.editing) this.lockChanged(true);
     this.discovery.reset(false);
     this.form.reset();
     this.confirmation = null;

@@ -40,6 +40,25 @@ function registryServer(name: string): McpRegistryServer {
 }
 
 describe('MCP endpoint setup state', () => {
+  it('keeps the results area compact until the first valid search and expanded between queries', async () => {
+    const { state, search } = setup();
+    search.mockResolvedValue({ servers: [], next_cursor: '' });
+    state.openSearch();
+    state.changeTerm('sv');
+    await state.search();
+    expect(state.hasSearched).toBe(false);
+    expect(search).not.toHaveBeenCalled();
+
+    state.changeTerm('svelte');
+    const firstSearch = state.search();
+    expect(state.hasSearched).toBe(true);
+    expect(state.searchStatus).toBe('loading');
+    await firstSearch;
+
+    state.changeTerm('');
+    expect(state.searchStatus).toBe('idle');
+    expect(state.hasSearched).toBe(true);
+  });
   it('paginates searches, retries a failed page and only checks the endpoint chosen in review', async () => {
     const { state, search, checkAccess, complete } = setup();
     const first = registryServer('example/first');
@@ -76,11 +95,19 @@ describe('MCP endpoint setup state', () => {
     enterManual(state, endpointUrl);
     await state.checkAccess();
     expect(state.modes).toEqual(['static_bearer']);
-    state.enableOverride();
+    state.setOverride(true);
     expect(state.modes).toEqual(['personal', 'static_bearer']);
-    state.finish('none');
+    state.selectMode('personal');
+    state.setOverride(false);
+    expect(state.selectedMode).toBeUndefined();
+    expect(state.modes).toEqual(['static_bearer']);
+    state.selectMode('none');
+    expect(state.selectedMode).toBeUndefined();
+    state.configure();
     expect(complete).not.toHaveBeenCalled();
-    state.finish('static_bearer');
+    state.selectMode('static_bearer');
+    expect(complete).not.toHaveBeenCalled();
+    state.configure();
     expect(complete).toHaveBeenCalledWith('static_bearer', { endpointUrl, displayName: '', description: '' });
   });
 
@@ -92,7 +119,7 @@ describe('MCP endpoint setup state', () => {
     expect(state.uncertainAccess).toBe(true);
     expect(checkAccess).not.toHaveBeenCalled();
     expect(state.modes).toEqual(['static_bearer']);
-    state.enableOverride();
+    state.setOverride(true);
     expect(state.modes).toEqual(['none', 'static_bearer']);
     state.finish('none');
     expect(complete).toHaveBeenCalledWith('none', { endpointUrl: 'http://127.0.0.1:3001/mcp', displayName: '', description: '' });

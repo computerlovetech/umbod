@@ -18,4 +18,4 @@ description: Actor-owned administration views and shared administration controls
 # Shared controls
 
 - [Administration controls](./shared/README.md) — Reusable selection, form and layout controls.
-- [Connector list empty state](./connectors/ConnectorListEmptyState.svelte) — Consistent empty-list presentation for catalog, OpenAPI and MCP tabs.
+- [Connector list empty state](./connectors/ConnectorListEmptyState.svelte) — Empty state for the mixed connector inventory.

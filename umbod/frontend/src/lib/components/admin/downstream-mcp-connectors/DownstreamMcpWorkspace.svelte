@@ -7,14 +7,14 @@
   import { emptyPromptCatalog, emptyResourceCatalog, type PromptCatalog as PromptCatalogData, type ResourceCatalog as ResourceCatalogData } from '#lib/admin/capability-catalogs.js';
   import type { InvocationPolicyTool } from '#lib/admin/invocation-policy.js';
   import CapabilityDescriptionOverrideModal from '#lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
-  import ConnectorListEmptyState from '#lib/components/admin/connectors/ConnectorListEmptyState.svelte';
   import ConnectorCapabilities from '#lib/components/admin/connectors/ConnectorCapabilities.svelte';
   import ConnectorDetailItem from '#lib/components/admin/connectors/ConnectorDetailItem.svelte';
   import CopyableValue from '#lib/components/admin/connectors/CopyableValue.svelte';
   import ConnectorDetailSummary from '#lib/components/admin/connectors/ConnectorDetailSummary.svelte';
-  import ConnectorSidebarList from '#lib/components/admin/connectors/ConnectorSidebarList.svelte';
+  import UnifiedConnectorWorkspace from '#lib/components/admin/connectors/UnifiedConnectorWorkspace.svelte';
+  import type { UnifiedConnectorKind, UnifiedConnectorRow } from '#lib/admin/unified-connectors.js';
   import PublicationConfirmationModal from '#lib/components/admin/connectors/PublicationConfirmationModal.svelte';
-  import AdminSplitWorkspace from '#lib/components/admin/shared/AdminSplitWorkspace.svelte';
+
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import AdminSidebarActionMenu from '#lib/components/admin/shared/AdminSidebarActionMenu.svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
@@ -30,7 +30,7 @@
   import PersonalMcpPublicationModal from '../personal-mcp-servers/PersonalMcpPublicationModal.svelte';
   import PersonalOAuthSetupDialog from '../personal-mcp-servers/PersonalOAuthSetupDialog.svelte';
   import { useToast } from '#lib/components/feedback/index.js';
-  let { connectors, selected: loadedDetail, catalog, promptCatalog, resourceCatalog, invocationPolicies = [], form, state }: { connectors: DownstreamMcpConnectorSummary[]; selected?: DownstreamMcpConnector; catalog?: DownstreamMcpToolList; promptCatalog?: PromptCatalogData; resourceCatalog?: ResourceCatalogData; invocationPolicies?: InvocationPolicyTool[]; form?: { message?: string; status?: string; mode?: string; values?: DownstreamMcpCreateValues }; state: DownstreamMcpWorkspaceState } = $props();
+  let { connectors, selected: loadedDetail, catalog, promptCatalog, resourceCatalog, invocationPolicies = [], form, state, unifiedRows, unavailableKinds }: { unifiedRows?: readonly UnifiedConnectorRow[]; unavailableKinds?: readonly UnifiedConnectorKind[]; connectors: DownstreamMcpConnectorSummary[]; selected?: DownstreamMcpConnector; catalog?: DownstreamMcpToolList; promptCatalog?: PromptCatalogData; resourceCatalog?: ResourceCatalogData; invocationPolicies?: InvocationPolicyTool[]; form?: { message?: string; status?: string; mode?: string; values?: DownstreamMcpCreateValues }; state: DownstreamMcpWorkspaceState } = $props();
   type SidebarConnector = {
     id: string;
     name: string;
@@ -122,18 +122,15 @@
 {#if state.operations.busy}<p role="status" class="feedback">Updating MCP connector…</p>{/if}
 {#if state.operations.message}<p role="alert" class="feedback">{state.operations.message} <a href="/admin/group-permissions/connectors">Group permissions</a></p>{/if}
 {#if state.operations.blocked}<Button onclick={state.operations.reload}>Reload servers</Button>{/if}
-{#if connectors.length && selected && !state.operations.blocked}
-<AdminSplitWorkspace ariaLabel="MCP connectors workspace" sidebarLabel="MCP connectors" sidebarHeading="Connectors" count={connectors.length} detailLabel="Selected MCP connector detail">
- {#snippet sidebar()}
-  <ConnectorSidebarList items={sidebarConnectors} selectedId={selected.connector_id} ariaLabel="MCP connectors" onselect={(connector) => state.selectConnector(connector.id)}>
+{#if !state.operations.blocked}
+<UnifiedConnectorWorkspace kind="mcp" items={sidebarConnectors} selectedId={selected?.connector_id} {unifiedRows} {unavailableKinds} detailLabel="Selected MCP connector detail" onselect={(connector) => state.selectConnector(connector.id)}>
    {#snippet metadata(item)}
-    <span class="connector-meta">{item.connector.authorization_mode === 'personal' ? 'Personal authorization' : 'Shared authorization'} · {item.connector.authorization_mode === 'shared' ? `${item.connector.health.status} · ` : ''}{item.connector.publication_status}{#if item.connector.authorization_mode === 'personal'}{' · '}<span role="status">{state.personalSetup.sidebarLabel(item.id)}</span>{/if}</span>
+    <span class="connector-meta">MCP · {item.connector.authorization_mode === 'personal' ? 'Personal authorization' : 'Shared authorization'} · {item.connector.authorization_mode === 'shared' ? `${item.connector.health.status} · ` : ''}{item.connector.publication_status}{#if item.connector.authorization_mode === 'personal'}{' · '}<span role="status">{state.personalSetup.sidebarLabel(item.id)}</span>{/if}</span>
    {/snippet}
    {#snippet actions(item)}
-    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}{#if selected.authorization_mode === 'personal'}<button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.open('personal-edit', event.currentTarget, detailSelected)}>Edit</button><button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.checkConfiguration(event.currentTarget, detailSelected)}>Check configuration</button>{/if}{#if selected.authorization_mode === 'shared'}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem" disabled={state.operations.locked}>Refresh discovery</button></form>{/if}{#if selected.publication_status === 'published' || state.operations.canPublish(selected)}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={() => state.requestPublication(selected)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</button>{/if}{#if selected.authorization_mode === 'personal'}<button role="menuitem" class="danger-text" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</button>{:else}<button role="menuitem" class="danger-text" type="button" disabled={state.operations.locked} onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/if}{/snippet}</AdminSidebarActionMenu>{/if}
+    {#if selected && item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}{#if selected.authorization_mode === 'personal'}<button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.open('personal-edit', event.currentTarget, detailSelected)}>Edit</button><button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.checkConfiguration(event.currentTarget, detailSelected)}>Check configuration</button>{/if}{#if selected.authorization_mode === 'shared'}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem" disabled={state.operations.locked}>Refresh discovery</button></form>{/if}{#if selected.publication_status === 'published' || state.operations.canPublish(selected)}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={() => state.requestPublication(selected)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</button>{/if}{#if selected.authorization_mode === 'personal'}<button role="menuitem" class="danger-text" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</button>{:else}<button role="menuitem" class="danger-text" type="button" disabled={state.operations.locked} onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/if}{/snippet}</AdminSidebarActionMenu>{/if}
    {/snippet}
-  </ConnectorSidebarList>
- {/snippet}
+
  {#snippet detail()}
  {#if state.detailLoading}<div class="feedback"><DelayedSpinner active label="Loading MCP connector details" /></div>
  {:else if state.detailFailed}<div class="feedback" role="alert"><p>Connector details are unavailable.</p><Button onclick={state.retrySelected}>Try again</Button></div>
@@ -178,8 +175,8 @@
  </ConnectorDetailSummary>
  {/if}
  {/snippet}
-</AdminSplitWorkspace>
-{:else if !state.operations.blocked}<ConnectorListEmptyState message="No MCP connectors yet." workspaceLabel="MCP connectors workspace" sidebarLabel="MCP connectors" detailLabel="Selected MCP connector detail" />{/if}
+</UnifiedConnectorWorkspace>
+{/if}
 {:else}<p role="alert">Administration access was lost. Sign in again before reloading this page.</p>{/if}
 <style>
   button:not(:disabled){cursor:pointer}

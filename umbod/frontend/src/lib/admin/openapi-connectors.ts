@@ -182,8 +182,7 @@ export type OpenApiConnectorCreateAction =
 
 export type OpenApiConnectorListPageData =
   | { status: 'ready'; connectors: OpenApiConnectorListItem[] }
-  | { status: 'empty'; message: string; connectors: [] }
-  | { status: 'failed'; message: string; retryLabel: string; connectors: [] };
+  | { status: 'empty' | 'failed'; connectors: [] };
 
 export function normalizeToolNamePrefix(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'connector';

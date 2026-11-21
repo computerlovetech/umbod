@@ -10,13 +10,13 @@
   import ResourceCatalog from '#lib/components/admin/capability-catalogs/ResourceCatalog.svelte';
   import { ConnectorDetailsBrowserRoute, type ConnectorDetailBundle } from '#lib/admin/connector-details-browser-api.js';
   import CapabilityDescriptionOverrideModal from '#lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
-  import ConnectorListEmptyState from './ConnectorListEmptyState.svelte';
   import ConnectorCapabilities from '#lib/components/admin/connectors/ConnectorCapabilities.svelte';
   import ConnectorConfigurationForm from '#lib/components/admin/connectors/ConnectorConfigurationForm.svelte';
   import ConnectorDetailItem from '#lib/components/admin/connectors/ConnectorDetailItem.svelte';
   import ConnectorDetailSummary from '#lib/components/admin/connectors/ConnectorDetailSummary.svelte';
   import ConnectorPublicationMenuAction from '#lib/components/admin/connectors/ConnectorPublicationMenuAction.svelte';
-  import ConnectorSidebarList from '#lib/components/admin/connectors/ConnectorSidebarList.svelte';
+  import UnifiedConnectorWorkspace from '#lib/components/admin/connectors/UnifiedConnectorWorkspace.svelte';
+  import type { UnifiedConnectorKind, UnifiedConnectorRow } from '#lib/admin/unified-connectors.js';
   import PublicationConfirmationModal from '#lib/components/admin/connectors/PublicationConfirmationModal.svelte';
   import ToolCard from '#lib/components/admin/connectors/ToolCard.svelte';
   import InvocationPolicyControl from '#lib/components/admin/connectors/InvocationPolicyControl.svelte';
@@ -25,7 +25,7 @@
   import CapabilityCatalogGrid from '#lib/components/admin/shared/CapabilityCatalogGrid.svelte';
   import ScrollableToolCatalog from '#lib/components/admin/shared/ScrollableToolCatalog.svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
-  import AdminSplitWorkspace from '#lib/components/admin/shared/AdminSplitWorkspace.svelte';
+
   import AdminSidebarActionMenu from '#lib/components/admin/shared/AdminSidebarActionMenu.svelte';
   import AdminToggle from '#lib/components/admin/shared/AdminToggle.svelte';
   import AdminSaveAction from '#lib/components/admin/shared/AdminSaveAction.svelte';
@@ -54,7 +54,9 @@
     onconfigure,
     selectedConnectorId,
     initialDetail,
-    initialDetailFailed
+    initialDetailFailed,
+    unifiedRows,
+    unavailableKinds
   }: {
     connectors: ConnectorListItem[];
     form?: ConnectorListForm;
@@ -62,11 +64,16 @@
     selectedConnectorId?: string;
     initialDetail?: ConnectorDetailBundle;
     initialDetailFailed?: boolean;
+    unifiedRows?: readonly UnifiedConnectorRow[];
+    unavailableKinds?: readonly UnifiedConnectorKind[];
   } = $props();
 
   const detailsRoute = new ConnectorDetailsBrowserRoute();
   const toast = useToast();
-  const initialSelectionId = untrack(() => (page.shallow?.url ?? page.url).searchParams.get('connector') ?? selectedConnectorId ?? connectors[0]?.id);
+  const initialSelectionId = untrack(() => {
+    const requested = (page.shallow?.url ?? page.url).searchParams.get('connector');
+    return connectors.find((connector) => connector.id === requested)?.id ?? selectedConnectorId ?? connectors[0]?.id;
+  });
   const state = new ConnectorListState(untrack(() => connectors), {
     selectedConnectorId: initialSelectionId,
     initialDetail: untrack(() => initialDetail?.detail.connector.id === initialSelectionId ? initialDetail : undefined),
@@ -178,32 +185,21 @@
   oncancel={state.cancelPublication}
 />
 
-{#if connectors.length > 0 && state.selectedConnector}
-  <AdminSplitWorkspace
-    ariaLabel="Connectors workspace"
-    sidebarLabel="Connectors"
-    sidebarHeading="Connectors"
-    count={connectors.length}
-    detailLabel="Selected connector detail"
-  >
-    {#snippet sidebar()}
-      <ConnectorSidebarList items={connectors} selectedId={state.selectedConnector.id} ariaLabel="Connectors" onselect={(connector) => state.selectConnector(connector.id)}>
-        {#snippet metadata(connector)}
-          <span class="connector-meta">{connector.id}</span>
-          <span class="connector-meta">{connector.sourceLabel} · {connector.publicationStatus}</span>
+  <UnifiedConnectorWorkspace kind="native" items={connectors} selectedId={state.selectedConnector?.id} {unifiedRows} {unavailableKinds} detailLabel="Selected connector detail" onselect={(connector) => state.selectConnector(connector.id)}>
+    {#snippet metadata(connector)}
+      <span class="connector-meta">{connector.id}</span>
+      <span class="connector-meta">Native · {connector.publicationStatus}</span>
+    {/snippet}
+    {#snippet actions(connector)}
+      <AdminSidebarActionMenu open={state.openMenuConnectorId === connector.id} label={`Open actions for ${connector.name}`} onopenchange={(open) => state.setMenuOpen(connector.id, open)}>
+        {#snippet menu()}
+          <button type="button" role="menuitem" onclick={() => { state.closeMenu(); onconfigure(connector.id); }}>Configure</button>
+          <button type="button" role="menuitem" onclick={() => state.showCapabilityDescription(connector.id)}>Edit capability description</button>
+          {#if connector.canPublish || connector.canUnpublish}
+            <ConnectorPublicationMenuAction connectorId={connector.id} connectorName={connector.name} action={connector.canPublish ? 'publish' : 'unpublish'} onrequest={requestPublicationConfirmation} />
+          {/if}
         {/snippet}
-        {#snippet actions(connector)}
-          <AdminSidebarActionMenu open={state.openMenuConnectorId === connector.id} label={`Open actions for ${connector.name}`} onopenchange={(open) => state.setMenuOpen(connector.id, open)}>
-            {#snippet menu()}
-              <button type="button" role="menuitem" onclick={() => { state.closeMenu(); onconfigure(connector.id); }}>Configure</button>
-              <button type="button" role="menuitem" onclick={() => state.showCapabilityDescription(connector.id)}>Edit capability description</button>
-              {#if connector.canPublish || connector.canUnpublish}
-                <ConnectorPublicationMenuAction connectorId={connector.id} connectorName={connector.name} action={connector.canPublish ? 'publish' : 'unpublish'} onrequest={requestPublicationConfirmation} />
-              {/if}
-            {/snippet}
-          </AdminSidebarActionMenu>
-        {/snippet}
-      </ConnectorSidebarList>
+      </AdminSidebarActionMenu>
     {/snippet}
 
     {#snippet detail()}
@@ -211,7 +207,7 @@
         <div class="admin-message"><DelayedSpinner active label="Loading connector details" /></div>
       {:else if state.detailFailed}
         <div class="admin-message admin-message-error" role="alert"><p>Connector details are unavailable.</p><Button onclick={state.retryDetail}>Try again</Button></div>
-      {:else}
+      {:else if state.selectedConnector}
       <ConnectorDetailSummary headingId="selected-connector-heading" title={state.selectedConnector.name} iconDataUrl={state.selectedConnector.iconDataUrl} publicationStatus={state.selectedConnector.publicationStatus}>
         {#snippet description()}
           <p class="description">{state.selectedConnector.description}</p>
@@ -463,10 +459,7 @@
       </ConnectorDetailSummary>
       {/if}
     {/snippet}
-  </AdminSplitWorkspace>
-{:else}
-  <ConnectorListEmptyState message="No connectors are available yet." />
-{/if}
+  </UnifiedConnectorWorkspace>
 
 <style>
   h3,

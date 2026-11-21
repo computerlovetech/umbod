@@ -1,7 +1,9 @@
 from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
+
+from umbod.core.mcp_registry.models import RegistryEndpointUrl
 
 from umbod.core.mcp_registry import (
     McpRegistry,
@@ -21,6 +23,7 @@ from umbod.infrastructure.http import (
 from .schemas import RegistryListing, RegistryRemote, RegistrySearchResponse
 
 OFFICIAL_REGISTRY_ORIGIN = "https://registry.modelcontextprotocol.io"
+_ICON_URL = TypeAdapter(RegistryEndpointUrl)
 
 
 class OfficialMcpRegistry:
@@ -74,8 +77,19 @@ def _compatible_server(listing: RegistryListing) -> RegistryServer | None:
         title=server.title.strip() or server.name,
         description=server.description,
         version=server.version,
+        icons=tuple(dict.fromkeys(_compatible_icons(server.icons)))[:4],
         endpoints=endpoints,
     )
+
+
+def _compatible_icons(icons: Iterable[object]) -> Iterable[str]:
+    for icon in icons:
+        if not isinstance(icon, dict) or not isinstance(icon.get("src"), str):
+            continue
+        try:
+            yield _ICON_URL.validate_python(icon["src"])
+        except ValidationError:
+            continue
 
 
 def _compatible_endpoints(

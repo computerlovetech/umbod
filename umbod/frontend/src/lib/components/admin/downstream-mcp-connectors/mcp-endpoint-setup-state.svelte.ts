@@ -47,6 +47,7 @@ export class McpEndpointSetupState {
   #term = $state('');
   #servers = $state.raw<readonly Server[]>([]);
   #cursor = $state('');
+  #hasSearched = $state(false);
   #searchStatus = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
   #retry = $state<'search' | 'more'>('search');
   #selected = $state.raw<Server | undefined>();
@@ -55,6 +56,7 @@ export class McpEndpointSetupState {
   #origin: 'review' | 'manual' = 'manual';
   #access = $state.raw<AccessCheck | undefined>();
   #override = $state(false);
+  #selectedMode = $state<McpSetupMode | undefined>();
   #closed = false;
   #generation = 0;
 
@@ -64,6 +66,7 @@ export class McpEndpointSetupState {
   get progress(): number { return this.#step === 'source' ? 1 : this.#step === 'access' ? 3 : 2; }
   get term(): string { return this.#term; }
   get servers(): readonly Server[] { return this.#servers; }
+  get hasSearched(): boolean { return this.#hasSearched; }
   get searchStatus(): 'idle' | 'loading' | 'ready' | 'error' { return this.#searchStatus; }
   get canSearch(): boolean { return mcpRegistrySearchSchema.safeParse({ term: this.#term }).success; }
   get hasMore(): boolean { return Boolean(this.#cursor); }
@@ -81,17 +84,31 @@ export class McpEndpointSetupState {
     return this.#access?.kind === 'result' && this.#access.result.oauth.kind === 'oauth_discovered';
   }
   get uncertainAccess(): boolean { return this.#access?.kind === 'unavailable' || this.#access?.kind === 'unsupported' || this.anonymousResult === 'inconclusive'; }
+  get selectedMode(): McpSetupMode | undefined { return this.#selectedMode; }
   get overrideEnabled(): boolean { return this.#override; }
-  get canOverride(): boolean {
-    return this.uncertainAccess || (this.#access?.kind === 'result' && this.#access.result.oauth.kind === 'oauth_not_confirmed' && this.inputs.personalAvailable());
+  private get canChooseAccess(): boolean {
+    return this.#step === 'access' && !this.#closed && !!this.#access && this.#access.kind !== 'checking';
   }
-  get modes(): readonly McpSetupMode[] {
-    if (this.#step !== 'access' || this.#closed || !this.#access || this.#access.kind === 'checking') return [];
+  private get canChoosePersonal(): boolean { return this.canProbeEndpoint && this.inputs.personalAvailable(); }
+  get unverifiedModes(): readonly McpSetupMode[] {
+    if (!this.canChooseAccess) return [];
     const modes: McpSetupMode[] = [];
-    if (this.anonymousResult === 'anonymous_initialization_succeeded' || (this.#override && this.uncertainAccess)) modes.push('none');
-    if (this.canProbeEndpoint && this.inputs.personalAvailable() && (this.oauthConfirmed || (this.#override && this.canOverride))) modes.push('personal');
+    if (this.uncertainAccess) modes.push('none');
+    const oauthUnconfirmed = this.#access?.kind === 'result' && this.#access.result.oauth.kind === 'oauth_not_confirmed';
+    if (this.canChoosePersonal && !this.oauthConfirmed && (this.uncertainAccess || oauthUnconfirmed)) modes.push('personal');
+    return modes;
+  }
+  get standardModes(): readonly McpSetupMode[] {
+    if (!this.canChooseAccess) return [];
+    const modes: McpSetupMode[] = [];
+    if (this.anonymousResult === 'anonymous_initialization_succeeded') modes.push('none');
+    if (this.canChoosePersonal && this.oauthConfirmed) modes.push('personal');
     modes.push('static_bearer');
     return modes;
+  }
+  get modes(): readonly McpSetupMode[] {
+    const available = [...this.standardModes, ...(this.#override ? this.unverifiedModes : [])];
+    return (['none', 'personal', 'static_bearer'] as const).filter((mode) => available.includes(mode));
   }
 
   openSearch = (): void => {
@@ -150,6 +167,7 @@ export class McpEndpointSetupState {
     if (this.#closed || !this.prepareCheck()) return;
     this.#step = 'access';
     this.#override = false;
+    this.#selectedMode = undefined;
     if (!this.canProbeEndpoint) {
       this.#access = { kind: 'unsupported' };
       return;
@@ -164,8 +182,18 @@ export class McpEndpointSetupState {
     }
   };
 
-  enableOverride = (): void => {
-    if (!this.#closed && this.#step === 'access' && this.canOverride) this.#override = true;
+  setOverride = (open: boolean): void => {
+    if (!this.canChooseAccess) return;
+    this.#override = open && this.unverifiedModes.length > 0;
+    if (!this.#override && this.#selectedMode && !this.standardModes.includes(this.#selectedMode)) this.#selectedMode = undefined;
+  };
+
+  selectMode = (mode: McpSetupMode): void => {
+    if (this.modes.includes(mode)) this.#selectedMode = mode;
+  };
+
+  configure = (): void => {
+    if (this.#selectedMode) this.finish(this.#selectedMode);
   };
 
   finish = (mode: McpSetupMode): void => {
@@ -176,7 +204,6 @@ export class McpEndpointSetupState {
     if (mode === 'personal' && oauth?.kind === 'oauth_discovered' && oauth.metadata.endpoint_url === draft.endpointUrl) {
       draft.oauthMetadata = oauth.metadata;
     }
-    this.dispose();
     this.inputs.complete(mode, draft);
   };
 
@@ -197,6 +224,7 @@ export class McpEndpointSetupState {
     const generation = ++this.#generation;
     this.#retry = kind;
     if (kind === 'search') { this.#servers = []; this.#cursor = ''; this.#selected = undefined; }
+    this.#hasSearched = true;
     this.#searchStatus = 'loading';
     try {
       const page = await this.inputs.api().search({ term: this.#term.trim(), limit: PAGE_SIZE, cursor });

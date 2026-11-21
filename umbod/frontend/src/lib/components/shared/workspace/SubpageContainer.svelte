@@ -3,10 +3,10 @@
 
   let { title, lede, headingId, actions, navigation, children }: {
     title: string;
-    lede: string;
+    lede?: string;
     headingId?: string;
     actions?: Snippet;
-    navigation: Snippet;
+    navigation?: Snippet;
     children: Snippet;
   } = $props();
 </script>
@@ -19,7 +19,7 @@
     </div>
     {#if actions}<div class="page-actions">{@render actions()}</div>{/if}
   </header>
-  {@render navigation()}
+  {@render navigation?.()}
   {@render children()}
 </div>
 

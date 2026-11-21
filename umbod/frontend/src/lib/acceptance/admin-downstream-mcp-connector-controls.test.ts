@@ -76,7 +76,7 @@ function input(body: string, name: string): string {
 
 const controls = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpWorkspace.svelte', 'utf8');
 const page = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
-const pageRoute = readFileSync('src/routes/admin/downstream-mcp-connectors/+page.svelte', 'utf8');
+const pageRoute = readFileSync('src/routes/admin/(connector-workspace)/downstream-mcp-connectors/+page.svelte', 'utf8');
 const toolCatalog = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpToolCatalog.svelte', 'utf8');
 
 describe('downstream MCP connector administration', () => {
@@ -151,7 +151,32 @@ describe('downstream MCP connector administration', () => {
     expect(sidebar).toContain('unpublished');
     expect(sidebar).not.toContain(shared.connector_id);
     expect(sidebar).not.toContain(personal.connector_id);
-    expect(controls).toContain('ConnectorSidebarList');
+  });
+
+  test('shows sorted peer links when the MCP inventory is unavailable', (): void => {
+    const state = new DownstreamMcpWorkspaceState();
+    const browser = new Window();
+    try {
+      browser.document.body.innerHTML = render(DownstreamMcpWorkspace, { props: {
+        connectors: [], state, unavailableKinds: ['mcp'], unifiedRows: [
+          { kind: 'openapi', id: 'shared', name: 'Zeta', status: 'Draft' },
+          { kind: 'native', id: 'shared', name: 'Alpha', status: 'Published' }
+        ]
+      } }).body;
+      const sidebar = browser.document.querySelector('ul[aria-label="Connectors"]');
+      expect(sidebar?.querySelectorAll('a')).toHaveLength(2);
+      const links = Array.from(sidebar?.querySelectorAll('a') ?? []);
+      expect(links.map((link) => link.getAttribute('href'))).toEqual([
+        '/admin/connectors?connector=shared&capability=tools',
+        '/admin/openapi-connectors?connector=shared&capability=tools'
+      ]);
+      expect(browser.document.body.textContent).toContain('Could not load connectors: MCP.');
+      expect(browser.document.querySelector('[aria-label="Selected MCP connector detail"]')?.textContent?.trim()).toBe('');
+      expect(browser.document.querySelector('button')?.textContent?.trim()).toBe('Try again');
+    } finally {
+      state.operations.dispose();
+      void browser.close();
+    }
   });
 
   test('resets connector-specific tool catalog state when selection changes', (): void => {
@@ -161,7 +186,7 @@ describe('downstream MCP connector administration', () => {
 
   test('recreates page state only when server data changes', (): void => {
     expect(pageRoute).toContain('{#key data}');
-    expect(pageRoute).toContain('<DownstreamMcpPageContent {data} {form} />');
+    expect(pageRoute).toContain('<DownstreamMcpPageContent {data} {form} {addConnector} />');
     expect(pageRoute).not.toContain('$effect');
     expect(page).not.toContain('$effect');
   });

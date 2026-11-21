@@ -5,7 +5,6 @@ import { connectorApiResponseSchema, connectorDetailApiResponseSchema } from './
 import {
   checkConnectorConfiguration,
   ConnectorsApi,
-  loadConnectorList,
   publishConnector,
   saveConnectorConfiguration,
   saveToolActivations
@@ -131,32 +130,6 @@ describe('ConnectorsApi route contracts', () => {
     expect(calls[0].path).not.toContain('invocation-policy');
     expect(calls[0].inputSchema).toBeDefined();
     expect(calls[0].outputSchema).toBeDefined();
-  });
-});
-
-describe('loadConnectorList', () => {
-  test('returns failure page data when the collection request fails', async () => {
-    const fetch = vi.fn(async () => new Response('', { status: 500, statusText: 'Server Error' }));
-    const data = await loadConnectorList(apiFromFetch(fetch), null);
-
-    expect(data).toMatchObject({ status: 'failed', message: 'Failed to get connectors' });
-  });
-
-  test('returns empty page data when no connectors are available', async () => {
-    const fetch = vi.fn(async () => jsonResponse({ connectors: [] }));
-    const data = await loadConnectorList(apiFromFetch(fetch), null);
-
-    expect(data).toMatchObject({ status: 'empty', connectors: [] });
-  });
-
-  test('loads summaries with only one collection request', async () => {
-    const summary = { id: 'test', display_name: 'Test', description: 'Test connector', extension: { source: 'built-in' }, publication_status: 'draft', available_actions: ['publish'] };
-    const fetch = vi.fn(async () => jsonResponse({ connectors: [summary] }));
-
-    const data = await loadConnectorList(apiFromFetch(fetch), null);
-
-    expect(data).toMatchObject({ status: 'ready', connectors: [{ id: 'test', tools: [] }] });
-    expect(fetch).toHaveBeenCalledOnce();
   });
 });
 

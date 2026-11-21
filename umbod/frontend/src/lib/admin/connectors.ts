@@ -186,30 +186,6 @@ export type ConnectorListItem = {
   configurationFields?: ConnectorConfigurationField[];
 };
 
-export type ConnectorListReadyPageData = {
-  status: 'ready';
-  successMessage: string | null;
-  connectors: ConnectorListItem[];
-};
-
-export type ConnectorListEmptyPageData = {
-  status: 'empty';
-  message: string;
-  connectors: ConnectorListItem[];
-};
-
-export type ConnectorListFailedPageData = {
-  status: 'failed';
-  message: string;
-  retryLabel: string;
-  connectors: ConnectorListItem[];
-};
-
-export type ConnectorListPageData =
-  | ConnectorListReadyPageData
-  | ConnectorListEmptyPageData
-  | ConnectorListFailedPageData;
-
 export type ConnectorConfigurationField = {
   name: string;
   label: string;

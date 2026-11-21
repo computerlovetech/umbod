@@ -163,15 +163,14 @@ describe('personal server administration presentation', () => {
   });
   test('registration uncertainty keeps its dialog mounted and exposes full workspace reload after close', () => {
     const page = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
-    expect(page).toContain('state.operations.loseAccess, state.operations.setRegistrationLocked');
-    expect(page).toContain("state.modal === 'personal' && !state.operations.authenticationLost");
-    expect(page).not.toContain("state.modal === 'personal' && !state.operations.locked");
-    expect(page).toContain("{#if registration.blocked && state.modal !== 'personal'}");
+    expect(page).toContain('workspace.operations.loseAccess, workspace.operations.setRegistrationLocked');
+    expect(page).toContain("workspace.modal === 'personal' && !workspace.operations.authenticationLost");
+    expect(page).not.toContain("workspace.modal === 'personal' && !workspace.operations.locked");
+    expect(page).toContain("{#if registration.blocked && workspace.modal !== 'personal'}");
     expect(page).toContain('All workspace changes remain blocked until a full server reload');
-    expect(page).toContain('{#if !state.operations.registrationLocked}');
+    expect(page).toContain('{#if !workspace.operations.registrationLocked}');
     expect(page).toContain('if (registration.blocked) window.location.reload()');
-    expect(page).toContain('disabled={state.operations.locked}');
-    expect(page).toContain('<Button aria-label="Add MCP connector" disabled={state.operations.locked}');
+    expect(page).toContain('disabled: () => workspace.operations.locked');
   });
   test('the consolidated workspace and navigation do not link to the retired personal-server route', () => {
     const workspace = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');

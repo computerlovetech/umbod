@@ -372,7 +372,7 @@ describe('personal MCP editing from the action menu', (): void => {
 
   test('validated personal publication reconciles in place without testing sign-in', async (): Promise<void> => {
     const { api, navigate } = await renderPersonalWorkspace();
-    const workspace = document.querySelector('[aria-label="MCP connectors workspace"]');
+    const workspace = document.querySelector('[aria-label="Connectors workspace"]');
     const personalGuidance = document.querySelector('[aria-label="Personal authorization"]');
     button('Open actions for Personal server').click();
     await tick();
@@ -385,7 +385,7 @@ describe('personal MCP editing from the action menu', (): void => {
     confirm.click();
     await vi.waitFor(() => expect(api.publish).toHaveBeenCalledExactlyOnceWith('personal'));
     await vi.waitFor(() => expect(document.querySelector('[aria-pressed="true"]')?.textContent).toContain('published'));
-    expect(document.querySelector('[aria-label="MCP connectors workspace"]')).toBe(workspace);
+    expect(document.querySelector('[aria-label="Connectors workspace"]')).toBe(workspace);
     expect(document.querySelector('[aria-label="Personal authorization"]')).toBe(personalGuidance);
     expect(document.querySelector('[aria-pressed="true"]')?.textContent).toContain('Configuration ready');
     expect(document.querySelector('[aria-label="Personal OAuth setup"]')).toBeNull();
@@ -511,7 +511,7 @@ describe('shared MCP publication from the action menu', (): void => {
     { label: 'Unpublish', published: true, action: 'unpublish', otherAction: 'publish', status: 'unpublished' }
   ] as const)('dispatches $label exactly once after confirmation for a healthy discovered connector', async ({ label, published, action, otherAction, status }): Promise<void> => {
     const { api, navigate } = renderWorkspace(published);
-    const workspace = document.querySelector('[aria-label="MCP connectors workspace"]');
+    const workspace = document.querySelector('[aria-label="Connectors workspace"]');
     const detail = document.querySelector('article');
     const search = document.querySelector<HTMLInputElement>('input[type="search"]')!;
     search.value = 'dashboards';
@@ -529,7 +529,7 @@ describe('shared MCP publication from the action menu', (): void => {
 
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     await vi.waitFor(() => expect(document.querySelector('[aria-pressed="true"]')?.textContent).toContain(`healthy · ${status}`));
-    expect(document.querySelector('[aria-label="MCP connectors workspace"]')).toBe(workspace);
+    expect(document.querySelector('[aria-label="Connectors workspace"]')).toBe(workspace);
     expect(document.querySelector('article')).toBe(detail);
     expect(document.querySelector('input[type="search"]')).toBe(search);
     expect(search.value).toBe('dashboards');

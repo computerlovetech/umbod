@@ -8,14 +8,10 @@ import {
   connectorToolActivationBatchRequestSchema,
   connectorToolActivationBatchResponseSchema,
   formatConnectorConfigurationError,
-  mapConnectorApiItem,
   mapConnectorConfigurationApiResponse,
   saveConnectorConfigurationRequestSchema,
   type ConnectorConfigurationFailedPageData,
   type ConnectorConfigurationPageData,
-  type ConnectorListFailedPageData,
-  type ConnectorListItem,
-  type ConnectorListPageData,
   type SaveConnectorConfigurationRequest
 } from './connectors';
 import type { ToolActivationSaveInput } from './connectors-forms';
@@ -179,22 +175,6 @@ const configurationLoadFailure: ConnectorConfigurationFailedPageData = {
   backHref: '/admin/connectors'
 };
 
-export async function loadConnectorList(api: ConnectorsApi, configuredConnectorId: string | null): Promise<ConnectorListPageData> {
-  try {
-    const apiResponse = await api.connectors.list();
-    const connectors = apiResponse.connectors.map(mapConnectorApiItem);
-
-    if (connectors.length === 0) {
-      return { status: 'empty', message: 'No connectors are currently available', connectors: [] };
-    }
-
-    return createReadyPageData(connectors, configuredConnectorId);
-  } catch (error) {
-    if (!isOperationalError(error)) throw error;
-    return createFailurePageData();
-  }
-}
-
 export async function loadConnectorConfiguration(api: ConnectorsApi, connectorId: string): Promise<ConnectorConfigurationPageData> {
   try {
     const apiResponse = await api.connectors.getConfiguration(connectorId);
@@ -277,25 +257,6 @@ export async function checkConnectorConfiguration(
     if (!isOperationalError(error)) throw error;
     return { status: 'failed', errorMessage: 'Connector configuration could not be checked' };
   }
-}
-
-function createReadyPageData(connectors: ConnectorListItem[], configuredConnectorId: string | null): ConnectorListPageData {
-  const configuredConnector = connectors.find((connector) => connector.id === configuredConnectorId);
-
-  return {
-    status: 'ready',
-    successMessage: configuredConnector ? `${configuredConnector.name} was configured successfully` : null,
-    connectors
-  };
-}
-
-function createFailurePageData(): ConnectorListFailedPageData {
-  return {
-    status: 'failed',
-    message: 'Failed to get connectors',
-    retryLabel: 'Try again',
-    connectors: []
-  };
 }
 
 function connectorName(connectorId: string): string {

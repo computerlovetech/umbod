@@ -18,6 +18,7 @@ export const mcpRegistryServerSchema = z.strictObject({
   title: nonBlankTextSchema,
   description: z.string(),
   version: nonBlankTextSchema,
+  icons: z.array(discoveryEndpointSchema.refine((url): boolean => url.startsWith('https://') && !/[{}]/.test(url))).max(4).optional(),
   endpoints: z.array(z.strictObject({
     url: discoveryEndpointSchema.refine((url): boolean => !/[{}]/.test(url)),
     required_headers: z.array(nonBlankTextSchema)

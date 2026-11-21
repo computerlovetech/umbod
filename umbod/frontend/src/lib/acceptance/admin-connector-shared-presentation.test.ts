@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 
-const connectorPage = readFileSync('src/routes/admin/connectors/+page.svelte', 'utf8');
-const openApiPage = readFileSync('src/routes/admin/openapi-connectors/+page.svelte', 'utf8');
+const connectorPage = readFileSync('src/routes/admin/(connector-workspace)/connectors/+page.svelte', 'utf8');
+const openApiPage = readFileSync('src/routes/admin/(connector-workspace)/openapi-connectors/+page.svelte', 'utf8');
 const downstreamMcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
-const downstreamMcpRoute = readFileSync('src/routes/admin/downstream-mcp-connectors/+page.svelte', 'utf8');
+const downstreamMcpRoute = readFileSync('src/routes/admin/(connector-workspace)/downstream-mcp-connectors/+page.svelte', 'utf8');
 const connectorList = readFileSync('src/lib/components/admin/connectors/ConnectorList.svelte', 'utf8');
 const openApiConnectorList = readFileSync('src/lib/components/admin/openapi-connectors/OpenApiConnectorList.svelte', 'utf8');
 const downstreamMcpWorkspace = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpWorkspace.svelte', 'utf8');
@@ -14,31 +14,34 @@ const downstreamState = readFileSync('src/lib/components/admin/downstream-mcp-co
 const selectionController = readFileSync('src/lib/components/admin/shared/selection-detail-controller.svelte.ts', 'utf8');
 const gettingStarted = readFileSync('src/lib/components/getting-started/GettingStarted.svelte', 'utf8');
 const sidebarList = readFileSync('src/lib/components/admin/connectors/ConnectorSidebarList.svelte', 'utf8');
+const unifiedWorkspace = readFileSync('src/lib/components/admin/connectors/UnifiedConnectorWorkspace.svelte', 'utf8');
 const publicationAction = readFileSync('src/lib/components/admin/connectors/ConnectorPublicationMenuAction.svelte', 'utf8');
 const detailSummary = readFileSync('src/lib/components/admin/connectors/ConnectorDetailSummary.svelte', 'utf8');
 
-const connectorPages = [connectorPage, openApiPage, downstreamMcpPage];
+const connectorLayout = readFileSync('src/routes/admin/(connector-workspace)/+layout.svelte', 'utf8');
 const connectorLists = [connectorList, openApiConnectorList];
 
 describe('admin connector shared presentation', () => {
   test('connector and getting started pages compose the same neutral subpage container', (): void => {
-    for (const page of [...connectorPages, gettingStarted]) {
+    for (const page of [connectorLayout, gettingStarted]) {
       expect(page).toContain('import SubpageContainer');
       expect(page).toContain('<SubpageContainer');
-      expect(page).toContain('{#snippet navigation()}');
+      expect(page).not.toContain('ConnectorTabs');
       expect(page).not.toContain('<div class="connector-page-header"');
     }
   });
 
-  test('all connector list empty branches compose the shared presenter', () => {
-    for (const component of [connectorPage, connectorList, openApiConnectorList, downstreamMcpWorkspace]) {
-      expect(component).toContain('import ConnectorListEmptyState');
-      expect(component).toContain('<ConnectorListEmptyState message=');
+  test('the shared connector layout owns the sole Add connector trigger', () => {
+    expect(connectorLayout).toContain('<AddConnector state={addConnector}');
+    for (const page of [connectorPage, openApiPage, downstreamMcpPage]) expect(page).not.toContain('<AddConnector');
+  });
+
+  test('mixed workspace owns inventory empty and failure presentation', () => {
+    expect(unifiedWorkspace).toContain('<ConnectorListEmptyState {detailLabel}');
+    expect(unifiedWorkspace).toContain('Could not load connectors: {unavailableLabels}');
+    for (const component of [connectorList, openApiConnectorList, downstreamMcpWorkspace]) {
+      expect(component).not.toContain('<ConnectorListEmptyState');
     }
-    expect(connectorPage).toContain('<ConnectorListEmptyState message={data.message} />');
-    expect(openApiConnectorList).toContain('<ConnectorListEmptyState message={data.message} workspaceLabel="OpenAPI connectors workspace"');
-    expect(openApiConnectorList).not.toContain('.empty-note');
-    expect(downstreamMcpWorkspace).not.toContain('class="empty"');
   });
 
   test('keeps connector workspaces keyed without effect synchronization', () => {
@@ -61,17 +64,19 @@ describe('admin connector shared presentation', () => {
     expect(downstreamMcpPage).toContain('BrowserSelectionUrlAdapter');
   });
 
-  test('catalog and OpenAPI lists share sidebar presentation while retaining parent actions', () => {
-    for (const list of connectorLists) {
-      expect(list).toContain('import ConnectorSidebarList');
-      expect(list).toContain('<ConnectorSidebarList');
+  test('connector lists share sidebar presentation while retaining parent actions', () => {
+    for (const list of [...connectorLists, downstreamMcpWorkspace]) {
+      expect(list).toContain('import UnifiedConnectorWorkspace');
+      expect(list).toContain('<UnifiedConnectorWorkspace');
       expect(list).toContain('{#snippet metadata(');
       expect(list).toContain('{#snippet actions(');
       expect(list).toContain('<AdminSidebarActionMenu');
       expect(list).not.toContain('<ul class="connector-list"');
     }
 
-    expect(sidebarList).toContain('{#each items as item (item.id)}');
+    expect(unifiedWorkspace).toContain('<ConnectorSidebarList');
+    expect(unifiedWorkspace).toContain('<AdminSplitWorkspace');
+    expect(sidebarList).toContain('{#each rows as row (row.key)}');
     expect(sidebarList).toContain('aria-pressed={selectedId === item.id}');
     expect(sidebarList).toContain('{@render metadata(item)}');
     expect(sidebarList).toContain('{@render actions(item)}');

@@ -113,6 +113,7 @@ def test_registry_search_returns_listings_and_forwards_pagination(
                 title="Demo",
                 description="Demo server",
                 version="1.2.3",
+                icons=("https://demo.example/logo.png",),
                 endpoints=(
                     RegistryEndpoint(
                         url="https://demo.example/mcp",
@@ -138,6 +139,7 @@ def test_registry_search_returns_listings_and_forwards_pagination(
                 "title": "Demo",
                 "description": "Demo server",
                 "version": "1.2.3",
+                "icons": ["https://demo.example/logo.png"],
                 "endpoints": [
                     {
                         "url": "https://demo.example/mcp",

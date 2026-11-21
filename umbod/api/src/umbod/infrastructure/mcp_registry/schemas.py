@@ -36,6 +36,12 @@ class RegistryServerRecord(BaseModel):
     description: str
     version: str
     remotes: tuple[RegistryRemote, ...] = ()
+    icons: tuple[object, ...] = ()
+
+    @field_validator("icons", mode="before")
+    @classmethod
+    def _normalize_icons(cls, value: object) -> object:
+        return value if isinstance(value, (list, tuple)) else ()
 
     @field_validator("remotes", mode="before")
     @classmethod

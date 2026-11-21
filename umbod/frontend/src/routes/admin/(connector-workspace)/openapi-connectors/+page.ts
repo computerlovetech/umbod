@@ -1,15 +1,17 @@
 
 import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
 
-import { loadOpenApiConnectorList } from '#lib/admin/openapi-connectors-api.js';
+import { loadUnifiedConnectorInventory } from '#lib/admin/unified-connectors.js';
 import { mapOpenApiConnector } from '#lib/admin/openapi-connectors.js';
 import { loadSelectedDetail } from '#lib/admin/selected-detail-facade.js';
 
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async (event) => {
-  const api = adminApi(event.fetch).openApiConnectors;
-  const list = await loadOpenApiConnectorList(api);
+  const admin = adminApi(event.fetch);
+  const { openapi, inventory } = await loadUnifiedConnectorInventory(admin);
+  const api = admin.openApiConnectors;
+  const list = { ...openapi, ...inventory };
   if (list.status !== 'ready') return list;
   const detail = await loadSelectedDetail({
     summaries: list.connectors,

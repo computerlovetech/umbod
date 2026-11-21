@@ -2,6 +2,8 @@
   import type { BrowserSubmitFunction as SubmitFunction } from '#lib/admin/operations/browser-submit.js';
   import type { DownstreamMcpConnector } from '#lib/admin/downstream-mcp-connectors.js';
   import AdminConfigurationField from '#lib/components/admin/shared/AdminConfigurationField.svelte';
+  import SetupProgress from '../shared/SetupProgress.svelte';
+  import { connectorSetupSteps } from '../connectors/connector-setup-steps.js';
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import Form from '#lib/components/admin/shared/Form.svelte';
   import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
@@ -11,7 +13,9 @@
   import { useToast } from '#lib/components/feedback/index.js';
 
   let { state, connector, message, values }: { state: DownstreamMcpWorkspaceState; connector?: DownstreamMcpConnector; message?: string; values?: DownstreamMcpCreateValues } = $props();
+  const steps = connectorSetupSteps('mcp', true);
   const configuring = $derived(state.modal === 'configure');
+  const guidedDraft = $derived(configuring ? undefined : state.createDraft);
   const toast = useToast();
   const fieldPrefix = $derived(`downstream-mcp-${configuring ? 'configure' : 'create'}`);
   const authenticationOptions: SelectOption[] = [
@@ -64,12 +68,16 @@
   <ModalShell title={configuring ? 'Configure MCP proxy connector' : 'Add MCP proxy connector'} titleId={`${fieldPrefix}-title`} close={state.close}>
     {#snippet children()}
       {#snippet fields()}
-        {#if !configuring && state.createDraft}<p class="helper">Step 4 of 4 · Configure</p>{/if}
+        {#if guidedDraft}<SetupProgress {steps} current={steps.length} />{/if}
         {#if configuring}<input type="hidden" name="connectorId" value={connector?.connector_id ?? ''} />{/if}
         <AdminConfigurationField id={`${fieldPrefix}-display-name`} name="displayName" label="Display name" value={connector?.display_name ?? values?.displayName ?? state.createDraft?.displayName ?? ''} oninput={configuring ? undefined : state.updateDisplayName} required />
         <AdminConfigurationField id={`${fieldPrefix}-tool-name-prefix`} name="toolNamePrefix" label="Tool name prefix" value={values?.toolNamePrefix ?? state.toolNamePrefix} oninput={state.updateToolNamePrefix} required />
         <AdminConfigurationField id={`${fieldPrefix}-capability-description`} name="capabilityDescription" label="Default capability description" value={connector?.capability_description ?? values?.capabilityDescription ?? state.createDraft?.description ?? ''} helperText="Describes this connector to agents. You can customize the agent-facing description after creation." required />
-        <AdminConfigurationField id={`${fieldPrefix}-endpoint`} name="endpointUrl" label="Downstream endpoint" type="url" value={connector?.endpoint_url ?? values?.endpointUrl ?? state.createDraft?.endpointUrl ?? ''} placeholder="https://mcp.example.com/mcp" required />
+        {#if guidedDraft}
+          <input type="hidden" name="endpointUrl" value={guidedDraft.endpointUrl} />
+        {:else}
+          <AdminConfigurationField id={`${fieldPrefix}-endpoint`} name="endpointUrl" label="Downstream endpoint" type="url" value={connector?.endpoint_url ?? values?.endpointUrl ?? ''} placeholder="https://mcp.example.com/mcp" required />
+        {/if}
         <p class="endpoint-help"><strong>Shared endpoint:</strong> After discovery, enable and publish tools to make them available on <code>/mcp</code>, namespaced with tools from other connectors.</p>
         <div class="path-field">
           <label for={`${fieldPrefix}-public-path`}>Dedicated MCP path (additional)</label>
@@ -90,7 +98,9 @@
           </div>
           <p class="helper" id={`${fieldPrefix}-path-helper`}>Enter only the connector-specific suffix. Enabled tools can still be published on the shared <code>/mcp</code> endpoint.</p>
         </div>
-        <Select id={`${fieldPrefix}-authentication`} label="Authentication" accessibleName="Authentication" options={authenticationOptions} value={state.authMode} onchange={state.setAuthMode} />
+        {#if !guidedDraft}
+          <Select id={`${fieldPrefix}-authentication`} label="Authentication" accessibleName="Authentication" options={authenticationOptions} value={state.authMode} onchange={state.setAuthMode} />
+        {/if}
         <input type="hidden" name="authMode" value={state.authMode} />
         {#if state.authMode === 'static_bearer'}
           <Select id={`${fieldPrefix}-header-type`} label="Header type" accessibleName="Header type" options={headerTypeOptions} value={state.headerType} onchange={state.setHeaderType} />
@@ -105,7 +115,11 @@
         {#if state.submitError}<p class="error" role="alert">{state.submitError}</p>{/if}
       {/snippet}
       {#snippet actions()}
-        <LoadingButton label="Cancel" loading={false} variant="secondary" onclick={state.close} />
+        {#if guidedDraft}
+          <div class="back-action"><LoadingButton label="Back" loading={false} disabled={state.submitting} variant="quiet" onclick={state.returnToAccess} /></div>
+        {:else}
+          <LoadingButton label="Cancel" loading={false} variant="secondary" onclick={state.close} />
+        {/if}
         <LoadingButton type="submit" label="Save connector" loadingLabel="Saving…" loading={state.submitting} />
       {/snippet}
       <Form method="POST" operation={configuring ? 'configure' : 'create'} {submit} {fields} {actions} />
@@ -114,6 +128,7 @@
 {/if}
 
 <style>
+  .back-action { margin-inline-end: auto; }
   .endpoint-help { color: var(--admin-muted); font-size: 12px; margin: 0; }
   .endpoint-help code { color: var(--admin-ink); }
   .path-field { display: grid; gap: 7px; }

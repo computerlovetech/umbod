@@ -9,11 +9,21 @@
   import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
   import Select from '#lib/components/admin/shared/Select.svelte';
   import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
+  import { connectorSetupSteps } from '../connectors/connector-setup-steps.js';
   import type { OpenApiConnectorSetupState } from './openapi-connector-setup-state.svelte';
 
-  let { state }: { state: OpenApiConnectorSetupState } = $props();
+  let { state, onbacktotype }: {
+    state: OpenApiConnectorSetupState;
+    onbacktotype?: () => void;
+  } = $props();
 
-  const steps = ['Specification', 'API server', 'Configure'];
+  const includesType = $derived(Boolean(onbacktotype));
+  const steps = $derived(connectorSetupSteps('openapi', includesType));
+
+  function backToType(): void {
+    state.close();
+    onbacktotype?.();
+  }
 
   function reviewSource(event: SubmitEvent): void {
     event.preventDefault();
@@ -142,12 +152,15 @@
         <LoadingButton type="submit" label="Save" loadingLabel="Saving…" loading={state.submitting} disabled={state.setupBlocked} />
       {/snippet}
       {#if state.mode === 'create'}
-        <SetupProgress {steps} current={state.step} />
+        <SetupProgress {steps} current={state.step + Number(includesType)} />
         <div hidden={state.step !== 1} inert={state.step !== 1}>
           <form class="stage" onsubmit={reviewSource}>
             <h3>Add a specification</h3>
             {@render sourceFields()}
-            <div class="stage-actions"><LoadingButton type="submit" label="Next" loadingLabel="Reading specification…" loading={state.step === 1 && state.submitting} /></div>
+            <div class="stage-actions">
+              {#if includesType}<Button type="button" variant="quiet" onclick={backToType}>Back</Button>{/if}
+              <LoadingButton type="submit" label="Next" loadingLabel="Reading specification…" loading={state.step === 1 && state.submitting} />
+            </div>
           </form>
         </div>
         {#if state.step === 2}

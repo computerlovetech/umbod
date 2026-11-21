@@ -7,7 +7,7 @@ const openApiModal = readFileSync('src/lib/components/admin/openapi-connectors/O
 const publicationModal = readFileSync('src/lib/components/admin/connectors/PublicationConfirmationModal.svelte', 'utf8');
 const confirmationDialog = readFileSync('src/lib/components/admin/shared/AdminConfirmationDialog.svelte', 'utf8');
 const catalogModal = readFileSync('src/lib/components/admin/connectors/ConnectorCatalogModal.svelte', 'utf8');
-const catalogPage = readFileSync('src/routes/admin/connectors/+page.svelte', 'utf8');
+const catalogPage = readFileSync('src/routes/admin/(connector-workspace)/connectors/+page.svelte', 'utf8');
 const connectorConfigurationForm = readFileSync('src/lib/components/admin/connectors/ConnectorConfigurationForm.svelte', 'utf8');
 const mcpModal = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpSetupModal.svelte', 'utf8');
 const mcpWorkspace = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpWorkspace.svelte', 'utf8');
@@ -64,7 +64,7 @@ const mcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors
   });
 
   test('connector catalog exposes an accessible add flow for only unconfigured connectors', () => {
-    expect(catalogPage).toContain('aria-label="Add connector"');
+    expect(catalogPage).toContain("kind: 'native'");
     expect(catalogPage).toContain('data.connectors.filter((connector) => connector.isConfigured)');
     expect(catalogModal).toContain('connectors.filter((connector) => !connector.isConfigured)');
     expect(catalogModal).toContain('<ModalShell');
@@ -79,8 +79,7 @@ const mcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors
   });
 
   test('MCP workspace buttons expose pointer and disabled cursor styles', () => {
-    expect(mcpPage).toContain('<SubpageContainer');
-    expect(mcpPage).toContain('<Button aria-label="Add MCP connector"');
+    expect(mcpPage).toContain("kind: 'mcp'");
     const button = readFileSync('src/lib/components/admin/shared/Button.svelte', 'utf8');
     const buttonStyles = readFileSync('src/lib/styles/buttons.css', 'utf8');
     expect(button).toContain("import '#lib/styles/buttons.css'");

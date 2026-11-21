@@ -20,15 +20,17 @@ export class DownstreamMcpMutationState {
   };
   busy = $state(false);
   formLocked = $state(false);
+  private setupLocked = $state(false);
   registrationLocked = $state(false);
   blocked = $state(false);
   authenticationLost = $state(false);
   message = $state('');
   private disposed = false;
   constructor(private readonly api: Pick<DownstreamMcpConnectorsRoute, 'publish' | 'unpublish' | 'delete' | 'list'> = adminApi().downstreamMcpConnectors, private readonly navigate: (id?: string) => void = (id) => { window.location.assign(`/admin/downstream-mcp-connectors${id ? `?connector=${encodeURIComponent(id)}` : ''}`); }) {}
-  get locked(): boolean { return this.registrationLocked || this.formLocked || this.busy || this.blocked || this.authenticationLost || this.disposed; }
+  get locked(): boolean { return this.registrationLocked || this.formLocked || this.setupLocked || this.busy || this.blocked || this.authenticationLost || this.disposed; }
   setRegistrationLocked = (locked: boolean): void => { this.registrationLocked = locked; };
   setFormLocked = (locked: boolean): void => { this.formLocked = locked; };
+  setSetupLocked = (locked: boolean): void => { this.setupLocked = locked; };
   requireReload = (message: string): void => { this.blocked = true; this.message = message; };
   request = (action: CommonMcpAction, id: string, name: string): void => {
     if (!this.locked) this.pending = { action, id, name };

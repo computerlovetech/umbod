@@ -44,6 +44,7 @@ class RegistryServer(BaseModel):
     title: NonBlankText
     description: str
     version: NonBlankText
+    icons: Annotated[tuple[RegistryEndpointUrl, ...], Field(max_length=4)] = ()
     endpoints: Annotated[tuple[RegistryEndpoint, ...], Field(min_length=1)]
 
 

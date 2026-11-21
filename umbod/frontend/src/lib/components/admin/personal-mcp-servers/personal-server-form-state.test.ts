@@ -46,6 +46,21 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reje
 }
 
 describe('personal registration and selected policy through administration port', () => {
+  test('registration availability loading does not lock unrelated workspace actions', async (): Promise<void> => {
+    const available = deferred<InstanceConfiguration>();
+    const lockChanged = vi.fn<(locked: boolean) => void>();
+    const { configuration, state } = setup(null, lockChanged);
+    vi.mocked(configuration.get).mockReturnValueOnce(available.promise);
+
+    const reload = state.reload();
+    expect(state.canRegister).toBe(false);
+    expect(lockChanged).not.toHaveBeenCalledWith(true);
+
+    available.resolve(configurationFixture());
+    await reload;
+    expect(state.canRegister).toBe(true);
+    expect(lockChanged).not.toHaveBeenCalledWith(true);
+  });
   test('automatic edit review and confirm fail closed while metadata is pending or failed', async (): Promise<void> => {
     const api = new InMemoryPersonalServers([serverFixture()], [{ ...policyFixture(), client: { kind: 'preconfigured_public', issuer_url: 'https://manual.test', client_id: 'app' } }]);
     const replace = vi.spyOn(api, 'replacePolicy');

@@ -42,7 +42,7 @@ export class PersonalOAuthSetupState {
     private readonly validationChanged: (id: string, validated: boolean) => void,
     private readonly publicationChanged: (id: string, status: DownstreamMcpConnector['publication_status']) => void,
     private readonly accessLost: () => void,
-    private readonly lockChanged: (locked: boolean) => void,
+    private readonly mutationLockChanged: (locked: boolean) => void,
     private readonly available: () => boolean = () => true
   ) {}
   get status(): SetupSnapshot<SetupStatus> | null { return this.currentStatus; }
@@ -106,12 +106,12 @@ export class PersonalOAuthSetupState {
   }
   load = async (id: string): Promise<void> => {
     if (this.disposed || this.denied || this.pendingOperation && id === this.id) return;
+    this.finish();
     this.invalidate();
     this.id = id;
     this.currentPolicy = null;
     const token = ++this.epoch;
     this.pendingOperation = 'loading';
-    this.lockChanged(true);
     this.feedback = '';
     try {
       const [policy, status, connector] = await Promise.all([this.servers.policy(id), this.setup.status(id), this.servers.get(id)]);
@@ -131,7 +131,7 @@ export class PersonalOAuthSetupState {
     const token = this.epoch;
     this.invalidate();
     this.pendingOperation = 'validation';
-    this.lockChanged(true);
+    this.mutationLockChanged(true);
     this.feedback = '';
     try {
       const status = await this.setup.validate(id, { expected_revision: revision });
@@ -152,9 +152,8 @@ export class PersonalOAuthSetupState {
     if (error instanceof AuthenticationRequiredError || error instanceof HttpError && [401, 403].includes(error.status)) {
       this.denied = true;
       this.currentPolicy = null;
-      this.pendingOperation = null;
       this.epoch++;
-      this.lockChanged(false);
+      this.finish();
       this.accessLost();
       this.feedback = 'Administration access was lost. Sign in again before reloading this page.';
       return;
@@ -166,11 +165,15 @@ export class PersonalOAuthSetupState {
         ? 'Settings changed elsewhere. Refresh status before continuing.'
         : 'The configuration could not be checked. Refresh status before continuing.';
   }
-  private finish(): void { this.pendingOperation = null; this.lockChanged(false); }
+  private finish(): void {
+    const operation = this.pendingOperation;
+    this.pendingOperation = null;
+    if (operation === 'validation' || operation === 'discovery') this.mutationLockChanged(false);
+  }
   policyChanged = (connector: DownstreamMcpConnector): void => {
     if (this.id !== connector.connector_id || this.disposed) return;
     this.epoch++;
-    this.pendingOperation = null;
+    this.finish();
     this.invalidate();
     this.publicationChanged(connector.connector_id, connector.publication_status);
     void this.load(connector.connector_id);
@@ -180,8 +183,7 @@ export class PersonalOAuthSetupState {
     this.invalidate();
     this.currentPolicy = null;
     this.id = null;
-    this.pendingOperation = null;
-    this.lockChanged(false);
+    this.finish();
   };
   dispose = (): void => { this.detach(); this.disposed = true; };
 }

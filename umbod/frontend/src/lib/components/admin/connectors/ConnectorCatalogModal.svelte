@@ -1,9 +1,11 @@
 <script lang="ts">
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import SetupProgress from '#lib/components/admin/shared/SetupProgress.svelte';
   import type { ConnectorListItem } from '#lib/admin/connectors.js';
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import ConnectorConfigurationForm from './ConnectorConfigurationForm.svelte';
   import ConnectorIcon from './ConnectorIcon.svelte';
+  import { connectorSetupSteps } from './connector-setup-steps.js';
   import type { ConnectorCatalogState } from './connector-catalog-state.svelte';
 
   type ConnectorListForm = {
@@ -15,9 +17,22 @@
     fieldMessages?: Record<string, string>;
   };
 
-  let { state, connectors, form, onselect }: { state: ConnectorCatalogState; connectors: ConnectorListItem[]; form?: ConnectorListForm; onselect: (connectorId: string) => Promise<void> } = $props();
-  const steps = ['Choose connector', 'Configure', 'Check & save'];
+  let { state, connectors, form, onselect, onbacktotype }: {
+    state: ConnectorCatalogState;
+    connectors: ConnectorListItem[];
+    form?: ConnectorListForm;
+    onselect: (connectorId: string) => Promise<void>;
+    onbacktotype?: () => void;
+  } = $props();
+
+  const includesType = $derived(state.mode === 'add' && Boolean(onbacktotype));
+  const steps = $derived(connectorSetupSteps('native', includesType));
   const selectedConnector = $derived(state.selectedConnector(connectors));
+
+  function backToType(): void {
+    state.close();
+    onbacktotype?.();
+  }
 </script>
 
 <svelte:window onkeydown={state.handleKeydown} />
@@ -32,10 +47,10 @@
     --admin-radius-panel={state.mode === 'add' ? '24px' : undefined}>
     {#snippet children()}
       {#snippet progress(current: number)}
-        <SetupProgress {steps} {current} />
+        <SetupProgress {steps} current={current + Number(includesType)} />
       {/snippet}
       {#if state.mode === 'add' && !selectedConnector?.configurationFields}
-        <SetupProgress {steps} current={selectedConnector ? 2 : 1} />
+        {@render progress(selectedConnector ? 2 : 1)}
       {/if}
       {#if selectedConnector}
         {#if selectedConnector.configurationFields}
@@ -72,6 +87,9 @@
       {:else}
         <p class="empty">No connectors are available to add.</p>
       {/if}
+      {#if includesType && !selectedConnector}
+        <div class="stage-actions"><Button type="button" variant="quiet" onclick={backToType}>Back</Button></div>
+      {/if}
     {/snippet}
   </ModalShell>
 {/if}
@@ -80,6 +98,7 @@
   .empty { color: var(--admin-muted); margin: 1rem 0 0; }
   h3 { margin: 0; font-size: 1.0625rem; letter-spacing: -.02em; }
   .retry-back { margin-block-start: 1rem; }
+  .stage-actions { margin-block-start: 1rem; padding-block-start: 1rem; border-top: 1px solid var(--admin-border); }
   .arrow { margin-inline-start: auto; color: var(--admin-accent); }
   ul { display: grid; gap: 0.5rem; list-style: none; margin: 1rem 0 0; overflow: auto; padding: 0; }
   li button { align-items: flex-start; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 16px; cursor: pointer; display: flex; gap: 0.75rem; padding: 0.85rem; text-align: left; width: 100%; }

@@ -101,6 +101,7 @@ async def test_search_maps_only_active_official_listings_with_concrete_https_rem
         _listing(
             "example/catalog",
             title="Catalog",
+            icons=[{"src": "https://primary.example.test/logo.png"}, {"src": "http://insecure.example.test/logo.png"}, None, {"src": 7}, {"src": "https://primary.example.test/logo.png"}],
             remotes=[
                 _remote(
                     _ENDPOINT,
@@ -168,6 +169,7 @@ async def test_search_maps_only_active_official_listings_with_concrete_https_rem
                 title="Catalog",
                 description="Catalog tools",
                 version="1.2",
+                icons=("https://primary.example.test/logo.png",),
                 endpoints=(
                     RegistryEndpoint(
                         url=_ENDPOINT, required_headers=("authorization",)

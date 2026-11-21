@@ -11,6 +11,7 @@ import { DownstreamMcpConnectorsRoute } from '#lib/admin/downstream-mcp-connecto
 import { HttpInstanceConfigurationRoute } from '#lib/admin/instance-configuration-api.js';
 import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import { serverFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
+import { AddConnectorState } from './add-connector-state.svelte.js';
 import DownstreamMcpPageContent from '../downstream-mcp-connectors/DownstreamMcpPageContent.svelte';
 import ConnectorList from './ConnectorList.svelte';
 import OpenApiConnectorList from '../openapi-connectors/OpenApiConnectorList.svelte';
@@ -18,10 +19,11 @@ import OpenApiConnectorList from '../openapi-connectors/OpenApiConnectorList.sve
 const navigation = vi.hoisted(() => ({ path: '/admin/connectors', capability: 'tools' }));
 const submission = vi.hoisted(() => ({ update: vi.fn<BrowserSubmitUpdate>().mockResolvedValue(undefined) }));
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null }, page: {
+  state: {},
   get url(): URL { return new URL(`${navigation.path}?connector=a&capability=${navigation.capability}`, 'https://umbod.test'); },
   get shallow(): { url: URL } { return { url: new URL(`${navigation.path}?connector=b&capability=${navigation.capability}`, 'https://umbod.test') }; }
 } }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn(), refreshAll: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn(), refreshAll: vi.fn(), replaceState: vi.fn() }));
 vi.mock('#lib/components/feedback/index.js', () => ({ useToast: (): object => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
 vi.mock('#lib/admin/operations/browser-submit.js', () => ({
   browserSubmit: (form: HTMLFormElement, callback?: BrowserSubmitFunction): { destroy: () => void } => {
@@ -120,7 +122,7 @@ test('MCP refreshed data for A reloads shallow-selected B without seeding A cata
   vi.spyOn(DownstreamMcpConnectorsRoute.prototype, 'listActivations').mockResolvedValue({ connector_id: 'b', tools: [] });
   vi.spyOn(HttpInstanceConfigurationRoute.prototype, 'get').mockRejectedValue(new HttpError(503, 'Unavailable', null));
   for (let refresh = 0; refresh < 2; refresh += 1) {
-    component = mount(DownstreamMcpPageContent, { target: document.body, props: { data: {
+    component = mount(DownstreamMcpPageContent, { target: document.body, props: { addConnector: new AddConnectorState(), data: {
       connectors: [first, selected], selectedConnectorId: 'a', selectedDetail: first, selectedDetailFailed: true,
       catalog: { discovered_at: '2026-01-01T00:00:00Z', tools: [] }, promptCatalog: bundle('a').promptCatalog,
       resourceCatalog: bundle('a').resourceCatalog, invocationPolicies: [{ tool_id: 'a-tool', mode: 'ask', revision: 1 }]
@@ -148,7 +150,7 @@ test.each(['tools', 'prompts'])('OpenAPI refreshed data for A reloads shallow-se
   for (let refresh = 0; refresh < 2; refresh += 1) {
     component = mount(OpenApiConnectorList, { target: document.body, props: {
       data: { status: 'ready', connectors: [openApiConnector('a'), openApiConnector('b')], selectedConnectorId: 'a', selectedDetail: openApiConnector('a'), selectedDetailFailed: true, invocationPolicies: [{ tool_id: 'a-tool', mode: 'ask', revision: 1 }] },
-      onretry: async (): Promise<void> => {}, onconfigure: (): void => {}
+      onconfigure: (): void => {}
     } });
     await vi.waitFor(() => expect(document.querySelector('#selected-openapi-connector-heading')?.textContent).toBe('OpenAPI b'));
     await vi.waitFor(() => expect(document.body.textContent).toContain('Description b'));

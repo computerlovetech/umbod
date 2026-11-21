@@ -1,6 +1,9 @@
 import { DownstreamMcpMutationState } from './downstream-mcp-mutation-state.svelte';
 import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
-import { summaryFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
+import { policyFixture, serverFixture, summaryFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
+import { InMemoryPersonalOAuthSetup } from '#lib/admin/personal-mcp-servers/setup.test-support.js';
+import type { SetupStatus } from '#lib/admin/personal-mcp-servers/domain/setup.js';
+import * as adminApiModule from '#lib/admin/infrastructure/admin-api.js';
 import { describe, expect, test, vi } from 'vitest';
 import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
 import { DownstreamMcpWorkspaceState, type DownstreamMcpWorkspaceBundle } from './downstream-mcp-workspace-state.svelte';
@@ -180,6 +183,13 @@ describe('DownstreamMcpWorkspaceState', () => {
     expect(state.currentForm(previousForm)).toBeUndefined();
     const nextForm = { mode: 'create', message: 'Current error' };
     expect(state.currentForm(nextForm)).toBe(nextForm);
+
+    state.returnToAccess();
+    expect(state.modal).toBe('choose');
+    state.completeSharedSetup('none', draft);
+    expect(state.modal).toBe('create');
+    expect(state.createDraft).toEqual(draft);
+    expect(state.authMode).toBe('none');
   });
 
   test('does not hand off a wizard result after the wizard is closed', () => {
@@ -339,6 +349,52 @@ describe('DownstreamMcpWorkspaceState', () => {
     expect(state.operations.pending).toEqual({ action: publication_status === 'published' ? 'unpublish' : 'publish', id: 'payments', name: 'payments' });
     state.operations.cancel();
     expect(state.operations.pending).toBeNull();
+  });
+
+  test('personal readiness reads leave creation available and preserve independent mutation locks', async (): Promise<void> => {
+    const connector = serverFixture();
+    const setup = new InMemoryPersonalOAuthSetup();
+    const status = deferred<SetupStatus>();
+    const validation = deferred<SetupStatus>();
+    const api = new adminApiModule.AdminApi({ request: vi.fn().mockRejectedValue(new Error('Unexpected transport request')) });
+    vi.spyOn(api.personalServers, 'policy').mockResolvedValue(policyFixture());
+    vi.spyOn(api.personalServers, 'get').mockResolvedValue(connector);
+    vi.spyOn(api.personalOAuthSetup, 'status').mockReturnValue(status.promise);
+    vi.spyOn(api.personalOAuthSetup, 'validate').mockReturnValue(validation.promise);
+    const apiFactory = vi.spyOn(adminApiModule, 'adminApi').mockReturnValue(api);
+    const state = new DownstreamMcpWorkspaceState(undefined, undefined, { mode: 'personal', connector });
+    apiFactory.mockRestore();
+
+    const loading = state.personalSetup.load(connector.connector_id);
+    expect(state.personalSetup.outcome).toBe('loading');
+    expect(state.operations.locked).toBe(false);
+    state.requestPublication(connector);
+    expect(state.operations.pending).toBeNull();
+    state.beginCreate({ focus: vi.fn() } as unknown as HTMLElement);
+    expect(state.modal).toBe('choose');
+    state.close();
+
+    state.operations.setFormLocked(true);
+    status.resolve(setup.current);
+    await loading;
+    expect(state.operations.locked).toBe(true);
+    expect(state.operations.canPublish(connector)).toBe(false);
+    state.operations.setFormLocked(false);
+
+    const checking = state.personalSetup.check();
+    expect(state.operations.locked).toBe(true);
+    state.operations.setFormLocked(true);
+    state.operations.setFormLocked(false);
+    expect(state.operations.locked).toBe(true);
+    state.operations.setFormLocked(true);
+    validation.resolve(setup.validation);
+    await checking;
+    expect(state.operations.locked).toBe(true);
+
+    state.operations.setFormLocked(false);
+    expect(state.operations.locked).toBe(false);
+    state.requestPublication(connector);
+    expect(state.operations.pending?.action).toBe('publish');
   });
 
   test('personal publication requires current validation while published servers remain withdrawable', (): void => {

@@ -192,11 +192,11 @@ export class OpenApiConnectorsApi {
 export async function loadOpenApiConnectorList(api: { connectors: Pick<OpenApiConnectorPort, 'list'> }): Promise<OpenApiConnectorListPageData> {
   try {
     const response = await api.connectors.list();
-    if (response.connectors.length === 0) return { status: 'empty', message: 'No OpenAPI connectors are currently available', connectors: [] };
+    if (response.connectors.length === 0) return { status: 'empty', connectors: [] };
     return { status: 'ready', connectors: response.connectors.map(mapOpenApiConnectorSummary) };
   } catch (error) {
     if (!isOperationalError(error)) throw error;
-    return { status: 'failed', message: 'OpenAPI connectors are unavailable', retryLabel: 'Try again', connectors: [] };
+    return { status: 'failed', connectors: [] };
   }
 }
 

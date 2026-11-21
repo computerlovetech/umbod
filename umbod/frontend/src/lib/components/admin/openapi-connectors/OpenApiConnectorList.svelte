@@ -12,22 +12,21 @@
   import PromptCatalog from '#lib/components/admin/capability-catalogs/PromptCatalog.svelte';
   import ResourceCatalog from '#lib/components/admin/capability-catalogs/ResourceCatalog.svelte';
   import CapabilityDescriptionOverrideModal from '#lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
-  import ConnectorListEmptyState from '#lib/components/admin/connectors/ConnectorListEmptyState.svelte';
   import ConnectorCapabilities from '#lib/components/admin/connectors/ConnectorCapabilities.svelte';
   import ConnectorDetailItem from '#lib/components/admin/connectors/ConnectorDetailItem.svelte';
   import ConnectorDetailSummary from '#lib/components/admin/connectors/ConnectorDetailSummary.svelte';
   import ConnectorPublicationMenuAction from '#lib/components/admin/connectors/ConnectorPublicationMenuAction.svelte';
-  import ConnectorSidebarList from '#lib/components/admin/connectors/ConnectorSidebarList.svelte';
+  import UnifiedConnectorWorkspace from '#lib/components/admin/connectors/UnifiedConnectorWorkspace.svelte';
+  import type { UnifiedConnectorKind, UnifiedConnectorRow } from '#lib/admin/unified-connectors.js';
   import PublicationConfirmationModal from '#lib/components/admin/connectors/PublicationConfirmationModal.svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
-  import AdminSplitWorkspace from '#lib/components/admin/shared/AdminSplitWorkspace.svelte';
+
   import AdminSidebarActionMenu from '#lib/components/admin/shared/AdminSidebarActionMenu.svelte';
   import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
   import { BrowserSelectionUrlAdapter } from '#lib/components/admin/shared/selection-url-port.js';
   import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
   import OpenApiOperationCatalog from './OpenApiOperationCatalog.svelte';
   import { OpenApiConnectorListState } from './openapi-connector-list-state.svelte';
-  import { OpenApiConnectorReloadState } from './openapi-connector-reload-state.svelte';
   import { OpenApiPublicationState } from './openapi-publication-state.svelte';
 
   type ActionData = {
@@ -45,13 +44,14 @@
   type Props = {
     data: OpenApiConnectorListPageData & { selectedConnectorId?: string; selectedDetail?: OpenApiConnectorListItem; selectedDetailFailed?: true; invocationPolicies?: InvocationPolicyTool[] };
     form?: ActionData;
-    onretry: () => Promise<void>;
+    unifiedRows?: readonly UnifiedConnectorRow[];
+    unavailableKinds?: readonly UnifiedConnectorKind[];
     onconfigure: (event: MouseEvent, connector: OpenApiConnectorListItem) => void;
   };
 
-  let { data, form = null, onretry, onconfigure }: Props = $props();
+  let { data, form = null, onconfigure, unifiedRows, unavailableKinds }: Props = $props();
 
-  const connectors = $derived(data.status === 'ready' || data.status === 'empty' ? data.connectors : []);
+  const connectors = $derived(data.connectors);
   const toast = useToast();
   const toolsRoute = new OpenApiConnectorToolsBrowserRoute();
   const detailsRoute = new OpenApiConnectorDetailsBrowserRoute();
@@ -73,7 +73,6 @@
     if (initialSelectionId && initialSelectionId !== data.selectedConnectorId) state.selectConnector(initialSelectionId);
   });
   const publication = new OpenApiPublicationState();
-  const reload = new OpenApiConnectorReloadState(() => onretry());
   const selectedConnector = $derived(state.resolveSelectedConnector());
   const selectedToolsState = $derived(selectedConnector ? state.tools.toolsState(selectedConnector) : null);
   const selectedCapability = $derived(parseConnectorCapability((page.shallow?.url ?? page.url).searchParams.get('capability')));
@@ -121,31 +120,20 @@
   oncancel={cancelPublication}
 />
 
-{#if data.status === 'ready' && selectedConnector}
-  <AdminSplitWorkspace
-    ariaLabel="OpenAPI connectors workspace"
-    sidebarLabel="OpenAPI connectors"
-    sidebarHeading="OpenAPI connectors"
-    count={connectors.length}
-    detailLabel="Selected OpenAPI connector detail"
-  >
-    {#snippet sidebar()}
-      <ConnectorSidebarList items={connectors} selectedId={selectedConnector.id} ariaLabel="OpenAPI connectors" onselect={(connector) => state.selectConnector(connector.id)}>
-        {#snippet metadata(connector)}
-          <span class="connector-meta">{connector.publicationStatus}</span>
+  <UnifiedConnectorWorkspace kind="openapi" items={connectors} selectedId={selectedConnector?.id} {unifiedRows} {unavailableKinds} detailLabel="Selected OpenAPI connector detail" onselect={(connector) => state.selectConnector(connector.id)}>
+    {#snippet metadata(connector)}
+      <span class="connector-meta">OpenAPI · {connector.publicationStatus}</span>
+    {/snippet}
+    {#snippet actions(connector)}
+      <AdminSidebarActionMenu open={state.view.openMenuConnectorId === connector.id} label={`Open actions for ${connector.name}`} onopenchange={(open) => state.setMenuOpen(connector.id, open)}>
+        {#snippet menu()}
+          <button type="button" role="menuitem" onclick={(event) => { state.view.closeMenu(); onconfigure(event, connector); }}>Configure</button>
+          <button type="button" role="menuitem" onclick={() => state.showCapabilityDescription(connector.id)}>Edit capability description</button>
+          {#if connector.canPublish || connector.canUnpublish}
+            <ConnectorPublicationMenuAction connectorId={connector.id} connectorName={connector.name} action={connector.canPublish ? 'publish' : 'unpublish'} onrequest={requestPublicationConfirmation} />
+          {/if}
         {/snippet}
-        {#snippet actions(connector)}
-          <AdminSidebarActionMenu open={state.view.openMenuConnectorId === connector.id} label={`Open actions for ${connector.name}`} onopenchange={(open) => state.setMenuOpen(connector.id, open)}>
-            {#snippet menu()}
-              <button type="button" role="menuitem" onclick={(event) => { state.view.closeMenu(); onconfigure(event, connector); }}>Configure</button>
-              <button type="button" role="menuitem" onclick={() => state.showCapabilityDescription(connector.id)}>Edit capability description</button>
-              {#if connector.canPublish || connector.canUnpublish}
-                <ConnectorPublicationMenuAction connectorId={connector.id} connectorName={connector.name} action={connector.canPublish ? 'publish' : 'unpublish'} onrequest={requestPublicationConfirmation} />
-              {/if}
-            {/snippet}
-          </AdminSidebarActionMenu>
-        {/snippet}
-      </ConnectorSidebarList>
+      </AdminSidebarActionMenu>
     {/snippet}
 
     {#snippet detail()}
@@ -153,7 +141,7 @@
         <div class="admin-message"><DelayedSpinner active label="Loading OpenAPI connector details" /></div>
       {:else if state.detailFailed}
         <div class="admin-message admin-message-error" role="alert"><p>OpenAPI connector details are unavailable.</p><Button onclick={state.retryDetail}>Try again</Button></div>
-      {:else}
+      {:else if selectedConnector}
       <ConnectorDetailSummary headingId="selected-openapi-connector-heading" title={selectedConnector.name} publicationStatus={selectedConnector.publicationStatus}>
         {#snippet description()}
           <p>{selectedConnector.capabilityDescription}</p>
@@ -211,24 +199,7 @@
       </ConnectorDetailSummary>
       {/if}
     {/snippet}
-  </AdminSplitWorkspace>
-{:else if data.status === 'empty'}
-  <ConnectorListEmptyState message={data.message} workspaceLabel="OpenAPI connectors workspace" sidebarLabel="OpenAPI connectors" sidebarHeading="OpenAPI connectors" detailLabel="Selected OpenAPI connector detail" />
-{:else if data.status === 'failed'}
-  <div class="admin-message admin-message-error failure" role="alert">
-    <p>{data.message}</p>
-    <Button disabled={reload.retrying} onclick={reload.retry}>
-      {#if reload.retrying}
-        <DelayedSpinner active={reload.retrying} label="Loading OpenAPI connectors" inline size="small" />
-      {:else}
-        {data.retryLabel}
-      {/if}
-    </Button>
-  </div>
-{:else}
-  <ConnectorListEmptyState message="No OpenAPI connectors are available yet." workspaceLabel="OpenAPI connectors workspace" sidebarLabel="OpenAPI connectors" sidebarHeading="OpenAPI connectors" detailLabel="Selected OpenAPI connector detail" />
-{/if}
-
+  </UnifiedConnectorWorkspace>
 <style>
   h3,
   p {
@@ -242,10 +213,6 @@
   }
 
   .panel-section { min-width: 0; }
-
-  .failure p {
-    margin: 0 0 12px;
-  }
 
   .admin-message p {
     margin-top: 0;
