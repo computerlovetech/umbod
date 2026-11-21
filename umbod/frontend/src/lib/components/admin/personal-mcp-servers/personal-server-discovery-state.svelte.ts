@@ -47,6 +47,11 @@ export class PersonalServerDiscoveryState {
     this.reset(this.active);
     this.endpoint = endpoint;
   };
+  acceptPreview = (preview: EndpointDiscoveryResult): void => {
+    if (!this.active || this.attempted || preview.endpoint_url !== this.endpoint) return;
+    this.attempted = true;
+    this.applyResult(preview);
+  };
   invalidateApproval = (): void => { this.approved = false; this.acknowledged = false; };
   blur = async (): Promise<void> => { if (!this.attempted) await this.discover(); };
   retry = async (): Promise<void> => { await this.discover(); };
@@ -75,15 +80,7 @@ export class PersonalServerDiscoveryState {
       const result = await this.api.discover({ endpoint_url: this.endpoint, issuer_selection: this.selectedIssuer ? { kind: 'selected', issuer_url: this.selectedIssuer } : { kind: 'automatic' } });
       if (!this.active || generation !== this.generation) return;
       if (result.endpoint_url !== this.endpoint) throw new Error('Endpoint mismatch');
-      if (result.kind === 'issuer_selection_required') {
-        this.issuers = result.issuer_urls;
-        this.selectedIssuer = '';
-      } else {
-        this.result = result;
-        this.automaticRegistrationUnavailable = result.automatic_client.kind === 'unavailable';
-        this.automaticClientChanged(result.automatic_client);
-        this.selectedIssuer = result.issuer_url;
-      }
+      this.applyResult(result);
     } catch (error) {
       if (!this.active || generation !== this.generation) return;
       if (error instanceof AuthenticationRequiredError || error instanceof HttpError && (error.status === 401 || error.status === 403)) {
@@ -94,6 +91,17 @@ export class PersonalServerDiscoveryState {
         this.resourceMismatch = error instanceof EndpointResourceMismatchError;
       }
     } finally { if (generation === this.generation) this.pending = false; }
+  }
+  private applyResult(result: EndpointDiscoveryResult): void {
+    if (result.kind === 'issuer_selection_required') {
+      this.issuers = result.issuer_urls;
+      this.selectedIssuer = '';
+      return;
+    }
+    this.result = result;
+    this.automaticRegistrationUnavailable = result.automatic_client.kind === 'unavailable';
+    this.automaticClientChanged(result.automatic_client);
+    this.selectedIssuer = result.issuer_url;
   }
   configureManually = (): void => { if (this.failed && !this.pending) { this.manual = true; this.invalidateApproval(); } };
   acknowledge = (value: boolean): void => { this.acknowledged = this.manual && value; };

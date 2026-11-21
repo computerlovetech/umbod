@@ -99,6 +99,7 @@ def test_infrastructure_package_exports_public_kernel() -> None:
 def test_infrastructure_public_surface_is_composition_only() -> None:
     assert set(infrastructure.__all__) == {
         'OutboundHttpClientFactory',
+        'open_anonymous_mcp_initialization',
         'open_official_mcp_registry',
         'migrate_local_content',
         'AppPersistenceRuntime',
@@ -337,7 +338,7 @@ def test_personal_identity_policy_does_not_load_persistence_drivers() -> None:
 def test_infrastructure_contains_only_approved_io_composition_and_drivers() -> None:
     infrastructure_root = Path(__file__).parents[4] / 'src' / 'umbod' / 'infrastructure'
     source_entries = {path.relative_to(infrastructure_root).parts[0] for path in infrastructure_root.rglob('*.py')}
-    assert source_entries == {'__init__.py', 'connections', 'persistence', 'filesystem', 'http', 'key_value', 'mcp_registry', 'telemetry', 'metrics'}
+    assert source_entries == {'__init__.py', 'connections', 'persistence', 'filesystem', 'http', 'key_value', 'mcp_endpoint_access', 'mcp_registry', 'telemetry', 'metrics'}
 
 
 def test_driver_packages_export_adapter_types() -> None:

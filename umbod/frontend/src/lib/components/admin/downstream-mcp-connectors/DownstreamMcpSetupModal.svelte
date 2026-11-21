@@ -64,11 +64,12 @@
   <ModalShell title={configuring ? 'Configure MCP proxy connector' : 'Add MCP proxy connector'} titleId={`${fieldPrefix}-title`} close={state.close}>
     {#snippet children()}
       {#snippet fields()}
+        {#if !configuring && state.createDraft}<p class="helper">Step 4 of 4 · Configure</p>{/if}
         {#if configuring}<input type="hidden" name="connectorId" value={connector?.connector_id ?? ''} />{/if}
-        <AdminConfigurationField id={`${fieldPrefix}-display-name`} name="displayName" label="Display name" value={connector?.display_name ?? values?.displayName ?? ''} oninput={configuring ? undefined : state.updateDisplayName} required />
+        <AdminConfigurationField id={`${fieldPrefix}-display-name`} name="displayName" label="Display name" value={connector?.display_name ?? values?.displayName ?? state.createDraft?.displayName ?? ''} oninput={configuring ? undefined : state.updateDisplayName} required />
         <AdminConfigurationField id={`${fieldPrefix}-tool-name-prefix`} name="toolNamePrefix" label="Tool name prefix" value={values?.toolNamePrefix ?? state.toolNamePrefix} oninput={state.updateToolNamePrefix} required />
-        <AdminConfigurationField id={`${fieldPrefix}-capability-description`} name="capabilityDescription" label="Default capability description" value={connector?.capability_description ?? values?.capabilityDescription ?? ''} helperText="Describes this connector to agents. You can customize the agent-facing description after creation." required />
-        <AdminConfigurationField id={`${fieldPrefix}-endpoint`} name="endpointUrl" label="Downstream endpoint" type="url" value={connector?.endpoint_url ?? values?.endpointUrl ?? ''} placeholder="https://mcp.example.com/mcp" required />
+        <AdminConfigurationField id={`${fieldPrefix}-capability-description`} name="capabilityDescription" label="Default capability description" value={connector?.capability_description ?? values?.capabilityDescription ?? state.createDraft?.description ?? ''} helperText="Describes this connector to agents. You can customize the agent-facing description after creation." required />
+        <AdminConfigurationField id={`${fieldPrefix}-endpoint`} name="endpointUrl" label="Downstream endpoint" type="url" value={connector?.endpoint_url ?? values?.endpointUrl ?? state.createDraft?.endpointUrl ?? ''} placeholder="https://mcp.example.com/mcp" required />
         <p class="endpoint-help"><strong>Shared endpoint:</strong> After discovery, enable and publish tools to make them available on <code>/mcp</code>, namespaced with tools from other connectors.</p>
         <div class="path-field">
           <label for={`${fieldPrefix}-public-path`}>Dedicated MCP path (additional)</label>

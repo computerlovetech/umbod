@@ -11,6 +11,7 @@ description: "Shared and personal downstream MCP connector coordination."
 - [adapters/](./adapters/README.md) — Protocol and configuration integration.
 - [catalog/](./catalog/) — Shared capability projections.
 - [connection.py](./connection.py) — Shared connection integration.
+- [endpoint_access.py](./endpoint_access.py) — Pre-registration access checks that distinguish anonymous initialization from OAuth evidence.
 - [errors.py](./errors.py) — Connector failures.
 - [management/](./management/) — Aggregate lifecycle and discovery.
 - [models.py](./models.py) — Definitions and creation commands.

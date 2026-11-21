@@ -1,10 +1,7 @@
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from fastapi.routing import APIRoute
+from fastapi import APIRouter, Depends, HTTPException
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.metadata import DiscoveredPersonalOAuthMetadataProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import SafeOAuthHttpTransport
@@ -12,32 +9,13 @@ from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models impo
 from umbod.core.connectors.downstream_mcp.personal_oauth_metadata import DiscoverPersonalOAuthMetadata, PersonalOAuthMetadataProvider, PersonalOAuthMetadataResult
 from umbod.core.network import public_http_connection_pool
 from .dependencies import Factories
+from .preview_validation import BoundedPreviewRoute
 
 
-class MetadataValidationRoute(APIRoute):
-    def get_route_handler(self) -> Callable[[Request], Awaitable[Response]]:
-        handler = super().get_route_handler()
-
-        async def bounded_handler(request: Request) -> Response:
-            try:
-                chunks: list[bytes] = []
-                size = 0
-                async for chunk in request.stream():
-                    size += len(chunk)
-                    if size > 12288:
-                        return JSONResponse(status_code=413, content={"detail": {"code": "personal_oauth_discovery_failed", "stage": "discovery", "reason": "invalid_response"}}, headers={"Cache-Control": "no-store"})
-                    chunks.append(chunk)
-                request._body = b"".join(chunks)
-                response = await handler(request)
-            except RequestValidationError:
-                response = JSONResponse(status_code=422, content={"detail": {"code": "personal_oauth_discovery_failed", "stage": "discovery", "reason": "invalid_response"}})
-            except HTTPException as error:
-                error.headers = {**(error.headers or {}), "Cache-Control": "no-store"}
-                raise
-            response.headers["Cache-Control"] = "no-store"
-            return response
-
-        return bounded_handler
+class MetadataValidationRoute(BoundedPreviewRoute):
+    @staticmethod
+    def invalid_input_detail() -> dict[str, str]:
+        return {"code": "personal_oauth_discovery_failed", "stage": "discovery", "reason": "invalid_response"}
 
 
 def require_metadata_registration(factories: Factories) -> None:

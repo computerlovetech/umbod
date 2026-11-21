@@ -173,23 +173,9 @@ describe('personal server administration presentation', () => {
     expect(page).toContain('disabled={state.operations.locked}');
     expect(page).toContain('<Button aria-label="Add MCP connector" disabled={state.operations.locked}');
   });
-  test('the old route has no UI and the surviving workspace owns both mode choices', () => {
+  test('the consolidated workspace and navigation do not link to the retired personal-server route', () => {
     const workspace = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
     const shell = readFileSync('src/lib/components/admin/AdminShell.svelte', 'utf8');
-    expect(workspace).toContain('onclick={(event) => state.beginCreate(registration.availability, event.currentTarget)}');
-    expect(workspace).toContain('Both options are organisation-managed.');
-    expect(workspace).toContain('Choose shared authorization or personal authorization, where each user authorizes access using their own account.');
-    expect(workspace).not.toContain('User-managed');
-    expect(workspace).toContain('>Shared</Button>');
-    expect(workspace).not.toContain('An operator must');
-    expect(workspace).not.toContain('View startup settings');
-    expect(workspace).not.toContain('Reload availability');
-    expect(workspace).not.toContain('User OAuth availability');
-    expect(workspace).toContain('>Personal</Button>');
-    expect(workspace).toMatch(/<div class="connector-mode-options">\s*<Button[^\n]+>Shared<\/Button>\s*<Button[^\n]+>Personal<\/Button>\s*<\/div>/);
-    expect(workspace).toContain('.connector-mode-options { display: grid; flex-shrink: 0; gap: .75rem; }');
-    expect(workspace).toContain('disabled={!registration.canRegister}');
-    expect(workspace).toContain('<PersonalServerRegistration');
     expect(workspace).not.toContain('/admin/personal-mcp-servers');
     expect(shell).not.toContain('personalMcpServers');
   });

@@ -45,11 +45,12 @@
 </dialog>
 
 <style>
-  dialog { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel); box-shadow: var(--admin-shadow-dialog); box-sizing: border-box; color: var(--admin-ink); max-height: calc(100dvh - 2rem); max-width: var(--modal-width, 36rem); overflow: var(--modal-overflow, hidden); padding: var(--modal-padding, 1.5rem); width: calc(100% - 2rem); text-align: start; white-space: normal; }
+  dialog { background: var(--modal-background, var(--admin-panel)); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel); box-shadow: var(--admin-shadow-dialog); box-sizing: border-box; color: var(--admin-ink); max-height: calc(100dvh - 2rem); max-width: var(--modal-width, 36rem); overflow: var(--modal-overflow, hidden); padding: var(--modal-padding, 1.5rem); width: calc(100% - 2rem); text-align: start; white-space: normal; }
   dialog[open] { display: flex; flex-direction: column; }
   dialog::backdrop { background: var(--admin-overlay); }
   header { align-items: flex-start; border-bottom: 1px solid var(--admin-border); display: flex; flex: none; gap: 1rem; justify-content: space-between; padding: var(--modal-header-padding, 0 0 1rem); }
   h2 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.03em; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  h2:focus-visible { outline: var(--modal-title-focus-outline, 3px solid var(--admin-focus)); }
   svg { display: block; height: 1.25rem; width: 1.25rem; }
 
   @media (max-width: 30rem) {

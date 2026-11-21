@@ -121,6 +121,7 @@ async def test_search_maps_only_active_official_listings_with_concrete_https_rem
                 _remote("https://{tenant}.example.test/mcp"),
                 _remote("https://primary.example.test/{tenant}/mcp"),
                 _remote("https://user:private@primary.example.test/mcp"),
+                _remote("https://primary.example.test/mcp?region=example"),
             ],
         ),
         _listing("example/second", title=None, remotes=[_remote(_MIRROR)]),

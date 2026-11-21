@@ -6,7 +6,8 @@
   import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
   import { PersonalServerFormState } from '../personal-mcp-servers/personal-server-form-state.svelte';
   import PersonalServerRegistration from '../personal-mcp-servers/PersonalServerRegistration.svelte';
-  import PersonalServerDialog from '../personal-mcp-servers/PersonalServerDialog.svelte';
+  import McpEndpointSetupWizard from './McpEndpointSetupWizard.svelte';
+  import type { McpSetupDraft, McpSetupMode } from './mcp-endpoint-setup-state.svelte';
   import Button from '../shared/Button.svelte';
   import { parseConnectorCapability } from '#lib/admin/connector-capabilities.js';
   import type { DownstreamMcpConnector, DownstreamMcpConnectorSummary, DownstreamMcpToolList } from '#lib/admin/downstream-mcp-connectors.js';
@@ -18,7 +19,7 @@
   import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
   import { BrowserSelectionUrlAdapter } from '#lib/components/admin/shared/selection-url-port.js';
   import DownstreamMcpWorkspace from './DownstreamMcpWorkspace.svelte';
-  import { DownstreamMcpWorkspaceState, type DownstreamMcpCreateValues } from './downstream-mcp-workspace-state.svelte';
+  import { DownstreamMcpWorkspaceState, type DownstreamMcpWorkspaceForm } from './downstream-mcp-workspace-state.svelte';
 
   let { data, form }: {
     data: {
@@ -32,12 +33,7 @@
       invocationPolicies?: InvocationPolicyTool[];
       accountIdentity?: HeaderAccountIdentityState;
     };
-    form?: {
-      message?: string;
-      status?: string;
-      mode?: string;
-      values?: DownstreamMcpCreateValues;
-    };
+    form?: DownstreamMcpWorkspaceForm;
   } = $props();
 
   const toast = useToast();
@@ -72,13 +68,28 @@
     registration.close();
     state.close();
   }
+  function completeSetup(mode: McpSetupMode, draft: McpSetupDraft): void {
+    if (mode !== 'personal') {
+      state.completeSharedSetup(mode, draft);
+      return;
+    }
+    const trigger = state.returnFocus;
+    if (state.modal !== 'choose' || !trigger || state.operations.locked || !registration.canRegister) return;
+    registration.openCreate();
+    registration.setMetadata('name', draft.displayName);
+    registration.setMetadata('description', draft.description);
+    registration.setMetadata('endpoint', draft.endpointUrl);
+    state.open('personal', trigger);
+    if (draft.oauthMetadata) registration.discovery.acceptPreview(draft.oauthMetadata);
+    else void registration.discovery.blur();
+  }
   const fallbackAccountIdentity: HeaderAccountIdentityState = { kind: 'hidden' };
 </script>
 
 <AdminShell activeItem="connectors" accountIdentity={data.accountIdentity ?? fallbackAccountIdentity} contentWidth="wide">
   <SubpageContainer headingId="mcp-workspace-heading" title="MCP connectors" lede="Manage your MCP connections.">
     {#snippet actions()}
-      <Button aria-label="Add MCP connector" disabled={state.operations.locked} onclick={(event) => state.beginCreate(registration.availability, event.currentTarget)}><span aria-hidden="true">+</span> Add MCP connector</Button>
+      <Button aria-label="Add MCP connector" disabled={state.operations.locked} onclick={(event) => state.beginCreate(event.currentTarget, form)}><span aria-hidden="true">+</span> Add MCP connector</Button>
     {/snippet}
     {#snippet navigation()}
       <ConnectorTabs activeTab="downstream-mcp" capability={parseConnectorCapability((page.shallow?.url ?? page.url).searchParams.get('capability'))} />
@@ -88,24 +99,13 @@
       <Button variant="secondary" disabled={registration.busy || registration.authenticationLost} onclick={reloadRegistration}>Reload servers</Button>
     {/if}
     {#if !state.operations.registrationLocked}
-    <DownstreamMcpWorkspace connectors={data.connectors} selected={state.bundle?.connector} catalog={state.bundle?.catalog} promptCatalog={state.bundle?.promptCatalog} resourceCatalog={state.bundle?.resourceCatalog} invocationPolicies={state.bundle?.invocationPolicies ?? []} {form} {state} />
+    <DownstreamMcpWorkspace connectors={data.connectors} selected={state.bundle?.connector} catalog={state.bundle?.catalog} promptCatalog={state.bundle?.promptCatalog} resourceCatalog={state.bundle?.resourceCatalog} invocationPolicies={state.bundle?.invocationPolicies ?? []} form={state.currentForm(form)} {state} />
     {/if}
   </SubpageContainer>
 </AdminShell>
 
 {#if state.modal === 'choose' && !state.operations.locked}
-  <PersonalServerDialog title="Add MCP connector" titleId="mcp-mode-title" descriptionId="mcp-mode-description" close={state.close}>
-    <p id="mcp-mode-description">Both options are organisation-managed. Choose shared authorization or personal authorization, where each user authorizes access using their own account.</p>
-    <div class="connector-mode-options">
-      <Button onclick={() => state.open('create', state.returnFocus!)}>Shared</Button>
-      <Button disabled={!registration.canRegister} onclick={() => { registration.openCreate(); state.open('personal', state.returnFocus!); }}>Personal</Button>
-    </div>
-    {#if registration.message}<p role="alert">{registration.message}</p>{/if}
-  </PersonalServerDialog>
+  <McpEndpointSetupWizard api={api.mcpEndpointSetup} personalAvailable={registration.canRegister} close={state.close} complete={completeSetup} accessLost={state.operations.loseAccess} />
 {:else if state.modal === 'personal' && !state.operations.authenticationLost}
   <PersonalServerRegistration state={registration} close={closeRegistration} reload={reloadRegistration} />
 {/if}
-
-<style>
-  .connector-mode-options { display: grid; flex-shrink: 0; gap: .75rem; }
-</style>

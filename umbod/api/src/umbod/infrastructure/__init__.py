@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from umbod.infrastructure.http import OutboundHttpClientFactory
+    from umbod.infrastructure.mcp_endpoint_access import open_anonymous_mcp_initialization
     from umbod.infrastructure.mcp_registry import open_official_mcp_registry
     from umbod.infrastructure.metrics.mcp.composition import create_mcp_metrics
     from umbod.infrastructure.metrics.rest.composition import (
@@ -50,6 +51,7 @@ from umbod.infrastructure.filesystem import (
 
 __all__ = [
     "OutboundHttpClientFactory",
+    "open_anonymous_mcp_initialization",
     "open_official_mcp_registry",
     "create_mcp_metrics",
     "create_rest_metrics_recorder",
@@ -88,6 +90,7 @@ __all__ = [
 
 _EXPORTS: dict[str, str] = {
     "OutboundHttpClientFactory": ".http",
+    "open_anonymous_mcp_initialization": ".mcp_endpoint_access",
     "open_official_mcp_registry": ".mcp_registry",
     "create_mcp_metrics": ".metrics.mcp.composition",
     "create_rest_metrics_recorder": ".metrics.rest.composition",

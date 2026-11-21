@@ -10,6 +10,8 @@ import { DownstreamMcpConnectorsRoute } from '../downstream-mcp-connectors-api';
 import { GroupPermissionsApi } from '../group-permissions-api';
 import { HttpInstanceConfigurationRoute } from '../instance-configuration-api';
 import { OpenApiConnectorsApi } from '../openapi-connectors-api';
+import { McpEndpointSetupRoute } from '../mcp-endpoint-setup-api';
+import type { McpEndpointSetup } from '../mcp-endpoint-setup';
 import { browserTransport, type Transport } from './transport';
 
 
@@ -26,6 +28,7 @@ export class AdminApi {
   readonly instanceConfiguration: HttpInstanceConfigurationRoute;
   readonly downstreamMcpConnectors: DownstreamMcpConnectorsRoute;
   readonly openApiConnectors: OpenApiConnectorsApi;
+  readonly mcpEndpointSetup: McpEndpointSetup;
 
   constructor(transport: Transport) {
     this.namespaces = new NamespacesRoute(transport);
@@ -40,6 +43,7 @@ export class AdminApi {
     this.instanceConfiguration = new HttpInstanceConfigurationRoute(transport);
     this.downstreamMcpConnectors = new DownstreamMcpConnectorsRoute(transport);
     this.openApiConnectors = new OpenApiConnectorsApi(transport);
+    this.mcpEndpointSetup = new McpEndpointSetupRoute(transport);
   }
 }
 

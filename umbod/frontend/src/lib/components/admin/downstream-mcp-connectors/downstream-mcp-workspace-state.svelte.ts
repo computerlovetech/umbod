@@ -1,6 +1,6 @@
 import { tick } from 'svelte';
 import { PersonalOAuthSetupState } from '../personal-mcp-servers/personal-oauth-setup-state.svelte';
-import type { PersonalServerAvailability } from '#lib/admin/personal-mcp-servers/domain/availability.js';
+import type { McpSetupDraft, McpSetupMode } from './mcp-endpoint-setup-state.svelte';
 import { AdminApi, adminApi } from '#lib/admin/infrastructure/admin-api.js';
 import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
 import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
@@ -40,6 +40,13 @@ export interface DownstreamMcpCreateValues {
   customHeaderName?: string;
 }
 
+export interface DownstreamMcpWorkspaceForm {
+  message?: string;
+  status?: string;
+  mode?: string;
+  values?: DownstreamMcpCreateValues;
+}
+
 type DownstreamBundleLoader = (connectorId: string, signal?: AbortSignal) => Promise<DownstreamMcpWorkspaceBundle>;
 
 import { DownstreamMcpMutationState } from './downstream-mcp-mutation-state.svelte';
@@ -60,7 +67,14 @@ export class DownstreamMcpWorkspaceState {
   toolNamePrefixEdited = $state(false);
   capabilityDescriptionConnectorId = $state<string | null>(null);
   readonly personalSetup: PersonalOAuthSetupState;
+  #createDraft = $state.raw<McpSetupDraft>();
+  #previousForm = $state.raw<DownstreamMcpWorkspaceForm>();
   private publicationFromCheck = false;
+
+  get createDraft(): Readonly<McpSetupDraft> | undefined { return this.#createDraft; }
+
+  currentForm = (form?: DownstreamMcpWorkspaceForm): DownstreamMcpWorkspaceForm | undefined =>
+    form === this.#previousForm ? undefined : form;
   private readonly selection: SelectionDetailController<{ connector_id: string }, DownstreamMcpWorkspaceBundle>;
 
   get bundle(): DownstreamMcpWorkspaceBundle | null { return this.operations.authenticationLost || this.operations.blocked ? null : this.selection.detail; }
@@ -106,8 +120,20 @@ export class DownstreamMcpWorkspaceState {
     this.customHeaderName = values.customHeaderName ?? '';
   }
 
-  beginCreate = (availability: PersonalServerAvailability, trigger: HTMLElement): void => {
-    this.open(availability.registration === 'enabled' ? 'choose' : 'create', trigger);
+  beginCreate = (trigger: HTMLElement, previousForm?: DownstreamMcpWorkspaceForm): void => {
+    if (this.operations.locked) return;
+    this.#previousForm = previousForm;
+    this.#createDraft = undefined;
+    this.open('choose', trigger);
+  };
+
+  completeSharedSetup = (mode: Exclude<McpSetupMode, 'personal'>, draft: McpSetupDraft): void => {
+    const trigger = this.returnFocus;
+    if (this.modal !== 'choose' || !trigger || this.operations.locked) return;
+    this.open('create', trigger);
+    this.#createDraft = { ...draft };
+    this.setAuthMode(mode);
+    this.suggestCreateIdentifiers(draft.displayName);
   };
 
   open = (modal: Exclude<DownstreamMcpModal, null>, trigger: HTMLElement, connector?: DownstreamMcpConnector): void => {
@@ -226,11 +252,14 @@ export class DownstreamMcpWorkspaceState {
 
   updateDisplayName = (event: Event): void => {
     if (!event.currentTarget || !('value' in event.currentTarget)) return;
-    const displayName = String(event.currentTarget.value);
+    this.suggestCreateIdentifiers(String(event.currentTarget.value));
+  };
+
+  private suggestCreateIdentifiers(displayName: string): void {
     const suggestion = suggestedConnectorId(displayName).slice(0, 63);
     if (!this.publicPathEdited) this.createPublicPath = suggestion;
     if (!this.toolNamePrefixEdited) this.toolNamePrefix = suggestedToolNamePrefix(displayName);
-  };
+  }
 
   updateToolNamePrefix = (event: Event): void => {
     if (!event.currentTarget || !('value' in event.currentTarget)) return;
@@ -248,7 +277,7 @@ export class DownstreamMcpWorkspaceState {
   finishSubmit = (): void => { this.submitting = false; };
   failSubmit = (message: string): void => { this.submitError = message; this.submitting = false; };
   setMenuOpen = (open: boolean): void => { this.menuOpen = open; };
-  handleKeydown = (event: KeyboardEvent): void => { if (event.key === 'Escape' && this.modal !== 'personal-edit' && this.modal !== 'personal-setup') this.close(); };
+  handleKeydown = (event: KeyboardEvent): void => { if (event.key === 'Escape' && this.modal !== 'choose' && this.modal !== 'personal-edit' && this.modal !== 'personal-setup') this.close(); };
 }
 
 async function loadDownstreamBundle(connectorId: string, signal?: AbortSignal): Promise<DownstreamMcpWorkspaceBundle> {

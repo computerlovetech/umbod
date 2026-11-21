@@ -35,6 +35,9 @@ description: "Administration contracts, browser clients and feature state for co
 - [instance-configuration-api.ts](./instance-configuration-api.ts) — Instance settings HTTP adapter.
 - [instance-configuration-api.spec.ts](./instance-configuration-api.spec.ts) — Instance settings API tests.
 - [invocation-policy.ts](./invocation-policy.ts) — Tool invocation policy contracts.
+- [mcp-endpoint-setup.ts](./mcp-endpoint-setup.ts) — MCP registry search and endpoint access contracts.
+- [mcp-endpoint-setup-api.ts](./mcp-endpoint-setup-api.ts) — Registry search and endpoint access HTTP adapter.
+- [mcp-endpoint-setup-api.test.ts](./mcp-endpoint-setup-api.test.ts) — Endpoint setup route and wire contract tests.
 - [openapi-connector-details-browser-api.ts](./openapi-connector-details-browser-api.ts) — OpenAPI detail client.
 - [openapi-connector-tools-browser-api.ts](./openapi-connector-tools-browser-api.ts) — OpenAPI tool client.
 - [openapi-connectors.ts](./openapi-connectors.ts) — OpenAPI connector models.

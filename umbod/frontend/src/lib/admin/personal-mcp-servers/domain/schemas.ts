@@ -9,7 +9,7 @@ export const issuerSchema = z.string().min(1).max(4096).refine((value) => {
   try {
     const url = new URL(value);
     const authority = value.split('/')[2] ?? '';
-    return /^https:\/\//i.test(value) && url.protocol === 'https:' && !!url.hostname && !authority.includes('@') && !url.username && !url.password && !/[?#\\\s\x00-\x20\x7f-\uffff]/.test(value) && !authority.includes('%') && url.port !== '0' && !/[\x00-\x1f\x7f]/.test(decodeURIComponent(value));
+    return /^https:\/\//i.test(value) && url.protocol === 'https:' && !!url.hostname && !authority.includes('@') && !url.username && !url.password && !/[?#\\\s\x00-\x20\x7f-\uffff]/.test(value) && !authority.includes('%') && url.port !== '0' && !/%(?:0[\da-f]|1[\da-f]|7f)/i.test(value);
   } catch { return false; }
 });
 export const confidentialAuthMethodSchema = z.enum(['client_secret_basic', 'client_secret_post']);

@@ -14,6 +14,7 @@
 </script>
   <PersonalServerDialog title={state.editing ? "Edit MCP server with personal authorization" : "Register MCP server with personal authorization"} titleId="personal-create-title" {close}>
     <div class="modal-content">
+      {#if !state.editing}<p class="setup-step">Step 4 of 4 · Configure</p>{/if}
       {#if state.message}<p role="alert">{state.message}</p>{/if}
       {#if state.blocked}<Button variant="secondary" disabled={state.busy || state.loading} onclick={reload}>{state.editing ? "Reload OAuth settings" : "Reload servers"}</Button>{/if}
       {#if state.loading}<p role="status">Loading OAuth settings…</p>{/if}
@@ -72,6 +73,7 @@
 <style>
   .modal-content { overflow-y: auto; min-height: 0; padding-top: 8px; }
   fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 18px; min-width: 0; }
+  .setup-step { margin: 0 0 1rem; color: var(--admin-muted); font-size: 13px; }
   .creation-blocker { margin: 0; color: var(--admin-muted); font-size: 13px; }
   .actions { display: flex; gap: 12px; flex-wrap: wrap; }
   .section-heading { display: grid; gap: 7px; }

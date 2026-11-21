@@ -143,32 +143,53 @@ describe('common MCP mutations through the generic administration port', () => {
 });
 
 describe('DownstreamMcpWorkspaceState', () => {
-  test.each([
-    { registration: 'disabled', authorization: 'disabled', expected: 'create' },
-    { registration: 'unknown', authorization: 'unknown', expected: 'create' },
-    { registration: 'enabled', authorization: 'enabled', expected: 'choose' },
-    { registration: 'enabled', authorization: 'disabled', expected: 'choose' }
-  ] as const)('starts $expected when registration is $registration and OAuth is $authorization', ({ registration, authorization, expected }) => {
+  test('starts with the source chooser and restores focus when dismissed', () => {
     const state = new DownstreamMcpWorkspaceState();
     const focus = vi.fn();
     const trigger = { focus } as unknown as HTMLElement;
 
-    state.beginCreate({ registration, authorization }, trigger);
+    state.beginCreate(trigger);
 
-    expect(state.modal).toBe(expected);
+    expect(state.modal).toBe('choose');
     expect(state.returnFocus).toBe(trigger);
     state.close();
     expect(focus).toHaveBeenCalledOnce();
   });
 
-  test.each(['enabled', 'disabled', 'unknown'] as const)('does not start creation while locked with %s registration', (registration) => {
+  test('does not start creation while locked', () => {
     const state = new DownstreamMcpWorkspaceState();
     state.operations.setRegistrationLocked(true);
 
-    state.beginCreate({ registration, authorization: 'enabled' }, { focus: vi.fn() } as unknown as HTMLElement);
+    state.beginCreate({ focus: vi.fn() } as unknown as HTMLElement);
 
     expect(state.modal).toBeNull();
     expect(state.returnFocus).toBeNull();
+  });
+
+  test('hands off a registry selection to the existing shared form without using old errors', () => {
+    const state = new DownstreamMcpWorkspaceState();
+    const previousForm = { mode: 'create', message: 'Previous error' };
+    const draft = { displayName: 'Project Tools', description: 'Project search', endpointUrl: 'https://tools.example/mcp' };
+    state.beginCreate({ focus: vi.fn() } as unknown as HTMLElement, previousForm);
+    state.completeSharedSetup('static_bearer', draft);
+
+    expect(state.modal).toBe('create');
+    expect(state.createDraft).toEqual(draft);
+    expect(state.authMode).toBe('static_bearer');
+    expect(state.createPublicPath).toBe('project-tools');
+    expect(state.currentForm(previousForm)).toBeUndefined();
+    const nextForm = { mode: 'create', message: 'Current error' };
+    expect(state.currentForm(nextForm)).toBe(nextForm);
+  });
+
+  test('does not hand off a wizard result after the wizard is closed', () => {
+    const state = new DownstreamMcpWorkspaceState();
+    state.beginCreate({ focus: vi.fn() } as unknown as HTMLElement);
+    state.close();
+    state.completeSharedSetup('none', { displayName: '', description: '', endpointUrl: 'https://tools.example/mcp' });
+
+    expect(state.modal).toBeNull();
+    expect(state.createDraft).toBeUndefined();
   });
 
   test('uses a coherent initial bundle without requesting it again', () => {

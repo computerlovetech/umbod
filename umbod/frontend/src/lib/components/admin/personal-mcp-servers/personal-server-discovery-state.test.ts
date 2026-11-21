@@ -25,6 +25,24 @@ function setup(): { state: PersonalServerDiscoveryState; api: PersonalServerDisc
   return { state, api, lost };
 }
 describe('creation metadata discovery', (): void => {
+  test('reuses a matching access preview without approving scopes or fetching again', async (): Promise<void> => {
+    const { state, api } = setup();
+    state.acceptPreview(discovered());
+    await state.blur();
+
+    expect(api.discover).not.toHaveBeenCalled();
+    expect(state.result).toEqual(discovered());
+    expect(state.selectedScopes).toEqual([]);
+    expect(state.canSave('dynamic_public')).toBe(false);
+  });
+
+  test('does not reuse OAuth information from a different endpoint', async (): Promise<void> => {
+    const { state, api } = setup();
+    state.acceptPreview(discovered({ endpoint_url: 'https://other.test/mcp' }));
+    expect(state.result).toBeNull();
+    await state.blur();
+    expect(api.discover).toHaveBeenCalledOnce();
+  });
   test('only blur requests once until explicit retry and all scopes start unchecked', async (): Promise<void> => {
     const { state, api } = setup();
     expect(api.discover).not.toHaveBeenCalled();

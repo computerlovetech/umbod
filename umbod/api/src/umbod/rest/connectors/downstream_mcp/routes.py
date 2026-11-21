@@ -149,7 +149,9 @@ from umbod.rest.connectors.downstream_mcp.schemas import (
 )
 
 
+from .endpoint_access import router as endpoint_access_router
 from .personal_oauth_metadata import router as personal_oauth_metadata_router
+from .registry import router as registry_router
 
 
 router = APIRouter(
@@ -159,6 +161,8 @@ router = APIRouter(
 router.include_router(personal_tools_router)
 router.include_router(personal_oauth_setup_router)
 router.include_router(personal_oauth_metadata_router)
+router.include_router(registry_router)
+router.include_router(endpoint_access_router)
 ConfigurationStore = Annotated[
     PersonalOAuthConfigurationStore, Depends(get_personal_oauth_configuration_store)
 ]
