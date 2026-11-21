@@ -37,15 +37,25 @@ describe('OpenApiConnectorSetupState', () => {
     expect(JSON.stringify(state)).not.toContain('private-token');
   });
 
-  test('retrieves a URL document and adds it to setup submission data', async () => {
-    const request = vi.fn(async () => response({ openapi: '3.1.0', paths: {} })) as unknown as typeof globalThis.fetch;
+  test('reviews a URL document before saving the same document without a second fetch', async () => {
+    const request = vi.fn<typeof fetch>(async () => response({ openapi: '3.1.0', info: { title: 'Billing API', description: 'Manage billing' }, servers: [{ url: 'https://api.example.net/v1' }], paths: {} }));
     const state = new OpenApiConnectorSetupState(request);
     state.showCreate({ focus: vi.fn() } as unknown as HTMLElement);
     state.setImportMode('url');
     state.replaceSpecificationUrl('https://example.com/openapi.json');
+    await state.reviewSource(new FormData());
+    expect(state.step).toBe(2);
+    expect(state.servers).toEqual(['https://api.example.net/v1']);
+    expect(state.approvedHostname).toBe('api.example.net');
+    expect(state.displayName).toBe('Billing API');
+    expect(state.capabilityDescription).toBe('Manage billing');
+    await expect(state.prepareSubmission(new FormData())).resolves.toBe(false);
+    state.confirmHostname();
+    expect(state.step).toBe(3);
     const formData = new FormData();
-
     await expect(state.prepareSubmission(formData)).resolves.toBe(true);
+    expect(formData.get('approvedHostname')).toBe('api.example.net');
+    expect(request).toHaveBeenCalledTimes(1);
     expect(formData.get('importMode')).toBe('url');
     expect(JSON.parse(String(formData.get('document')))).toMatchObject({ openapi: '3.1.0' });
     expect(request).toHaveBeenCalledWith('https://example.com/openapi.json', {
@@ -62,9 +72,54 @@ describe('OpenApiConnectorSetupState', () => {
     state.setImportMode('url');
     state.replaceSpecificationUrl('http://example.com/openapi.json');
 
-    await expect(state.prepareSubmission(new FormData())).resolves.toBe(false);
+    await state.reviewSource(new FormData());
+    expect(state.step).toBe(1);
     expect(state.urlError).toContain('HTTPS URL');
     expect(request).not.toHaveBeenCalled();
+  });
+
+  test('requires an explicit hostname when a reviewed file declares multiple hosts', async () => {
+    const state = new OpenApiConnectorSetupState();
+    state.showCreate({ focus: vi.fn() } as unknown as HTMLElement);
+    const formData = new FormData();
+    formData.set('file', new File([JSON.stringify({ openapi: '3.0.3', info: {}, paths: {}, servers: [{ url: 'https://first.example.net' }, { url: 'https://second.example.net' }] })], 'spec.json', { type: 'application/json' }));
+    await state.reviewSource(formData);
+    expect(state.step).toBe(2);
+    expect(state.servers).toHaveLength(2);
+    state.confirmHostname();
+    expect(state.step).toBe(2);
+  });
+
+  test('submits the reviewed file without requiring its input on the final step', async () => {
+    const state = new OpenApiConnectorSetupState();
+    state.showCreate({ focus: vi.fn() } as unknown as HTMLElement);
+    const source = new FormData();
+    const file = new File([JSON.stringify({ openapi: '3.0.3', info: {}, paths: {}, servers: [{ url: 'https://api.example.net' }] })], 'spec.json', { type: 'application/json' });
+    source.set('file', file);
+    await state.reviewSource(source);
+    state.confirmHostname();
+    const submission = new FormData();
+    await expect(state.prepareSubmission(submission)).resolves.toBe(true);
+    expect(submission.get('file')).toBe(file);
+    expect(submission.get('approvedHostname')).toBe('api.example.net');
+  });
+
+  test('ignores a specification response after the wizard is closed', async () => {
+    const pending = Promise.withResolvers<Response>();
+    const state = new OpenApiConnectorSetupState(() => pending.promise);
+    const trigger = { focus: vi.fn() } as unknown as HTMLElement;
+    state.showCreate(trigger);
+    state.setImportMode('url');
+    state.replaceSpecificationUrl('https://example.com/openapi.json');
+    const review = state.reviewSource(new FormData());
+    expect(state.submitting).toBe(true);
+    state.close();
+    state.showCreate(trigger);
+    pending.resolve(response({ openapi: '3.1.0', info: { title: 'Old source' } }));
+    await review;
+    expect(state.step).toBe(1);
+    expect(state.displayName).toBe('');
+    expect(state.submitting).toBe(false);
   });
 
   test.each(['create', 'configure'] as const)('closes %s setup on successful SPA redirect', async (mode) => {

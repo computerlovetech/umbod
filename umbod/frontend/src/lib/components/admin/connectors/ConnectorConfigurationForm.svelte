@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
   import type { ConnectorConfigurationField } from '#lib/admin/connectors.js';
   import AdminConfigurationField from '#lib/components/admin/shared/AdminConfigurationField.svelte';
@@ -18,6 +20,7 @@
     errorMessage?: string;
     successMessage?: string;
     values?: Record<string, string>;
+    fieldMessages?: Record<string, string>;
   } | null;
 
   let {
@@ -27,7 +30,9 @@
     operation = 'saveConfiguration',
     checkAction = 'checkConfiguration',
     submitConnectorId = false,
-    onsaved
+    onsaved,
+    progress,
+    onback
   }: {
     connector: Connector;
     fields: ConnectorConfigurationField[];
@@ -36,6 +41,8 @@
     checkAction?: string;
     submitConnectorId?: boolean;
     onsaved?: () => void;
+    progress?: Snippet<[number]>;
+    onback?: () => void;
   } = $props();
 
   let formElement: HTMLFormElement | undefined;
@@ -48,6 +55,7 @@
   const checkConfigurationKey = $derived(`check-configuration:${connector.id}`);
   const saveConfigurationPending = $derived(pendingState.isPending(saveConfigurationKey));
   const checkConfigurationPending = $derived(pendingState.isPending(checkConfigurationKey));
+  const reviewing = $derived(Boolean(progress) && state.saveEnabled);
   const feedback = $derived(state.feedback(form?.status, form?.errorMessage));
   const secretFieldNames = $derived(fields.filter((field) => field.inputType === 'password').map((field) => field.name));
   const hasRequiredUnsupportedFields = $derived(
@@ -95,12 +103,22 @@
 
     state.replaceCurrentSignature(configurationSignature(formElement));
   }
+  function focusHeading(heading: HTMLElement): void {
+    heading.focus({ preventScroll: true });
+  }
 </script>
 
-<section class="configuration admin-panel" aria-labelledby="connector-configuration-title">
+{@render progress?.(reviewing ? 3 : 2)}
+<section class="configuration admin-panel" data-guided={progress ? '' : undefined} aria-labelledby="connector-configuration-title">
   <div class="section-heading">
-    <p class="eyebrow">Configuration</p>
-    <h2 id="connector-configuration-title">{connector.name}</h2>
+    <p class="eyebrow">{progress ? connector.name : 'Configuration'}</p>
+    {#if reviewing}
+      <h2 id="connector-configuration-title" tabindex="-1" {@attach focusHeading}>Check &amp; save</h2>
+    {:else if progress}
+      <h2 id="connector-configuration-title" tabindex="-1" {@attach focusHeading}>Configure connector</h2>
+    {:else}
+      <h2 id="connector-configuration-title">{connector.name}</h2>
+    {/if}
   </div>
 
   <form
@@ -109,8 +127,12 @@
     data-operation={operation}
     aria-label={`${connector.name} configuration`}
     oninput={updateSignature}
-    use:browserSubmit={({ submitter, onComplete }) => {
+    use:browserSubmit={({ submitter, cancel, onComplete }) => {
       const checkingConfiguration = actionIsCheck(submitter);
+      if (checkConfigurationPending || saveConfigurationPending || (progress && !checkingConfiguration && !reviewing)) {
+        cancel();
+        return;
+      }
       const pendingKey = checkingConfiguration ? checkConfigurationKey : saveConfigurationKey;
       const submittedSignature = formElement ? configurationSignature(formElement) : '';
       onComplete(() => pendingState.stop(pendingKey));
@@ -134,45 +156,63 @@
       };
     }}
   >
-    <p class={["feedback-message", `feedback-message--${feedback.tone}`]}>{feedback.message}</p>
+    {#if !progress || reviewing || feedback.tone === 'error'}
+      <p class={["feedback-message", `feedback-message--${feedback.tone}`]} role="status">{feedback.message}</p>
+    {/if}
 
     <input type="hidden" name="__secret_fields" value={secretFieldNames.join(',')} />
     <input type="hidden" name="connectorId" value={connector.id} />
 
+    <div class="configuration-fields" hidden={reviewing} inert={reviewing}>
     {#each fields as field (field.name)}
+      {@const fieldError = progress && form?.status === 'check-invalid' ? form.fieldMessages?.[field.name] : undefined}
       <AdminConfigurationField
         id={field.name}
         name={field.name}
         label={field.label}
         type={field.inputType}
         required={field.required}
+        readonly={Boolean(progress) && (checkConfigurationPending || saveConfigurationPending)}
+        invalid={Boolean(fieldError)}
+        describedBy={fieldError ? `${field.name}-error` : undefined}
         configuredSecret={field.inputType === 'password' && field.secretConfigured}
         unsupported={field.unsupported}
         value={field.inputType === 'password' ? '' : (form?.values?.[field.name] ?? field.value)}
       />
+      {#if fieldError}
+        <p id={`${field.name}-error`} class="feedback-message feedback-message--error">{fieldError}</p>
+      {/if}
     {/each}
+    </div>
 
     {#if hasRequiredUnsupportedFields}
       <p class="unsupported">Required fields are not supported in this interface.</p>
     {/if}
 
-    <div class="form-actions">
+    <div class={['form-actions', progress && 'wizard-actions']}>
+      {#if progress}
+        <Button type="button" variant="quiet" disabled={checkConfigurationPending || saveConfigurationPending} onclick={reviewing ? state.invalidateCheck : onback}>Back</Button>
+      {/if}
+      {#if !reviewing}
       <LoadingButton
         type="submit"
-        label="Check configuration"
+        label={progress ? 'Next' : 'Check configuration'}
         loadingLabel="Checking configuration..."
         loading={checkConfigurationPending}
         disabled={hasRequiredUnsupportedFields}
-        variant="secondary"
+        variant={progress ? 'primary' : 'secondary'}
         data-operation={checkAction}
       />
+      {/if}
+      {#if !progress || reviewing}
       <LoadingButton
         type="submit"
-        label="Save configuration"
+        label={progress ? 'Save' : 'Save configuration'}
         loadingLabel="Saving configuration..."
         loading={saveConfigurationPending}
         disabled={hasRequiredUnsupportedFields || !state.saveEnabled}
       />
+      {/if}
     </div>
   </form>
 </section>
@@ -183,6 +223,8 @@
     min-height: 0;
     overflow-y: auto;
   }
+
+  .configuration[data-guided] { background: transparent; border: 0; box-shadow: none; padding: 0; }
 
   .section-heading {
     display: grid;
@@ -214,6 +256,9 @@
     margin-top: 16px;
     max-width: 42rem;
   }
+
+  .configuration-fields:not([hidden]) { display: grid; gap: 16px; }
+  .wizard-actions { justify-content: space-between; }
 
   .unsupported,
   .feedback-message {

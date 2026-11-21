@@ -48,6 +48,8 @@ tags:
 
 ## Layout and identity
 
+- [SetupProgress](src/lib/components/admin/shared/SetupProgress.svelte) — Studio-style step indicator for guided setup; callers supply step labels and the current step, and own navigation.
+
 - [PageContainer](src/lib/components/shared/workspace/PageContainer.svelte) — Shared heading, optional actions and content slots for Files and Connectors; pair with the split workspace for sidebar/detail pages.
 - [SubpageContainer](src/lib/components/shared/workspace/SubpageContainer.svelte) — Shared page heading, optional introduction, action slot and content frame; use with feature-owned navigation and selected subpage content.
 - [SubpageNavigation](src/lib/components/shared/workspace/SubpageNavigation.svelte) — Horizontal links with current-page or parent-location semantics; parents supply routes, selection and eligibility.

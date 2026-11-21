@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
+  import SetupProgress from '#lib/components/admin/shared/SetupProgress.svelte';
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import { nativeDialog } from '#lib/components/shared/dialogs/native-dialog.js';
   import TextField from '#lib/components/shared/TextField.svelte';
@@ -21,7 +22,7 @@
     complete: (mode, draft) => complete(mode, draft),
     accessLost: () => accessLost()
   });
-  const steps = [{ number: 1, label: 'Source' }, { number: 2, label: 'Endpoint' }, { number: 3, label: 'Access' }, { number: 4, label: 'Configure' }];
+  const steps = ['Source', 'Endpoint', 'Access', 'Configure'];
   const labels: Record<McpSetupMode, string> = {
     none: 'Continue without credentials',
     personal: 'Set up personal sign-in',
@@ -108,14 +109,7 @@
 </script>
 
 <ModalShell title="Add MCP connector" titleId={`${id}-title`} close={dismiss} dialogAttachment={attachDialog} --modal-title-focus-outline="none" --modal-overflow="auto" --modal-width="39rem" --modal-background="linear-gradient(135deg, var(--admin-accent-soft), var(--admin-panel) 17rem)" --admin-radius-panel="24px">
-  <ol class="progress" aria-label="Setup progress">
-    {#each steps as step (step.number)}
-      <li aria-current={state.progress === step.number ? 'step' : undefined} class={state.progress > step.number ? 'complete' : undefined}>
-        <span class="step-number" aria-hidden="true">{state.progress > step.number ? '✓' : step.number}</span>
-        {step.label}
-      </li>
-    {/each}
-  </ol>
+  <SetupProgress {steps} current={state.progress} />
 
   <div class="content">
     {#if state.step === 'source'}
@@ -248,12 +242,6 @@
 </ModalShell>
 
 <style>
-  .progress { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; list-style: none; padding: 0 0 1rem; margin: 1.125rem 0; border-bottom: 1px solid var(--admin-border); color: var(--admin-muted); }
-  .progress li { display: flex; align-items: center; gap: .45rem; font-size: .8125rem; }
-  .progress [aria-current='step'], .progress .complete { color: var(--admin-accent); font-weight: 700; }
-  .step-number { display: grid; place-items: center; width: 1.55rem; height: 1.55rem; flex: 0 0 auto; border-radius: 50%; background: var(--admin-soft); border: 1px solid var(--admin-border); font-size: .75rem; font-weight: 650; }
-  [aria-current='step'] .step-number { background: var(--admin-accent); border-color: var(--admin-accent); color: white; }
-  .complete .step-number { background: var(--admin-accent-soft); border-color: var(--admin-accent-border); }
   .content, .stack { display: grid; gap: .875rem; min-width: 0; }
   h3, p { margin: 0; overflow-wrap: anywhere; }
   h3 { font-size: 1.0625rem; letter-spacing: -.02em; }
@@ -267,7 +255,6 @@
   .tile-arrow { position: absolute; inset-inline-end: .875rem; inset-block-end: .625rem; color: var(--admin-accent); }
   .evidence { padding: .875rem 1rem; border: 1px solid var(--admin-accent-border); border-radius: var(--admin-radius-panel); background: var(--admin-accent-soft); }
   @media (max-width: 30rem) {
-    .progress li { flex-direction: column; align-items: flex-start; gap: .25rem; font-size: .75rem; }
     .tiles :global(.setup-tile) { gap: .45rem; border-radius: 14px; }
     .tile-arrow { display: none; }
   }
