@@ -7,7 +7,7 @@ import anyio
 import httpcore2
 import pytest
 
-from tests.umbod.core.connectors.downstream_mcp.adapters.personal_runtime.conftest import ScriptedNetwork, ScriptedResolver
+from tests.umbod.core.connectors.downstream_mcp.adapters.personal_runtime.conftest import ScriptedNetwork, ScriptedResolver, ScriptedStream
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from tests.umbod.core.connectors.downstream_mcp.test_personal_tools_s3_contracts import approved_tool
 from tests.umbod.mcp.connectors.downstream_mcp.personal_runtime_support import execution_case
@@ -48,6 +48,7 @@ __all__ = ["runtime_case", "configured_signals"]
         ("expired", "target_expired", 0),
         ("network", "network_failure", 0),
         ("unexpected", "runtime_failure", 0),
+        ("unexpected_tool_call", "runtime_failure", 0),
         ("cleanup", "http_rejected", 503),
         ("inventory_snapshot", "runtime_failure", 200),
         ("inventory_cleanup_timeout", "runtime_failure", 200),
@@ -101,6 +102,16 @@ async def test_scripted_network_failures_reach_public_tool_and_serialized_stdout
                 raise httpcore2.ConnectError(SENSITIVE)
             raise RuntimeError(SENSITIVE)
         monkeypatch.setattr(network, "connect_tcp", fail_connect)
+    elif scenario == "unexpected_tool_call":
+        original_write = ScriptedStream.write
+
+        async def fail_tool_call(stream: ScriptedStream, buffer: bytes, timeout: float | None = None) -> None:
+            previous_request_count = len(network.requests)
+            await original_write(stream, buffer, timeout)
+            if len(network.requests) > previous_request_count and network.requests[-1][2].get("method") == "tools/call":
+                raise RuntimeError(SENSITIVE)
+
+        monkeypatch.setattr(ScriptedStream, "write", fail_tool_call)
     elif scenario == "cleanup":
         network.status = 503
         async def fail_close(self: object) -> None:
@@ -141,7 +152,7 @@ async def test_scripted_network_failures_reach_public_tool_and_serialized_stdout
         assert "Sign in again" not in repr(result)
     records = completion_records(capsys, caplog)
     assert len(records) == 1
-    internal_failure = scenario in {"unexpected", "inventory_snapshot", "inventory_cleanup_timeout", "cleanup_timeout"}
+    internal_failure = scenario in {"unexpected", "unexpected_tool_call", "inventory_snapshot", "inventory_cleanup_timeout", "cleanup_timeout"}
     stage = "authorization" if scenario == "401" else "runtime" if internal_failure else "transport"
     attributes = records[0]["attributes"]
     assert attributes["mcp.failure.reason"] == reason
@@ -165,6 +176,10 @@ async def test_scripted_network_failures_reach_public_tool_and_serialized_stdout
     if scenario in {"unexpected", "network"}:
         assert "in fail_connect" in attributes["exception.stacktrace"]
         assert attributes["exception.type"] == ("RuntimeError" if scenario == "unexpected" else "ConnectError")
+    if scenario == "unexpected_tool_call":
+        assert attributes["exception.type"] == "RuntimeError"
+        assert "in fail_tool_call" in attributes["exception.stacktrace"]
+        assert SENSITIVE not in attributes["exception.stacktrace"]
     if scenario == "cleanup":
         assert "fail_close" not in attributes["exception.stacktrace"]
     assert len(network.connections) <= (6 if network.session else 4)

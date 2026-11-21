@@ -14,7 +14,10 @@ class HarnessPackageService:
 
     def package(self, harness: Harness) -> bytes:
         resources = self._resources.read()
-        entries = render_package(self.endpoint, resources.skill, resources.license_text, harness, resources.behaviour_skill)
+        entries = render_package(
+            self.endpoint, resources.skill, resources.license_text, harness,
+            resources.behaviour_skill, resources.run_diagnostics_skill,
+        )
         buffer = BytesIO()
         with ZipFile(buffer, "w", compression=ZIP_STORED) as archive:
             for name, content in sorted(entries.items()):

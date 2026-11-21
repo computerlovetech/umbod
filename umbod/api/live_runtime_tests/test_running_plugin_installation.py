@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 from io import BytesIO
+from pathlib import Path
 from zipfile import ZipFile
 
 import httpx
@@ -63,6 +64,8 @@ def test_running_public_plugin_artifacts_use_configured_endpoint(
             }
             for skill_name in ("umbod-connected-apps", "umbod-agent-behaviour"):
                 assert package.read(f"plugins/umbod/skills/{skill_name}/SKILL.md").strip()
+            canonical_skill = Path(__file__).resolve().parents[3] / "skills/integrations/run-diagnostics/SKILL.md"
+            assert package.read("plugins/umbod/skills/run-diagnostics/SKILL.md") == canonical_skill.read_bytes()
             catalog_path = (
                 ".agents/plugins/marketplace.json" if harness == "codex" else ".claude-plugin/marketplace.json"
             )

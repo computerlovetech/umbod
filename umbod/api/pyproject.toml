@@ -47,6 +47,7 @@ packages = ["src/umbod", "src/messaging"]
 "src/umbod/rest/install/assets/install.ps1" = "umbod/rest/install/assets/install.ps1"
 "../../skills/integrations/umbod-connected-apps/SKILL.md" = "umbod/harness_plugin_resources/SKILL.md"
 "../../skills/integrations/umbod-agent-behaviour/SKILL.md" = "umbod/harness_plugin_resources/AGENT_BEHAVIOUR_SKILL.md"
+"../../skills/integrations/run-diagnostics/SKILL.md" = "umbod/harness_plugin_resources/RUN_DIAGNOSTICS_SKILL.md"
 "../../LICENSE" = "umbod/harness_plugin_resources/LICENSE"
 
 [tool.hatch.build]

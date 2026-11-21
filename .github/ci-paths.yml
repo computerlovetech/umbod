@@ -9,6 +9,7 @@ backend:
   - 'packages/umbod-sdk/**'
   - 'skills/integrations/umbod-connected-apps/**'
   - 'skills/integrations/umbod-agent-behaviour/**'
+  - 'skills/integrations/run-diagnostics/**'
   - 'umbod/docker-compose*.yml'
   - 'umbod/frontend/deployment/**'
   - 'umbod/frontend/static/signed-out.html'
@@ -94,6 +95,7 @@ core:
   - 'packages/umbod-sdk/**'
   - 'skills/integrations/umbod-connected-apps/**'
   - 'skills/integrations/umbod-agent-behaviour/**'
+  - 'skills/integrations/run-diagnostics/**'
   - 'LICENSE'
 connector:
   - '.github/workflows/**'
@@ -124,6 +126,7 @@ kind:
   - 'umbod/api/src/**'
   - 'skills/integrations/umbod-connected-apps/**'
   - 'skills/integrations/umbod-agent-behaviour/**'
+  - 'skills/integrations/run-diagnostics/**'
   - 'LICENSE'
   - 'umbod/frontend/**'
   - 'umbod/deploy/helm/umbod/**'

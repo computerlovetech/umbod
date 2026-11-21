@@ -84,7 +84,7 @@ class PatternAssessment(BehaviourModel):
 
 class SubmitDiagnosticReport(BehaviourModel):
     idempotency_key: UUID = Field(description="Generate one UUID before submission. After a lost receipt, retry only the identical payload with this same key. Keys are scoped to the authenticated caller.")
-    configuration_revision: int = Field(ge=1, description="Current revision returned by the playbook resource or run_diagnostics prompt. Stale reports require reloading and reassessing, never relabeling old evidence.")
+    configuration_revision: int = Field(ge=1, description="Current revision returned by the playbook resource. Stale reports require reloading and reassessing, never relabeling old evidence.")
     playbook_id: Identifier = Field(description="Enabled playbook ID from umbod://agent-behaviour/playbooks. Read its current instructions before collecting a report.")
     trigger: Literal["user_requested", "proactive"] = Field(description="Use user_requested only for a genuine user-invoked flow. proactive requires administrator allow_proactive=true plus user/client permission; respect refusals.")
     assessments: tuple[PatternAssessment, ...] = Field(min_length=1, max_length=20, description="Exactly one assessment for every selected pattern, including not_assessed when context is unavailable. Combined compact UTF-8 submission must not exceed 32 KiB.")

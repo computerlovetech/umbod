@@ -57,7 +57,9 @@ async def test_running_admin_publication_mcp_reporting_and_admin_inspection_shar
                 assert decoded["configuration_revision"] == revision
                 assert decoded["patterns"][0]["assessment_prompt"] == pattern["assessment_prompt"]
                 prompt = await client.get_prompt("run_diagnostics", {"playbook_id": playbook_id})
-                assert "Review only the authorized task context" in str(prompt)
+                assert decoded["resource_uri"] in prompt.messages[0].content.text
+                assert decoded["playbook"]["collection_instructions"] == playbook["collection_instructions"]
+                assert "trigger=user_requested" in decoded["reporting_guidance"]
                 command = {
                     "idempotency_key": str(uuid4()), "configuration_revision": revision, "playbook_id": playbook_id,
                     "trigger": "user_requested", "assessments": [{"pattern_id": pattern_id, "status": "observed", "summary": "A required task specification was unavailable", "evidence": ["The task specification could not be provided"]}],

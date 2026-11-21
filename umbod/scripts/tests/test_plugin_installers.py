@@ -150,6 +150,7 @@ class InstallerDriver:
             "plugins/umbod/.mcp.json": json.dumps({"mcpServers": {"umbod": {"type": "http", "url": endpoint}}}),
             "plugins/umbod/skills/umbod-connected-apps/SKILL.md": "Umbod skill",
             "plugins/umbod/skills/umbod-agent-behaviour/SKILL.md": "Umbod behaviour skill",
+            "plugins/umbod/skills/run-diagnostics/SKILL.md": "Umbod run diagnostics skill",
             "plugins/umbod/LICENSE": "MIT",
         }
         if missing:
@@ -203,9 +204,9 @@ def test_installs_verified_package_and_reruns_without_duplicate_marketplace(inst
     assert len(registrations) == 1
     assert Path(registrations[0][4]).is_absolute()
     assert len(list(installer.installation_parent.glob("*/plugins/umbod/.mcp.json"))) == 1
-    behaviour_skills = list(installer.installation_parent.glob("*/plugins/umbod/skills/umbod-agent-behaviour/SKILL.md"))
-    assert len(behaviour_skills) == 1
-    assert behaviour_skills[0].read_text() == "Umbod behaviour skill"
+    installed_package = Path(registrations[0][4])
+    assert (installed_package / "plugins/umbod/skills/umbod-agent-behaviour/SKILL.md").read_text() == "Umbod behaviour skill"
+    assert (installed_package / "plugins/umbod/skills/run-diagnostics/SKILL.md").read_text() == "Umbod run diagnostics skill"
     assert not (installer.installation_parent / ".install.lock").exists()
     installations = [call for call in installer.calls() if call[1:3] == ["plugin", "add" if installer.harness == "codex" else "install"] and "--help" not in call]
     assert len(installations) == 1
@@ -324,8 +325,9 @@ def test_rejects_unexpected_and_traversing_zip_entries(installer: InstallerDrive
     assert not installer.installation_parent.exists()
 
 
-def test_rejects_missing_behaviour_skill_without_installation(installer: InstallerDriver) -> None:
-    installer.write_archive(missing="plugins/umbod/skills/umbod-agent-behaviour/SKILL.md")
+@pytest.mark.parametrize("skill_name", ["umbod-agent-behaviour", "run-diagnostics"])
+def test_rejects_missing_skill_without_installation(installer: InstallerDriver, skill_name: str) -> None:
+    installer.write_archive(missing=f"plugins/umbod/skills/{skill_name}/SKILL.md")
     result = installer.run()
     assert result.returncode != 0
     assert "unsafe ZIP entries" in result.stderr

@@ -68,12 +68,10 @@ def test_package_contains_actual_harness_schema_and_canonical_resources(
         else:
             assert catalog["owner"]["name"] == "Computerlove"
             assert catalog["plugins"][0]["source"] == "./plugins/umbod"
-        assert package.read("plugins/umbod/skills/umbod-connected-apps/SKILL.md") == (
-            root / "skills/integrations/umbod-connected-apps/SKILL.md"
-        ).read_bytes()
-        assert package.read("plugins/umbod/skills/umbod-agent-behaviour/SKILL.md") == (
-            root / "skills/integrations/umbod-agent-behaviour/SKILL.md"
-        ).read_bytes()
+        for skill_name in ("umbod-connected-apps", "umbod-agent-behaviour", "run-diagnostics"):
+            assert package.read(f"plugins/umbod/skills/{skill_name}/SKILL.md") == (
+                root / f"skills/integrations/{skill_name}/SKILL.md"
+            ).read_bytes()
         assert package.read("plugins/umbod/LICENSE") == (root / "LICENSE").read_bytes()
 
 

@@ -20,8 +20,7 @@ async def test_initial_direct_mcp_discovery_and_instructions_use_defaults(defaul
         assert {pattern["id"] for pattern in instructions["patterns"]} == {"missing-context", "tool-problems", "task-blocked", "user-correction"}
         assert all(pattern["enabled"] for pattern in instructions["patterns"])
         prompt = await client.get_prompt("run_diagnostics", {"playbook_id": "behaviour-review"})
-        assert instructions["playbook"]["collection_instructions"] in prompt.messages[0].content.text
-        assert '"configuration_revision":1' in prompt.messages[0].content.text
+        assert index["playbooks"][0]["resource_uri"] in prompt.messages[0].content.text
     assert (await default_diagnostic_mcp.service.list_reports(ReportQuery())).total == 0
 
 

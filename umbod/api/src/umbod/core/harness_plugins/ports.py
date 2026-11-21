@@ -10,6 +10,7 @@ class PackageResources(BaseModel):
 
     skill: ResourceText
     behaviour_skill: ResourceText
+    run_diagnostics_skill: ResourceText
     license_text: ResourceText
 
 

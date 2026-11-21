@@ -21,7 +21,10 @@ class InMemoryPackageResourceReader:
 @pytest.mark.parametrize("harness", ["codex", "claude-code"])
 def test_service_renders_injected_resources_and_hashes_exact_zip(harness: Harness) -> None:
     reader = InMemoryPackageResourceReader(
-        PackageResources(skill="canonical skill", behaviour_skill="behaviour skill", license_text="MIT"),
+        PackageResources(
+            skill="canonical skill", behaviour_skill="behaviour skill",
+            run_diagnostics_skill="run diagnostics skill", license_text="MIT",
+        ),
     )
     service = HarnessPackageService("https://configured.test/", reader)
     package = service.package(harness)
@@ -29,21 +32,34 @@ def test_service_renders_injected_resources_and_hashes_exact_zip(harness: Harnes
     with ZipFile(BytesIO(package)) as archive:
         assert archive.read("plugins/umbod/skills/umbod-connected-apps/SKILL.md") == b"canonical skill"
         assert archive.read("plugins/umbod/skills/umbod-agent-behaviour/SKILL.md") == b"behaviour skill"
+        assert archive.read("plugins/umbod/skills/run-diagnostics/SKILL.md") == b"run diagnostics skill"
         assert archive.read("plugins/umbod/LICENSE") == b"MIT"
 
 
-@pytest.mark.parametrize("behaviour_skill", ["", " ", "x" * 262145])
-def test_resource_boundary_rejects_invalid_behaviour_skill(behaviour_skill: str) -> None:
-    with pytest.raises(ValidationError):
-        PackageResources(skill="canonical skill", behaviour_skill=behaviour_skill, license_text="MIT")
+@pytest.mark.parametrize("field", ["skill", "behaviour_skill", "run_diagnostics_skill"])
+@pytest.mark.parametrize("content", ["", " ", "x" * 262145], ids=["empty", "blank", "oversized"])
+def test_resource_boundary_rejects_invalid_skill_content(field: str, content: str) -> None:
+    resources = {
+        "skill": "canonical skill",
+        "behaviour_skill": "behaviour skill",
+        "run_diagnostics_skill": "run diagnostics skill",
+        "license_text": "MIT",
+    }
+    resources[field] = content
+    with pytest.raises(ValidationError) as error:
+        PackageResources.model_validate(resources)
+    assert [detail["loc"] for detail in error.value.errors()] == [(field,)]
 
 
-def test_resource_boundary_requires_behaviour_skill() -> None:
-    with pytest.raises(ValidationError):
-        PackageResources.model_validate({"skill": "canonical skill", "license_text": "MIT"})
-
-
-@pytest.mark.parametrize("skill", ["", " ", "x" * 262145])
-def test_resource_boundary_rejects_empty_or_unbounded_content(skill: str) -> None:
-    with pytest.raises(ValidationError):
-        PackageResources(skill=skill, behaviour_skill="behaviour skill", license_text="MIT")
+@pytest.mark.parametrize("field", ["behaviour_skill", "run_diagnostics_skill"])
+def test_resource_boundary_requires_each_auxiliary_skill(field: str) -> None:
+    resources = {
+        "skill": "canonical skill",
+        "behaviour_skill": "behaviour skill",
+        "run_diagnostics_skill": "run diagnostics skill",
+        "license_text": "MIT",
+    }
+    del resources[field]
+    with pytest.raises(ValidationError) as error:
+        PackageResources.model_validate(resources)
+    assert [detail["loc"] for detail in error.value.errors()] == [(field,)]

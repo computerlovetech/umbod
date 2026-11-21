@@ -14,13 +14,21 @@ def submission() -> dict[str, object]:
 
 
 @pytest.mark.asyncio
-async def test_prompt_embeds_current_bundle_and_privacy_without_writing(diagnostic_mcp: DiagnosticMcp) -> None:
+async def test_prompt_points_to_live_user_requested_guidance_without_writing(diagnostic_mcp: DiagnosticMcp) -> None:
     async with Client(diagnostic_mcp.server) as client:
+        index = json.loads((await client.read_resource("umbod://agent-behaviour/playbooks"))[0].text)
+        resource_uri = index["playbooks"][0]["resource_uri"]
         prompt = await client.get_prompt("run_diagnostics", {"playbook_id": "review"})
-        text = prompt.messages[0].content.text
-        assert prompt.messages[0].role == "user"
-        for required in ["Review available authorized facts", "Assess fallback", "Normal clarification", '"configuration_revision":2', "report_diagnostic", "hidden reasoning", "same UUID", "not_assessed", "Slash-command"]:
-            assert required in text
+        message = prompt.messages[0]
+        assert message.role == "user"
+        assert resource_uri in message.content.text
+        assert "stop without submitting" in message.content.text
+        instructions = json.loads((await client.read_resource(resource_uri))[0].text)
+        assert instructions["configuration_revision"] == 2
+        assert instructions["playbook"]["collection_instructions"] == "Review available authorized facts"
+        assert instructions["playbook"]["collection_instructions"] not in message.content.text
+        for required in ["trigger=user_requested", "report_diagnostic", "Never send transcripts", "hidden reasoning", "same UUID", "not_assessed", "stale_configuration", "durable receipt"]:
+            assert required in instructions["reporting_guidance"]
     assert (await diagnostic_mcp.service.list_reports(ReportQuery())).total == 0
 
 

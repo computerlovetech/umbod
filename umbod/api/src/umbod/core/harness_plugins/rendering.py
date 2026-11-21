@@ -47,12 +47,17 @@ def marketplace_name(endpoint: str) -> str:
 
 
 def render_package(
-    endpoint: str, skill: str, license_text: str, harness: Harness, behaviour_skill: str,
+    endpoint: str,
+    skill: str,
+    license_text: str,
+    harness: Harness,
+    behaviour_skill: str,
+    run_diagnostics_skill: str,
 ) -> Mapping[str, str]:
     if harness not in {"codex", "claude-code"}:
         raise ValueError("Unsupported harness")
     selected_endpoint = normalize_endpoint(endpoint)
-    if not skill.strip() or not license_text.strip() or not behaviour_skill.strip():
+    if not all(content.strip() for content in (skill, license_text, behaviour_skill, run_diagnostics_skill)):
         raise ValueError("The canonical skills and license must not be empty")
     marketplace = {
         "name": marketplace_name(selected_endpoint),
@@ -94,6 +99,7 @@ def render_package(
         "plugins/umbod/.mcp.json": json.dumps(mcp, indent=2) + "\n",
         "plugins/umbod/skills/umbod-connected-apps/SKILL.md": skill,
         "plugins/umbod/skills/umbod-agent-behaviour/SKILL.md": behaviour_skill,
+        "plugins/umbod/skills/run-diagnostics/SKILL.md": run_diagnostics_skill,
         "plugins/umbod/LICENSE": license_text,
     }
 

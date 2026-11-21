@@ -207,9 +207,9 @@ def test_windows_fresh_install_and_identical_rerun_are_verified(windows_installe
     assert len(registrations) == 1
     assert Path(registrations[0][4]).is_absolute()
     assert len(list(windows_installer.installation_parent.glob("*/plugins/umbod/.mcp.json"))) == 1
-    behaviour_skills = list(windows_installer.installation_parent.glob("*/plugins/umbod/skills/umbod-agent-behaviour/SKILL.md"))
-    assert len(behaviour_skills) == 1
-    assert behaviour_skills[0].read_text() == "Umbod behaviour skill"
+    installed_package = Path(registrations[0][4])
+    assert (installed_package / "plugins/umbod/skills/umbod-agent-behaviour/SKILL.md").read_text() == "Umbod behaviour skill"
+    assert (installed_package / "plugins/umbod/skills/run-diagnostics/SKILL.md").read_text() == "Umbod run diagnostics skill"
     assert len(list(windows_installer.installation_parent.glob("*/.umbod-install.json"))) == 1
     assert not (windows_installer.installation_parent / ".install.lock").exists()
     if windows_installer.package.harness == "claude-code":
@@ -220,8 +220,11 @@ def test_windows_fresh_install_and_identical_rerun_are_verified(windows_installe
         assert listings == [["codex", "plugin", "list", "--json", "--marketplace", MARKETPLACE]] * 4
 
 
-def test_windows_rejects_missing_behaviour_skill_without_installation(windows_installer: WindowsInstallerDriver) -> None:
-    windows_installer.package.write_archive(missing="plugins/umbod/skills/umbod-agent-behaviour/SKILL.md")
+@pytest.mark.parametrize("skill_name", ["umbod-agent-behaviour", "run-diagnostics"])
+def test_windows_rejects_missing_skill_without_installation(
+    windows_installer: WindowsInstallerDriver, skill_name: str,
+) -> None:
+    windows_installer.package.write_archive(missing=f"plugins/umbod/skills/{skill_name}/SKILL.md")
     public = windows_installer.package.root / "public" / "api" / "install" / "v1" / windows_installer.package.harness
     for name in ("package.zip", "package.sha256"):
         shutil.copyfile(windows_installer.package.downloads / name, public / name)

@@ -15,6 +15,7 @@ COPY umbod/api/README.md umbod/api/
 COPY umbod/api/src umbod/api/src
 COPY skills/integrations/umbod-connected-apps/SKILL.md skills/integrations/umbod-connected-apps/SKILL.md
 COPY skills/integrations/umbod-agent-behaviour/SKILL.md skills/integrations/umbod-agent-behaviour/SKILL.md
+COPY skills/integrations/run-diagnostics/SKILL.md skills/integrations/run-diagnostics/SKILL.md
 COPY LICENSE LICENSE
 COPY packages/umbod-sdk/src packages/umbod-sdk/src
 RUN python -c 'import pathlib, sys; pathlib.Path("umbod/api/src/umbod/build_identity.py").write_text("from typing import Final\n\nUMBOD_RELEASE: Final[str] = " + repr(sys.argv[1]) + "\nUMBOD_REVISION: Final[str] = " + repr(sys.argv[2]) + "\n")' "$UMBOD_RELEASE" "$UMBOD_REVISION"

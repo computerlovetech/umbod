@@ -21,7 +21,7 @@ async def test_first_publication_separates_criteria_from_collection(service: Age
     assert saved.revision == 2
     assert instructions.patterns == publication.patterns
     assert instructions.playbook.collection_instructions == publication.playbooks[0].collection_instructions
-    assert "Never send full transcripts" in instructions.reporting_guidance
+    assert "Never send transcripts" in instructions.reporting_guidance
 
 
 async def test_concurrent_publication_does_not_overwrite_winner(service: AgentBehaviourService, publication: PublishConfiguration) -> None:

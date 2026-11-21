@@ -1,6 +1,6 @@
 # Codex CLI plugin
 
-The Umbod plugin bundles a remote MCP connection and skills for connected-app access and obstacle self-reporting. Reporting follows the current agent-behaviour playbook and requires proactive reporting permission and user/client authority. It connects to an existing Umbod deployment; it does not install the Umbod server or copy credentials into Codex.
+The Umbod plugin bundles a remote MCP connection and skills for connected-app access, user-requested diagnostics, and obstacle self-reporting. Both reporting paths use the current Umbod playbook. Only proactive reporting requires the playbook's proactive setting and user/client authorization. It connects to an existing Umbod deployment; it does not install the Umbod server or copy credentials into Codex.
 
 This local-marketplace installation is verified with Codex CLI 0.167.0. Update Codex if `codex plugin` is unavailable. It does not require an OpenAI public-directory submission or a ChatGPT desktop installation.
 
@@ -18,7 +18,7 @@ Installation does not authenticate or verify connected-app access. Complete any 
 
 An identical installer rerun verifies the existing package and plugin registration without creating duplicates. Existing standalone Umbod MCP connections, conflicting marketplaces, disabled plugins, and modified package files stop installation with guidance for manual review. The installer does not remove or replace unrelated configuration.
 
-Keep the installed marketplace directory in place. Use Codex's `/plugins` interface to inspect, disable, or uninstall the plugin. Review the registered marketplace before removing its source; do not delete unrelated Codex configuration or change connector permissions as part of removal.
+The installer does not upgrade an existing registration in place. To pick up a changed package, use Codex's `/plugins` interface to uninstall the Umbod plugin for that instance, remove only its matching Umbod marketplace registration, then rerun the installation command from Getting started and restart Codex. Leave other marketplaces and MCP entries untouched.
 
 ## Troubleshooting
 
@@ -30,9 +30,9 @@ Keep the installed marketplace directory in place. Use Codex's `/plugins` interf
 
 ## Package development
 
-The [repository package builder](https://github.com/computerlovetech/umbod/blob/main/umbod/scripts/build_codex_plugin.py) creates a new endpoint-specific Codex marketplace directory and prints registration commands without executing them. It uses the [shared package renderer](https://github.com/computerlovetech/umbod/blob/main/umbod/api/src/umbod/core/harness_plugins/rendering.py), canonical connected-app and agent-behaviour skills, and repository license. Existing output directories are never replaced.
+The [repository package builder](https://github.com/computerlovetech/umbod/blob/main/umbod/scripts/build_codex_plugin.py) creates a new endpoint-specific Codex marketplace directory and prints registration commands without executing them. It uses the [shared package renderer](https://github.com/computerlovetech/umbod/blob/main/umbod/api/src/umbod/core/harness_plugins/rendering.py), canonical connected-app, agent-behaviour, and run-diagnostics skills, and repository license. Existing output directories are never replaced.
 
-Edit `skills/integrations/umbod-connected-apps/SKILL.md` and `skills/integrations/umbod-agent-behaviour/SKILL.md` in the repository root to maintain the packaged skills. The shared API packages canonical resources directly; there is no browser-generated ZIP or frontend package template to regenerate.
+Edit `skills/integrations/umbod-connected-apps/SKILL.md`, `skills/integrations/umbod-agent-behaviour/SKILL.md`, and `skills/integrations/run-diagnostics/SKILL.md` in the repository root to maintain the packaged skills. The shared API packages canonical resources directly; there is no browser-generated ZIP or frontend package template to regenerate.
 
 ## References
 
