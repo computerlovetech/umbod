@@ -92,7 +92,7 @@ test('shows an empty list and a labelled creation action in the page header', as
   const add = button('Add Namespace');
   expect(add.textContent?.trim()).toBe('Add Namespace');
   expect(document.querySelector('.page-header .page-actions button')).toBe(add);
-  expect(document.querySelector('.namespaces button')?.textContent).not.toContain('Add Namespace');
+  expect(document.querySelector('[aria-label="Namespace management"] button')).toBeNull();
   expect(add.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
 });
 
@@ -231,6 +231,9 @@ test('retains the groups sidebar and assigns namespace access independently for 
   const sidebar = document.querySelector('aside[aria-label="Groups"]');
   expect(sidebar).not.toBeNull();
   expect(document.querySelector('.group-header h2')?.textContent).toBe('Operators');
+  const editor = document.querySelector('[aria-label="Permission editor"]');
+  expect(editor).not.toBeNull();
+  expect(editor?.querySelector('button[aria-label="Edit Research"], button[aria-label="Delete namespace: Research"]')).toBeNull();
   expect(accessRadio('Research', 'Read').checked).toBe(true);
   const readers = [...sidebar!.querySelectorAll<HTMLButtonElement>('button')].find((entry) => entry.textContent?.includes('Readers'));
   expect(readers).toBeDefined();

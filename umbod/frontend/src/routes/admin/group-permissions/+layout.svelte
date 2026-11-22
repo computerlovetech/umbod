@@ -2,10 +2,9 @@
   import type { Snippet } from 'svelte';
   import { onDestroy, untrack } from 'svelte';
   import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
-  import { afterNavigate } from '$app/navigation';
+  import { afterNavigate, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import AdminShell from '#lib/components/admin/AdminShell.svelte';
-  import AddNamespaceButton from '#lib/components/admin/filesystem/AddNamespaceButton.svelte';
   import GroupPermissionsPage from '#lib/components/admin/group-permissions/GroupPermissionsPage.svelte';
   import GroupPermissionsWorkspace from '#lib/components/admin/group-permissions/GroupPermissionsWorkspace.svelte';
   import { BrowserGroupPermissionsLoader } from '#lib/components/admin/group-permissions/group-permissions-loader.js';
@@ -17,7 +16,14 @@
 
   let { data, children }: { data: LayoutData; children: Snippet } = $props();
   const route = new GroupPermissionsRouteState(() => new URL(page.url.href));
-  const state = new GroupPermissionsWorkspaceState(() => data.permissionGroups, new BrowserGroupPermissionsLoader(), new BrowserGroupPermissionsSaver(), () => route.initialTarget, adminApi().namespaces);
+  function updateGroupLink(id: string): void {
+    if (!page.url.searchParams.has('group')) return;
+    const url = new URL(page.url.href);
+    url.searchParams.set('group', id);
+    replaceState(url, page.state);
+  }
+
+  const state = new GroupPermissionsWorkspaceState(() => data.permissionGroups, new BrowserGroupPermissionsLoader(), new BrowserGroupPermissionsSaver(), () => route.initialTarget, adminApi().namespaces, untrack(() => page.url.searchParams.get('group')), updateGroupLink);
   setGroupPermissionsWorkspace(state);
   $effect.pre(() => {
     const identity = data.accountIdentity ?? { kind: 'hidden' as const };
@@ -32,9 +38,6 @@
 <AdminShell activeItem="groupPermissions" accountIdentity={data.accountIdentity ?? { kind: 'hidden' }} contentWidth="wide" navigationScope="/admin/group-permissions">
   <div class="admin-page">
     <GroupPermissionsPage activeTab={route.activeTab} description={route.description} backHref={route.backHref}>
-      {#snippet actions()}
-        {#if route.activeTab === 'filesystem'}<AddNamespaceButton state={state.namespaces} />{/if}
-      {/snippet}
       <GroupPermissionsWorkspace {state}>
         {@render children()}
       </GroupPermissionsWorkspace>

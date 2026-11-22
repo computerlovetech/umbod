@@ -1,5 +1,5 @@
 <script lang="ts">
-  import NamespaceManagement from '../filesystem/NamespaceManagement.svelte';
+  import NamespacePermissions from '../filesystem/NamespacePermissions.svelte';
   import AdminShell from '../AdminShell.svelte';
   import GroupPermissionsPage from './GroupPermissionsPage.svelte';
   import GroupPermissionsWorkspace from './GroupPermissionsWorkspace.svelte';
@@ -16,7 +16,7 @@
       {#if tab === 'connectors'}
         {#if state.connectors}<GroupPermissionsManager state={state.connectors} />{/if}
       {:else}
-        <NamespaceManagement state={state.namespaces} />
+        <NamespacePermissions state={state.namespaces} />
       {/if}
     </GroupPermissionsWorkspace>
   </GroupPermissionsPage>

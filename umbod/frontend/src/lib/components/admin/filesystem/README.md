@@ -8,7 +8,8 @@ description: "Shared namespace administration with revision-safe saves and exact
 
 - [AddNamespaceButton.svelte](./AddNamespaceButton.svelte) — Feature-owned header action opening namespace creation with pending-state protection.
 
-- [NamespaceManagement.svelte](./NamespaceManagement.svelte) — Compact access choices and size-aligned edit actions, with explicit permission saves, guarded reload and separate metadata actions.
+- [NamespaceManagement.svelte](./NamespaceManagement.svelte) — Namespace inventory and record actions, including creation and editing dialogs and guarded deletion.
+- [NamespacePermissions.svelte](./NamespacePermissions.svelte) — Filesystem access choices, explicit permission saves, and guarded reload within Permissions.
 - [NamespaceFormModal.svelte](./NamespaceFormModal.svelte) — Feature-local name and optional description dialog, independent of group access assignment.
 - [namespace-management-state.svelte.ts](./namespace-management-state.svelte.ts) — Metadata and group access drafts, captured policy revisions, sequential partial-save reconciliation and identity fences.
 - [namespace-management-state.test.ts](./namespace-management-state.test.ts) — Draft/save, partial failure, metadata isolation, revision conflicts, reload decisions and obsolete-response tests.

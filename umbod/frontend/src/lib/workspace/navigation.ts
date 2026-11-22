@@ -39,7 +39,8 @@ const administratorWorkspaceNavigation: readonly WorkspaceNavigationItem[] = [
 export const administrationNavigation: readonly WorkspaceNavigationItem[] = [
   { id: 'connectors', label: 'Connectors', href: '/admin/connectors', icon: 'connectors' },
   { id: 'groups', label: 'Groups', href: '/admin/groups', icon: 'groups' },
-  { id: 'groupPermissions', label: 'Group permissions', href: '/admin/group-permissions/connectors', icon: 'permissions' },
+  { id: 'namespaces', label: 'Shared namespaces', href: '/admin/namespaces', icon: 'files' },
+  { id: 'groupPermissions', label: 'Permissions', href: '/admin/group-permissions/connectors', icon: 'permissions' },
   { id: 'insights', label: 'Insights', href: '/admin/insights/agent-behaviour', icon: 'analytics' }
 ];
 

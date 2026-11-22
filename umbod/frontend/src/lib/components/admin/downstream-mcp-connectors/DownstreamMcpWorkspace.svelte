@@ -100,7 +100,7 @@
 <PublicationConfirmationModal
   open={Boolean(state.operations.pending)}
   title={state.operations.pending ? `${state.operations.pending.action === 'publish' ? 'Publish' : state.operations.pending.action === 'unpublish' ? 'Unpublish' : 'Delete'} ${state.operations.pending.name}?` : ''}
-  message={state.operations.pending && state.operations.pending.action !== 'delete' && connectors.find((connector) => connector.connector_id === state.operations.pending?.id)?.authorization_mode === 'shared' ? `Please confirm that you want to ${state.operations.pending.action} the MCP proxy connector ${state.operations.pending.name}.` : state.operations.pending?.action === 'delete' ? 'This permanently removes the server and saved local authorizations and policy. Existing connector and tool grants must be removed explicitly in Group permissions first; deletion never removes grants automatically. Remote tokens are not revoked.' : 'After catalogue reload, withdrawal prevents new selection. It does not revoke remote tokens or disconnect owners.'}
+  message={state.operations.pending && state.operations.pending.action !== 'delete' && connectors.find((connector) => connector.connector_id === state.operations.pending?.id)?.authorization_mode === 'shared' ? `Please confirm that you want to ${state.operations.pending.action} the MCP proxy connector ${state.operations.pending.name}.` : state.operations.pending?.action === 'delete' ? 'This permanently removes the server and saved local authorizations and policy. Existing connector and tool grants must be removed explicitly in Permissions first; deletion never removes grants automatically. Remote tokens are not revoked.' : 'After catalogue reload, withdrawal prevents new selection. It does not revoke remote tokens or disconnect owners.'}
   confirmLabel={state.operations.pending?.action === 'delete' ? 'Delete server' : state.operations.pending?.action === 'unpublish' ? 'Unpublish' : 'Publish'}
   onconfirm={state.confirmPublication}
   oncancel={state.cancelPublication}
@@ -120,7 +120,7 @@
 {/if}
 {#if form?.message && (form.status === 'stale' || form.status === 'conflict' || form.status === 'authentication' || form.status === 'invalid')}<p class="feedback" role="alert">{form.message}</p>{/if}
 {#if state.operations.busy}<p role="status" class="feedback">Updating MCP connector…</p>{/if}
-{#if state.operations.message}<p role="alert" class="feedback">{state.operations.message} <a href="/admin/group-permissions/connectors">Group permissions</a></p>{/if}
+{#if state.operations.message}<p role="alert" class="feedback">{state.operations.message} <a href="/admin/group-permissions/connectors">Permissions</a></p>{/if}
 {#if state.operations.blocked}<Button onclick={state.operations.reload}>Reload servers</Button>{/if}
 {#if !state.operations.blocked}
 <UnifiedConnectorWorkspace kind="mcp" items={sidebarConnectors} selectedId={selected?.connector_id} {unifiedRows} {unavailableKinds} detailLabel="Selected MCP connector detail" onselect={(connector) => state.selectConnector(connector.id)}>

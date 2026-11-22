@@ -55,6 +55,7 @@ tags:
 - [SubpageNavigation](src/lib/components/shared/workspace/SubpageNavigation.svelte) — Horizontal links with current-page or parent-location semantics; parents supply routes, selection and eligibility.
 
 - [AdminSplitWorkspace](src/lib/components/admin/shared/AdminSplitWorkspace.svelte) — Responsive master/detail surface with optional mobile sidebar drawer and flush detail padding.
+- [AdminRecordList](src/lib/components/admin/shared/AdminRecordList.svelte) — Responsive record list with identity, detail, and action slots; use for administration inventories with feature-owned actions.
 - [CapabilityCatalogGrid](src/lib/components/admin/shared/CapabilityCatalogGrid.svelte) — Responsive list grid; use to arrange capability cards consistently, supplying list items as content.
 - [ScrollableToolCatalog](src/lib/components/admin/shared/ScrollableToolCatalog.svelte) — Height-bounded tool-list region; use for independently scrolling tool catalogues with a stable scrollbar gutter.
 - [WorkspaceShell](src/lib/components/shared/workspace/WorkspaceShell.svelte) — Contextual sidebar with a mobile drawer, optional return link, account and logout; parents own destinations and eligibility.
@@ -130,7 +131,7 @@ tags:
 
 ## Scope and composition
 
-- [Namespace administration composition](src/lib/components/admin/filesystem/README.md) — Feature-owned namespace list and create/edit dialogs; reuse shared modal and form controls, not this administration workflow.
+- [Namespace administration composition](src/lib/components/admin/filesystem/README.md) — Feature-owned namespace inventory, metadata dialogs, and a separate group access editor; reuse the indexed controls, not the workflows.
 
 - [Agent behaviour composition](src/lib/components/admin/agent-behaviour/README.md) — Feature-owned pattern editing and report inspection; reuse its canonical controls, not these administrator workflows.
 

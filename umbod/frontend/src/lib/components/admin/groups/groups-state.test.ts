@@ -8,7 +8,7 @@ import { GroupsState } from './groups-state.svelte';
 const group: CatalogueGroup = { group_id: ' exact /../ provider ', label: 'Operators', description: 'Manage reports', revision: 1 };
 
 describe('central group management', () => {
-  it('creates exact immutable IDs with trimmed labels and filters all metadata', async (): Promise<void> => {
+  it('creates groups with exact IDs and trimmed labels', async (): Promise<void> => {
     const api = new InMemoryGroupCatalogue();
     const state = new GroupsState(api, [], new InMemoryIdentityDirectory());
     state.create();
@@ -19,12 +19,6 @@ describe('central group management', () => {
     expect(await api.list()).toEqual([group]);
     expect(state.groups).toEqual([group]);
     expect(state.formOpen).toBe(false);
-    for (const query of ['operators', 'REPORTS', '/../']) {
-      state.setQuery(query);
-      expect(state.filteredGroups).toEqual([group]);
-    }
-    state.setQuery('missing');
-    expect(state.filteredGroups).toEqual([]);
   });
   it('validates and detects duplicates before dispatch and preserves the draft', async (): Promise<void> => {
     const api = new InMemoryGroupCatalogue([group]);
@@ -75,16 +69,14 @@ describe('central group management', () => {
     expect(state.formOpen).toBe(false);
     expect(state.message).toContain('Group saved');
   });
-  it('updates authoritative metadata in place without losing filters or changing the ID', async (): Promise<void> => {
+  it('updates authoritative metadata in place without changing the ID', async (): Promise<void> => {
     const api = new InMemoryGroupCatalogue([group]);
     const state = new GroupsState(api, [group], new InMemoryIdentityDirectory());
-    state.setQuery('Reports');
     state.edit(group);
     state.setGroupId('changed');
     state.setLabel(' Reporting ');
     await state.save();
     expect(state.groups).toEqual([{ ...group, label: 'Reporting', revision: 2 }]);
-    expect(state.query).toBe('Reports');
     expect(state.groupId).toBe(group.group_id);
   });
   it('preserves conflicting drafts and reloads the revision explicitly before retry', async (): Promise<void> => {

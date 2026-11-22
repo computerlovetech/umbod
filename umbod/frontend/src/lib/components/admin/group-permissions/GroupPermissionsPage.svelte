@@ -17,7 +17,7 @@
     {#if backHref !== null}
       <a class="back-link" href={backHref}>← Back to OpenAPI connector</a>
     {/if}
-    <h1 id="group-permissions-title" class="admin-title">Group permissions</h1>
+    <h1 id="group-permissions-title" class="admin-title">Permissions</h1>
     {#if description}<p class="admin-lede">{description}</p>{/if}
     </div>
     {#if actions}<div class="page-actions">{@render actions()}</div>{/if}

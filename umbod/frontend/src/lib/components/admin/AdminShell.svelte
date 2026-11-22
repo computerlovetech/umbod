@@ -10,6 +10,7 @@
     | 'insights'
     | 'connectors'
     | 'groups'
+    | 'namespaces'
     | 'groupPermissions';
 
   type AdminShellProps = {

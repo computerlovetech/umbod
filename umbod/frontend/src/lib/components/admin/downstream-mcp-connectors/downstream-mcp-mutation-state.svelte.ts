@@ -65,7 +65,7 @@ export class DownstreamMcpMutationState {
       if (this.disposed) return;
       if (error instanceof AuthenticationRequiredError || error instanceof HttpError && [401, 403].includes(error.status)) this.loseAccess();
       else if (error instanceof HttpError && error.status === 409 && action === 'delete') {
-        this.message = 'Remove connector and tool grants in Group permissions before deleting this server. Deletion was not retried.';
+        this.message = 'Remove connector and tool grants in Permissions before deleting this server. Deletion was not retried.';
       } else if (error instanceof HttpError && error.status >= 400 && error.status < 500 || error instanceof SchemaValidationError && error.direction === 'outbound') {
         this.message = error instanceof HttpError
           ? `${presentDownstreamMcpActionError(error, action === 'publish' ? 'Publication' : action === 'unpublish' ? 'Unpublication' : 'Deletion').data.message} Reload authoritative state before trying again.`

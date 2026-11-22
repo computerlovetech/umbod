@@ -14,7 +14,8 @@ description: Capability-checked administration layout, workspaces and compatibil
 
 - [Insights](./insights/README.md) — Behaviour findings, configuration and log analytics routes.
 - [Groups](./groups/README.md) — Central administrator group catalogue route.
-- [Group permissions](./group-permissions/README.md) — Persistent permissions layout and lazy tab editors.
+- [Shared namespaces](./namespaces/+page.svelte) — Administration inventory for creating, editing, and deleting shared namespaces.
+- [Permissions](./group-permissions/README.md) — Persistent permissions layout and lazy tab editors.
 
 # Compatibility redirects
 

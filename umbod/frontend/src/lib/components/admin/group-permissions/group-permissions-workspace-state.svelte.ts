@@ -24,9 +24,12 @@ export class GroupPermissionsWorkspaceState {
     private readonly loader: GroupPermissionsLoader,
     private readonly saver: GroupPermissionsSaver,
     private readonly target: () => GroupPermissionsInitialTarget | null,
-    namespaceAdministration: NamespaceAdministration
+    namespaceAdministration: NamespaceAdministration,
+    initialGroupId: string | null = null,
+    private readonly onSelection?: (id: string) => void
   ) {
-    this.selection = catalogue()[0]?.group_id ?? null;
+    const groups = catalogue();
+    this.selection = groups.find((group) => group.group_id === initialGroupId)?.group_id ?? groups[0]?.group_id ?? null;
     this.namespaces = new NamespaceManagementState(namespaceAdministration, () => this.selectedGroupId);
   }
 
@@ -86,6 +89,7 @@ export class GroupPermissionsWorkspaceState {
 
   private commitSelection(id: string): void {
     this.selection = id;
+    this.onSelection?.(id);
     if (this.activeTab === 'connectors') this.activate('connectors');
   }
 

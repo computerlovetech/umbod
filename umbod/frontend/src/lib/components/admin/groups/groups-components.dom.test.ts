@@ -41,6 +41,7 @@ function renderGroups(directory = new InMemoryIdentityDirectory()): { api: InMem
 describe('group management form wiring', () => {
   it('renders labelled group rows with accessible icon-only edit and delete actions', async (): Promise<void> => {
     renderGroups();
+    expect(document.querySelector('input[type="search"]')).toBeNull();
     const list = document.querySelector('ul[aria-label="Groups"]');
     expect(list).not.toBeNull();
     expect(list?.textContent).toContain(group.label);
@@ -193,9 +194,10 @@ describe('group management form wiring', () => {
     eligibility.mockRestore();
   });
 
-  it('creates from labelled inputs and retains the search element on in-place success', async (): Promise<void> => {
+  it('adds the saved group to the existing list', async (): Promise<void> => {
     const { api } = renderGroups();
-    const search = document.getElementById('group-search');
+    const list = document.querySelector('ul[aria-label="Groups"]');
+    expect(list).not.toBeNull();
     button('Add Group').click();
     await tick();
     for (const id of ['provider-group-id', 'group-label', 'group-description']) expect(document.querySelector(`label[for="${id}"]`)).not.toBeNull();
@@ -205,12 +207,9 @@ describe('group management form wiring', () => {
     button('Save group').click();
     await vi.waitFor(() => expect(document.querySelector('form')).toBeNull());
     expect(await api.list()).toContainEqual({ group_id: ' /./new ', label: 'New label', description: 'New description', revision: 1 });
-    expect(document.body.textContent).toContain('New description');
-    expect(document.getElementById('group-search')).toBe(search);
-    input('group-search', 'OPERATORS');
-    await tick();
-    expect(document.body.textContent).not.toContain('New description');
-    expect(document.body.textContent).toContain(group.description);
+    expect(document.querySelector('ul[aria-label="Groups"]')).toBe(list);
+    expect(list?.textContent).toContain('New description');
+    expect(list?.textContent).toContain(group.description);
   });
   it('keeps immutable IDs and draft fields through stale revisions and explicit retry', async (): Promise<void> => {
     const { api } = renderGroups();

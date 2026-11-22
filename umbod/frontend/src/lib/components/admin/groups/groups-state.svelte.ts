@@ -11,7 +11,6 @@ export class GroupsState {
   private editing = $state.raw<CatalogueGroup | null>(null);
   private disposed = false;
   private generation = 0;
-  private _query = $state('');
   private _groupId = $state('');
   private _label = $state('');
   private _description = $state('');
@@ -28,7 +27,6 @@ export class GroupsState {
     this.suggestions = new GroupSuggestions(directory);
     this.entries = groups.map((group) => ({ ...group }));
   }
-  get query(): string { return this._query; }
   get groupId(): string { return this._groupId; }
   get label(): string { return this._label; }
   get description(): string { return this._description; }
@@ -41,13 +39,8 @@ export class GroupsState {
   get denied(): boolean { return this._denied; }
   get deleting(): string | null { return this._deleting; }
   get groups(): readonly CatalogueGroup[] { return this._denied ? [] : this.entries.map((group) => ({ ...group })); }
-  get filteredGroups(): readonly CatalogueGroup[] {
-    const query = this._query.toLocaleLowerCase();
-    return this.groups.filter((group) => [group.group_id, group.label, group.description].some((value) => value.toLocaleLowerCase().includes(query)));
-  }
   get isEditing(): boolean { return this.editing !== null; }
   get canSave(): boolean { return !this.disposed && !this._pending && !this._denied && !this._conflict && !this._missing; }
-  setQuery = (value: string): void => { this._query = value; };
   setGroupId = (value: string): void => {
     if (this.editing || this._pending) return;
     this._groupId = value;

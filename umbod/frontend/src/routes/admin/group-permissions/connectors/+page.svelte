@@ -6,7 +6,7 @@
   const workspace = getGroupPermissionsWorkspace();
 </script>
 
-<svelte:head><title>Connectors · Group permissions</title></svelte:head>
+<svelte:head><title>Connectors · Permissions</title></svelte:head>
 
 {#if workspace.connectors}
   <GroupPermissionsManager state={workspace.connectors} />

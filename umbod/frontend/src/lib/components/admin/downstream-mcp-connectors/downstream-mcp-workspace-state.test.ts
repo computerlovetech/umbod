@@ -71,7 +71,7 @@ describe('common MCP mutations through the generic administration port', () => {
     api.delete.mockRejectedValueOnce(new HttpError(409, '', { detail: { code: 'downstream_connector_grants_conflict' } }));
     state.request('delete', 'personal', 'Personal');
     await state.confirm();
-    expect(state.message).toContain('Group permissions');
+    expect(state.message).toContain('Permissions');
     expect(state.message).toContain('not retried');
     expect(api.delete).toHaveBeenCalledTimes(1);
     expect(api.list).not.toHaveBeenCalled();

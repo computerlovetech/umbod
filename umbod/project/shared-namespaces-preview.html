@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shared namespaces · Umbod preview</title>
+<style>
+  :root { color-scheme: light; --ink: #16231c; --muted: #526158; --line: #d8e1da; --soft: #f4f7f4; --active: #e6f2eb; --accent: #265e4b; --danger: #a62e21; font: 15px/1.5 system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body, h1, h2, p { margin: 0; }
+  body { color: var(--ink); background: #fff; }
+  a { color: var(--accent); }
+  button, input, textarea { font: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
+  .sidebar { display: flex; flex-direction: column; gap: 2.2rem; padding: 1.45rem 1rem; border-inline-end: 1px solid var(--line); background: var(--soft); }
+  .brand { display: flex; align-items: center; gap: .65rem; padding-inline: .6rem; font-size: 1.45rem; font-weight: 750; letter-spacing: -.045em; }
+  .nav-label, .rail-label { display: block; color: var(--muted); font: 600 .73rem/1.4 ui-monospace, monospace; letter-spacing: .07em; text-transform: uppercase; }
+  .nav-label { margin: 0 .65rem .6rem; }
+  nav a, .group-choice { display: flex; align-items: center; gap: .65rem; min-height: 42px; padding: .55rem .65rem; color: var(--muted); text-decoration: none; border-radius: .5rem; }
+  nav a:hover, .group-choice:hover { background: #edf2ee; }
+  nav a[aria-current="page"], .group-choice[aria-pressed="true"] { background: var(--active); color: var(--accent); font-weight: 650; }
+  .preview-label { margin: auto .65rem 0; font-size: .78rem; color: var(--muted); }
+  main { width: min(100%, 1240px); padding: clamp(1rem, 4vw, 3.3rem); }
+  .page-head { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; }
+  h1 { font-size: clamp(2rem, 4.5vw, 2.75rem); line-height: 1.08; letter-spacing: -.055em; }
+  h2 { font-size: 1.15rem; letter-spacing: -.02em; }
+  .lede { color: var(--muted); margin-top: .65rem; }
+  .button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 38px; padding: .4rem .85rem; border: 1px solid var(--line); border-radius: .5rem; background: #fff; color: var(--ink); cursor: pointer; font-weight: 620; text-decoration: none; }
+  .button:hover { background: var(--soft); }
+  .primary, .primary:hover { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .danger, .danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .primary:hover, .danger:hover { filter: brightness(1.15); }
+  .button:disabled { background: #edf1ed; border-color: var(--line); color: var(--muted); cursor: default; }
+  .icon-action { width: 36px; min-height: 36px; padding: 0; }
+  .icon { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .panel { border: 1px solid var(--line); border-radius: .75rem; overflow: hidden; }
+  .panel-head, .record { display: grid; grid-template-columns: minmax(0, 1fr) 8rem 5.5rem; align-items: center; gap: 1rem; padding: .9rem 1.15rem; }
+  .panel-head { background: var(--soft); color: var(--muted); font-size: .8rem; font-weight: 650; }
+  .record + .record, .record:first-child { border-top: 1px solid var(--line); }
+  .record-name { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+  .record-name > div, .permission-row strong { min-width: 0; overflow-wrap: anywhere; }
+  .folder { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: .6rem; background: var(--soft); color: var(--accent); }
+  .description { color: var(--muted); font-size: .86rem; }
+  .actions, .footer { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; }
+  .record .actions { display: grid; grid-template-columns: repeat(2, 36px); }
+  .badge { justify-self: start; border-radius: 999px; background: var(--soft); padding: .2rem .6rem; font-size: .78rem; color: var(--muted); white-space: nowrap; }
+  .empty { padding: 1.15rem; color: var(--muted); }
+  .context-link { display: inline-flex; align-items: center; gap: .4rem; margin-top: 1rem; font-size: .88rem; font-weight: 620; }
+  .split { display: grid; grid-template-columns: minmax(10rem, 23%) minmax(0, 1fr); }
+  .rail { background: var(--soft); border-inline-end: 1px solid var(--line); padding: .9rem .65rem; }
+  .rail-label { margin: .2rem .65rem .7rem; }
+  .group-choice { width: 100%; border: 0; background: none; cursor: pointer; text-align: start; }
+  .detail { min-width: 0; padding: 1.2rem clamp(.8rem, 2.4vw, 1.65rem); }
+  .detail-head { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: center; gap: .5rem; padding-bottom: 1rem; }
+  .detail-head .context-link { margin: 0; }
+  .permission-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem 1rem; padding: .85rem 0; border-top: 1px solid var(--line); }
+  fieldset { display: flex; flex-wrap: wrap; min-width: 0; gap: .15rem; margin: 0; padding: .2rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--soft); }
+  fieldset label { position: relative; cursor: pointer; }
+  fieldset span { display: block; border-radius: .35rem; padding: .3rem .58rem; font-size: .82rem; }
+  fieldset input:checked + span { background: #2d4739; color: white; }
+  fieldset input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .footer { margin-top: .85rem; }
+  .status { color: var(--accent); font-size: .85rem; }
+  dialog { width: min(30rem, calc(100% - 2rem)); padding: 1.4rem; border: 1px solid var(--line); border-radius: .85rem; color: var(--ink); box-shadow: 0 12px 55px #16231c2b; }
+  dialog::backdrop { background: #16231c55; }
+  dialog p { margin: .65rem 0 1rem; overflow-wrap: anywhere; }
+  .field { display: grid; gap: .35rem; margin: .9rem 0; font-weight: 620; }
+  .field input, .field textarea { width: 100%; border: 1px solid #b6c4ba; border-radius: .5rem; padding: .5rem .65rem; color: inherit; font-weight: 400; }
+  .field textarea { resize: vertical; }
+  @media (max-width: 780px) {
+    .shell, .split { grid-template-columns: minmax(0, 1fr); }
+    .sidebar { gap: .45rem; padding: .75rem 1rem; border-inline-end: 0; border-bottom: 1px solid var(--line); }
+    .sidebar nav { display: flex; flex-wrap: wrap; }
+    .nav-label { display: none; }
+    .preview-label { margin-top: .2rem; }
+    .rail { border-inline-end: 0; border-bottom: 1px solid var(--line); }
+  }
+  @media (max-width: 460px) {
+    .panel-head, .record { grid-template-columns: minmax(0, 1fr) auto; gap: .55rem; padding-inline: .7rem; }
+    .panel-head span:nth-child(2), .record .folder { display: none; }
+    .record .badge { grid-row: 2; }
+    .record .actions { grid-column: 2; grid-row: 1 / 3; }
+  }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" class="sr-only" aria-hidden="true">
+  <symbol id="brand" viewBox="0 0 24 24"><path d="M3 21v-6L12 6l9 9v6M12 3v18M7 10V7m10 3V7"/></symbol>
+  <symbol id="folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="group-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2m2-15a3 3 0 0 1 0 6m1 3a4 4 0 0 1 3 4v2"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M12 22s7-4 7-10V5l-7-3-7 3v7c0 6 7 10 7 10Zm-3-10 2 2 4-4"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="edit" viewBox="0 0 24 24"><path d="m15 4 5 5M4 20l5-1L21 7a2.1 2.1 0 0 0-5-5L4 14zM4 20h16"/></symbol>
+  <symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+</svg>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><svg class="icon" aria-hidden="true"><use href="#brand"/></svg>Umbod</div>
+    <nav aria-label="Administration">
+      <span class="nav-label">Administration</span>
+      <a href="#groups"><svg class="icon" aria-hidden="true"><use href="#group-icon"/></svg>Groups</a>
+      <a href="#namespaces" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#folder"/></svg>Shared namespaces</a>
+      <a href="#permissions"><svg class="icon" aria-hidden="true"><use href="#shield"/></svg>Permissions</a>
+    </nav>
+    <p class="preview-label">Interactive preview · sample data</p>
+  </aside>
+  <main>
+    <section id="namespaces" aria-labelledby="namespaces-title">
+      <header class="page-head">
+        <div><h1 id="namespaces-title" tabindex="-1">Shared namespaces</h1><p class="lede">Manage shared storage used by your groups.</p></div>
+        <button class="button primary" id="add-namespace" type="button"><svg class="icon" aria-hidden="true"><use href="#plus"/></svg>Add namespace</button>
+      </header>
+      <div class="panel">
+        <div class="panel-head" aria-hidden="true"><span>Namespace</span><span>Contents</span><span>Actions</span></div>
+        <div id="namespace-records"></div>
+      </div>
+      <a class="context-link" href="#permissions">Manage group access <svg class="icon" aria-hidden="true"><use href="#arrow"/></svg></a>
+      <p class="status" id="namespace-status" role="status"></p>
+    </section>
+    <section id="groups" aria-labelledby="groups-title" hidden>
+      <header class="page-head"><div><h1 id="groups-title" tabindex="-1">Groups</h1><p class="lede">Browse the groups used in this preview.</p></div></header>
+      <div class="panel" id="group-records"></div>
+    </section>
+    <section id="permissions" aria-labelledby="permissions-title" hidden>
+      <header class="page-head"><div><h1 id="permissions-title" tabindex="-1">Permissions</h1><p class="lede">Choose what each group can access in the filesystem.</p></div></header>
+      <div class="panel split">
+        <div class="rail" id="group-picker"><span class="rail-label">Groups</span></div>
+        <form class="detail" id="access-form">
+          <header class="detail-head"><div><h2 id="selected-group"></h2><p class="description">Filesystem access</p></div><a class="context-link" href="#namespaces">Manage shared namespaces <svg class="icon" aria-hidden="true"><use href="#arrow"/></svg></a></header>
+          <div id="permission-records"></div>
+          <div class="footer"><span class="status" id="permission-status" role="status"></span><button class="button primary" id="save-access" type="submit" disabled>Save permissions</button></div>
+        </form>
+      </div>
+    </section>
+  </main>
+</div>
+<dialog id="editor" aria-labelledby="editor-title">
+  <form id="editor-form">
+    <h2 id="editor-title"></h2>
+    <label class="field">Name<input id="namespace-name" maxlength="255" required autofocus></label>
+    <label class="field">Description (optional)<textarea id="namespace-description" rows="3"></textarea></label>
+    <div class="footer"><button class="button" type="button" data-close>Cancel</button><button class="button primary" id="submit-editor" type="submit"></button></div>
+  </form>
+</dialog>
+<dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description">
+  <form id="delete-form">
+    <h2 id="delete-title">Delete namespace?</h2>
+    <p id="delete-description">Delete <strong id="delete-name"></strong>? This cannot be undone.</p>
+    <div class="footer"><button class="button" type="button" data-close autofocus>Cancel</button><button class="button danger" type="submit">Delete namespace</button></div>
+  </form>
+</dialog>
+<template id="namespace-row">
+  <div class="record">
+    <div class="record-name"><span class="folder"><svg class="icon" aria-hidden="true"><use href="#folder"/></svg></span><div><strong></strong><p class="description"></p></div></div>
+    <span class="badge"></span>
+    <div class="actions">
+      <button class="button icon-action edit" type="button"><svg class="icon" aria-hidden="true"><use href="#edit"/></svg></button>
+      <button class="button icon-action danger delete" type="button"><svg class="icon" aria-hidden="true"><use href="#trash"/></svg></button>
+    </div>
+  </div>
+</template>
+<script>
+  const byId = (id) => document.getElementById(id);
+  const namespaces = [
+    { id: 1, name: 'Team resources', description: 'Shared templates and reference material.', hasContents: true },
+    { id: 2, name: 'Research', description: 'Working files for research projects.', hasContents: true },
+    { id: 3, name: 'Project archive', description: 'Reserved for completed projects.', hasContents: false }
+  ];
+  const groups = ['Administrators', 'Research team'];
+  const accessOptions = ['No access', 'Read', 'Read and write'];
+  const savedAccess = [new Map([[1, 2], [2, 2], [3, 1]]), new Map([[1, 1], [2, 2]])];
+  const drafts = groups.map(() => new Map());
+  const editor = byId('editor');
+  const deleteDialog = byId('delete-dialog');
+  const nameInput = byId('namespace-name');
+  const descriptionInput = byId('namespace-description');
+  let nextId = 4;
+  let selectedGroup = 0;
+  let editing = null;
+  let deleting = null;
+
+  function showView(moveFocus) {
+    const views = ['namespaces', 'groups', 'permissions'];
+    const hash = location.hash.slice(1);
+    const active = views.includes(hash) ? hash : 'namespaces';
+    for (const view of views) {
+      byId(view).hidden = view !== active;
+      const link = document.querySelector(`nav a[href="#${view}"]`);
+      if (view === active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    }
+    if (moveFocus) byId(`${active}-title`).focus();
+  }
+
+  function openEditor(namespace) {
+    editing = namespace;
+    byId('editor-title').textContent = namespace ? 'Edit namespace' : 'Add namespace';
+    byId('submit-editor').textContent = namespace ? 'Save changes' : 'Create namespace';
+    nameInput.value = namespace?.name ?? '';
+    nameInput.setCustomValidity('');
+    descriptionInput.value = namespace?.description ?? '';
+    editor.showModal();
+  }
+
+  function renderNamespaces() {
+    const list = byId('namespace-records');
+    list.replaceChildren();
+    if (!namespaces.length) list.append(emptyMessage('No shared namespaces yet.'));
+    for (const namespace of namespaces) {
+      const row = byId('namespace-row').content.cloneNode(true);
+      row.querySelector('strong').textContent = namespace.name;
+      row.querySelector('.description').textContent = namespace.description;
+      row.querySelector('.badge').textContent = namespace.hasContents ? 'Has files' : 'Empty';
+      const edit = row.querySelector('.edit');
+      edit.id = `edit-${namespace.id}`;
+      labelAction(edit, `Edit ${namespace.name}`);
+      edit.onclick = () => openEditor(namespace);
+      const remove = row.querySelector('.delete');
+      if (namespace.hasContents) remove.remove();
+      else {
+        labelAction(remove, `Delete ${namespace.name}`);
+        remove.onclick = () => {
+          deleting = namespace;
+          byId('delete-name').textContent = namespace.name;
+          deleteDialog.showModal();
+        };
+      }
+      list.append(row);
+    }
+  }
+
+  function labelAction(button, label) {
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  }
+
+  function emptyMessage(message) {
+    const paragraph = document.createElement('p');
+    paragraph.className = 'empty';
+    paragraph.textContent = message;
+    return paragraph;
+  }
+
+  function selectGroup(index) {
+    selectedGroup = index;
+    byId('permission-status').textContent = '';
+    renderPermissions();
+  }
+
+  function renderPermissions() {
+    byId('selected-group').textContent = groups[selectedGroup];
+    for (const button of byId('group-picker').querySelectorAll('button')) {
+      button.setAttribute('aria-pressed', String(Number(button.dataset.group) === selectedGroup));
+    }
+    const rows = byId('permission-records');
+    rows.replaceChildren();
+    if (!namespaces.length) rows.append(emptyMessage('No shared namespaces to assign.'));
+    for (const namespace of namespaces) {
+      const row = document.createElement('div');
+      row.className = 'permission-row';
+      const title = document.createElement('strong');
+      title.textContent = namespace.name;
+      const choices = document.createElement('fieldset');
+      const legend = document.createElement('legend');
+      legend.className = 'sr-only';
+      legend.textContent = `Access to ${namespace.name}`;
+      choices.append(legend);
+      const draft = drafts[selectedGroup];
+      const saved = savedAccess[selectedGroup].get(namespace.id) ?? 0;
+      accessOptions.forEach((option, index) => {
+        const label = document.createElement('label');
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = `access-${namespace.id}`;
+        radio.className = 'sr-only';
+        radio.checked = (draft.get(namespace.id) ?? saved) === index;
+        radio.onchange = () => {
+          if (index === saved) draft.delete(namespace.id);
+          else draft.set(namespace.id, index);
+          byId('save-access').disabled = !draft.size;
+          byId('permission-status').textContent = '';
+        };
+        const caption = document.createElement('span');
+        caption.textContent = option;
+        label.append(radio, caption);
+        choices.append(label);
+      });
+      row.append(title, choices);
+      rows.append(row);
+    }
+    byId('save-access').disabled = !drafts[selectedGroup].size;
+  }
+
+  groups.forEach((group, index) => {
+    const choice = document.createElement('button');
+    choice.className = 'group-choice';
+    choice.type = 'button';
+    choice.dataset.group = index;
+    choice.textContent = group;
+    choice.onclick = () => selectGroup(index);
+    byId('group-picker').append(choice);
+    const row = document.createElement('div');
+    row.className = 'permission-row detail';
+    const name = document.createElement('strong');
+    name.textContent = group;
+    const link = document.createElement('a');
+    link.className = 'button';
+    link.href = '#permissions';
+    link.textContent = 'View permissions';
+    link.setAttribute('aria-label', `View permissions for ${group}`);
+    link.onclick = () => selectGroup(index);
+    row.append(name, link);
+    byId('group-records').append(row);
+  });
+
+  byId('add-namespace').onclick = () => openEditor(null);
+  nameInput.oninput = () => nameInput.setCustomValidity('');
+  for (const button of document.querySelectorAll('[data-close]')) button.onclick = () => button.closest('dialog').close();
+  byId('editor-form').onsubmit = (event) => {
+    event.preventDefault();
+    const name = nameInput.value.trim();
+    if (!name || namespaces.some((item) => item !== editing && item.name.toLowerCase() === name.toLowerCase())) {
+      nameInput.setCustomValidity(name ? 'A namespace with that name already exists.' : 'Enter a namespace name.');
+      nameInput.reportValidity();
+      return;
+    }
+    const description = descriptionInput.value.trim();
+    const namespace = editing ?? { id: nextId++, hasContents: false };
+    Object.assign(namespace, { name, description });
+    if (!editing) namespaces.push(namespace);
+    editor.close();
+    renderNamespaces();
+    renderPermissions();
+    byId(editing ? `edit-${namespace.id}` : 'add-namespace').focus();
+    byId('namespace-status').textContent = editing ? 'Namespace updated.' : 'Namespace created.';
+  };
+  byId('delete-form').onsubmit = (event) => {
+    event.preventDefault();
+    if (!deleting || deleting.hasContents) return;
+    namespaces.splice(namespaces.indexOf(deleting), 1);
+    for (const access of [...savedAccess, ...drafts]) access.delete(deleting.id);
+    deleteDialog.close();
+    deleting = null;
+    renderNamespaces();
+    renderPermissions();
+    byId('add-namespace').focus();
+    byId('namespace-status').textContent = 'Namespace deleted.';
+  };
+  byId('access-form').onsubmit = (event) => {
+    event.preventDefault();
+    for (const [id, access] of drafts[selectedGroup]) savedAccess[selectedGroup].set(id, access);
+    drafts[selectedGroup].clear();
+    byId('save-access').disabled = true;
+    byId('permission-status').textContent = 'Permissions saved.';
+  };
+  window.addEventListener('hashchange', () => showView(true));
+  renderNamespaces();
+  renderPermissions();
+  showView(false);
+</script>
+</body>
+</html>

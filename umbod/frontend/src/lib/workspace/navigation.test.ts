@@ -21,16 +21,16 @@ describe('contextual workspace navigation', (): void => {
 
   test('administration sidebar shows only administration destinations', (): void => {
     expect(administrationNavigation.map((link): string => link.href)).toEqual([
-      '/admin/connectors', '/admin/groups', '/admin/group-permissions/connectors',
+      '/admin/connectors', '/admin/groups', '/admin/namespaces', '/admin/group-permissions/connectors',
       '/admin/insights/agent-behaviour'
     ]);
     expect(administrationNavigation.map((link): string | undefined => link.icon)).toEqual([
-      'connectors', 'groups', 'permissions', 'analytics'
+      'connectors', 'groups', 'files', 'permissions', 'analytics'
     ]);
     expect(administrationNavigation.map((link): string => link.id)).toEqual([
-      'connectors', 'groups', 'groupPermissions', 'insights'
+      'connectors', 'groups', 'namespaces', 'groupPermissions', 'insights'
     ]);
-    expect(new Set(administrationNavigation.map((link): string => link.id)).size).toBe(4);
+    expect(new Set(administrationNavigation.map((link): string => link.id)).size).toBe(5);
     expect(administrationNavigation.filter((link): boolean => link.startsSection === true).map((link): string => link.href)).toEqual([]);
   });
 });

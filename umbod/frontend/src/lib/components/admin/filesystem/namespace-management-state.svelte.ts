@@ -20,7 +20,7 @@ export class NamespaceManagementState {
   private permissionsPending = $state(false);
   private permissionMessage = $state('');
   private reloadRequested = $state(false);
-  private activated = false;
+  private activated = $state(false);
   private editorVisible = $state(false);
   private deletion = $state.raw<DeleteSnapshot | null>(null);
   private selectedId = $state<string | null>(null);
@@ -56,6 +56,7 @@ export class NamespaceManagementState {
   get busy(): boolean { return this.pending || this.permissionsPending || this.loading; }
   get error(): string { return this.message; }
   get conflict(): boolean { return this.conflicted; }
+  get inventoryLoaded(): boolean { return this.activated && !this.inventoryUnavailable; }
   get needsReload(): boolean { return this.accessStale || this.inventoryUnavailable; }
   get canSave(): boolean { return this.editorOpen && !this.disposed && !this.busy && !this.conflicted && createNamespaceSchema.safeParse({ name: this.draftName, groups: [] }).success; }
   get canAssignAccess(): boolean { return this.selectedGroupId !== null && this.canOpenEditor && !this.editorOpen && !this.needsReload; }
