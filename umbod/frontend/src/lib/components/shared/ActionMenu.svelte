@@ -5,16 +5,18 @@
   type Props = {
     open: boolean;
     disabled?: boolean;
+    appearance?: 'icon' | 'surface';
+    align?: 'start' | 'end';
     label: string;
     menu: Snippet;
     trigger: Snippet;
     onopenchange: (open: boolean) => void;
   };
 
-  let { open, label, menu, trigger, onopenchange, disabled = false }: Props = $props();
+  let { open, label, menu, trigger, onopenchange, disabled = false, appearance = 'icon', align = 'start' }: Props = $props();
   const generatedId = $props.id();
   const menuId = `action-menu-${generatedId}`;
-  const state = new ActionMenuState();
+  const state = new ActionMenuState(() => align);
 
   function toggle(): void {
     if (disabled) return;
@@ -42,7 +44,7 @@
 <div class="action-menu">
   <button
     bind:this={state.trigger}
-    class="trigger"
+    class={["trigger", appearance === "surface" && "surface"]}
     type="button"
     aria-label={label}
     aria-haspopup="menu"
@@ -62,6 +64,8 @@
 <style>
   .action-menu { position: relative; flex: 0 0 auto; }
   .trigger { position: relative; z-index: var(--action-menu-trigger-z-index, auto); align-items: center; background: transparent; border: 0; border-radius: 4px; color: var(--admin-muted); cursor: pointer; display: inline-flex; font: inherit; font-size: 1.15rem; height: var(--action-menu-trigger-size, 2rem); justify-content: center; padding: 0; width: var(--action-menu-trigger-size, 2rem); }
+  .trigger.surface { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-ink); font-size: inherit; height: auto; justify-content: flex-start; padding: 7px 8px; text-align: left; width: 100%; }
+  .trigger.surface:hover:not(:disabled), .trigger.surface[aria-expanded='true'] { background: var(--admin-accent-soft); color: var(--admin-ink); }
   .trigger:disabled { cursor: not-allowed; opacity: 0.5; }
   .trigger:hover:not(:disabled) { background: var(--admin-border); color: var(--admin-ink); }
   .trigger:focus-visible, .popup :global([role='menuitem']:focus-visible), .popup :global(button:focus-visible) { outline: 2px solid var(--admin-accent); outline-offset: 2px; }

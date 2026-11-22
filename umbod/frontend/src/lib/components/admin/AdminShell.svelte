@@ -3,7 +3,7 @@
   import type { Snippet } from 'svelte';
   import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
   import WorkspaceShell from '#lib/components/shared/workspace/WorkspaceShell.svelte';
-  import { administrationNavigation, administrationPresentation } from '#lib/workspace/navigation.js';
+  import { administrationNavigation, administrationPresentation, workspaceAccountLinks } from '#lib/workspace/navigation.js';
   import { useWorkspaceNavigationHistory } from '#lib/workspace/navigation-history-context.js';
 
   type AdminShellActiveItem =
@@ -35,6 +35,7 @@
   backLink={{ label: 'Back to workspace', href: navigationHistory?.returnHref ?? '/dashboard' }}
   {activeItem}
   {accountIdentity}
+  accountLinks={workspaceAccountLinks}
   {contentWidth}
   {contentLoading}
   {navigationScope}

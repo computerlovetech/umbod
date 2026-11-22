@@ -7,7 +7,7 @@
   import { WorkspaceScope } from '#lib/workspace/workspace-scope.svelte.js';
   import { provideWorkspace } from '#lib/workspace/workspace-context.js';
   import { WorkspaceNavigationState } from '#lib/workspace/workspace-navigation-state.svelte.js';
-  import { workspaceNavigation, workspacePresentation } from '#lib/workspace/navigation.js';
+  import { workspaceAccountLinks, workspaceNavigation, workspacePresentation } from '#lib/workspace/navigation.js';
   import { logoutNavigation } from '#lib/admin/infrastructure/logout.js';
   import WorkspaceShell from '#lib/components/shared/workspace/WorkspaceShell.svelte';
 
@@ -43,6 +43,6 @@
   }
 </script>
 
-<WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(access.adminAccess === 'allowed')} activeItem={navigation.activeItem} accountIdentity={access.effectiveAccountIdentity} logout={{ logout }} contentWidth="wide">
+<WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(access.adminAccess === 'allowed')} activeItem={navigation.activeItem} accountIdentity={access.effectiveAccountIdentity} accountLinks={workspaceAccountLinks} logout={{ logout }} contentWidth="wide">
   {@render children()}
 </WorkspaceShell>

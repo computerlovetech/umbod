@@ -6,11 +6,11 @@ description: Shared application shell and actor-independent subpage presentation
 
 # Files
 
-- [WorkspaceShell.svelte](./WorkspaceShell.svelte) — Contextual sidebar, optional section heading and return link, account identity and logout frame.
+- [WorkspaceShell.svelte](./WorkspaceShell.svelte) — Expandable desktop icon rail, optional return link, mobile drawer, and account menu.
 - [mobile-navigation.ts](./mobile-navigation.ts) — Responsive popover lifecycle and link dismissal shared by sidebar drawers.
 - [Mobile navigation styles](../../../styles/mobile-navigation.css) — Shared mobile drawer layout, controls and backdrop.
 - [WorkspaceNavigationIcon.svelte](./WorkspaceNavigationIcon.svelte) — Internal decorative outline icons for workspace and administration navigation links.
-- [workspace-sidebar.dom.test.ts](./workspace-sidebar.dom.test.ts) — Context isolation, icon accessibility, remembered return links and sidebar motion rendering.
+- [workspace-sidebar.dom.test.ts](./workspace-sidebar.dom.test.ts) — Shared rail preference, icon accessibility, remembered return links and sidebar motion rendering.
 - [workspace-shell-state.svelte.ts](./workspace-shell-state.svelte.ts) — Workspace navigation and account presentation state.
 - [workspace-shell.test.ts](./workspace-shell.test.ts) — Workspace shell, navigation and account rendering tests.
 - [PageContainer.svelte](./PageContainer.svelte) — Neutral heading, optional actions and content slots shared by Files and Connectors; callers own state and feature markup.

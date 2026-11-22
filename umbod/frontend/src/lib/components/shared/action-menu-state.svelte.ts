@@ -1,6 +1,10 @@
 import { tick } from 'svelte';
 
+const viewportInset = 8;
+const triggerGap = 4;
+
 export class ActionMenuState {
+  constructor(private readonly alignment: () => 'start' | 'end' = () => 'start') {}
   trigger: HTMLButtonElement | null = null;
   menu: HTMLDivElement | null = null;
 
@@ -44,11 +48,21 @@ export class ActionMenuState {
   positionMenu = (): void => {
     if (!this.trigger || !this.menu) return;
     const rect = this.trigger.getBoundingClientRect();
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - this.menu.offsetWidth - 8));
-    const top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - this.menu.offsetHeight - 8));
+    const width = this.menu.offsetWidth;
+    const desiredLeft = this.alignment() === 'end' ? rect.right - width : rect.left;
+    const left = Math.max(viewportInset, Math.min(desiredLeft, window.innerWidth - width - viewportInset));
+    const heightLimit = window.innerHeight * 0.6;
+    const borderHeight = this.menu.offsetHeight - this.menu.clientHeight;
+    const preferredHeight = Math.min(heightLimit, this.menu.scrollHeight + borderHeight);
+    const belowTop = Math.max(viewportInset, rect.bottom + triggerGap);
+    const aboveBottom = Math.min(window.innerHeight - viewportInset, rect.top - triggerGap);
+    const below = window.innerHeight - belowTop - viewportInset;
+    const above = aboveBottom - viewportInset;
+    const opensUpward = preferredHeight > below && above > below;
+    const maxHeight = Math.max(0, Math.min(heightLimit, opensUpward ? above : below));
     this.menu.style.left = `${left}px`;
-    this.menu.style.top = `${top}px`;
-    this.menu.style.maxHeight = `${Math.max(0, Math.min(window.innerHeight * 0.6, window.innerHeight - top - 8))}px`;
+    this.menu.style.maxHeight = `${maxHeight}px`;
+    this.menu.style.top = `${opensUpward ? aboveBottom - this.menu.offsetHeight : belowTop}px`;
   };
 
   setTrigger = (trigger: HTMLButtonElement): void => {

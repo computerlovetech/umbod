@@ -4,8 +4,10 @@ import type { SidebarTransition } from '#lib/workspace/navigation-history.svelte
 import type { WorkspaceNavigationItem } from '#lib/workspace/navigation.js';
 export type { WorkspaceNavigationItem } from '#lib/workspace/navigation.js';
 
+export type AccountMenuLocation = 'sidebar' | 'mobile';
+
 export interface WorkspaceNavigationContext {
-  activeItem: string;
+  activeItem?: string;
   navigationItems: readonly WorkspaceNavigationItem[];
   destinationPath: string | null;
   originPath: string | null;
@@ -15,7 +17,8 @@ export interface WorkspaceNavigationContext {
 }
 
 export class WorkspaceShellState {
-  loggingOut = $state(false);
+  #loggingOut = $state(false);
+  #openAccountMenu = $state<AccountMenuLocation | null>(null);
 
   constructor(private readonly context: () => WorkspaceNavigationContext) {}
 
@@ -41,13 +44,27 @@ export class WorkspaceShellState {
     );
   }
 
-  get displayedActiveItem(): string {
+  get displayedActiveItem(): string | undefined {
     return this.pendingNavigationItem?.id ?? this.context().activeItem;
   }
 
+  get loggingOut(): boolean {
+    return this.#loggingOut;
+  }
+
+  accountMenuOpen = (location: AccountMenuLocation): boolean => this.#openAccountMenu === location;
+
+  setAccountMenuOpen = (location: AccountMenuLocation, open: boolean): void => {
+    if (open || this.accountMenuOpen(location)) this.#openAccountMenu = open ? location : null;
+  };
+
+  closeAccountMenu = (): void => {
+    this.#openAccountMenu = null;
+  };
+
   logout = async (navigation: LogoutNavigation): Promise<void> => {
-    if (this.loggingOut) return;
-    this.loggingOut = true;
+    if (this.#loggingOut) return;
+    this.#loggingOut = true;
     await navigation.logout();
   };
 }

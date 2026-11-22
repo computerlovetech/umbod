@@ -1,15 +1,13 @@
-import { workspaceSettingsHref } from './navigation.js';
-
 export class WorkspaceNavigationState {
   constructor(private readonly pathname: () => string) {}
 
-  get activeItem(): string {
+  get activeItem(): string | undefined {
     const path = this.pathname();
-    if (path === workspaceSettingsHref || path.startsWith(`${workspaceSettingsHref}/`)) return 'settings';
     if (path === '/getting-started' || path.startsWith('/getting-started/')) return 'gettingStarted';
     if (path === '/files' || path.startsWith('/files/')) return 'files';
     if (path === '/insights' || path.startsWith('/insights/')) return 'insights';
     if (path === '/connectors' || path.startsWith('/connectors/')) return 'connectors';
-    return 'dashboard';
+    if (path === '/dashboard' || path.startsWith('/dashboard/')) return 'dashboard';
+    return undefined;
   }
 }

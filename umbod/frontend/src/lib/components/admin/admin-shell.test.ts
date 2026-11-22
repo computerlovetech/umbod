@@ -30,8 +30,7 @@ describe('admin shell logout', () => {
     }
     const document = new Window().document;
     document.body.innerHTML = shell.body;
-    const logoutButton = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Log out');
-    expect(logoutButton?.type).toBe('button');
+    expect(document.querySelector('aside button[aria-haspopup="menu"]')?.getAttribute('aria-label')).toBe('unknown account menu');
     expect(shell.body).toContain('aria-label="Administration sidebar"');
     expect(shell.body).toContain('aria-label="Administration navigation"');
     expect(document.querySelector('.workspace-back')?.textContent).toBe('←Back to workspace');
@@ -82,7 +81,7 @@ describe('admin shell logout', () => {
     expect(currentUserIdentitySchema.safeParse({ id: 'admin-id', name: 'unknown', email: 123 }).success).toBe(false);
   });
 
-  test.each(['visible', 'hidden'] as const)('offers an explicit logout independent of %s identity without automatic navigation', (kind) => {
+  test.each(['visible', 'hidden'] as const)('offers an account menu with %s identity without automatic navigation', (kind): void => {
     const logout = vi.fn<() => Promise<void>>().mockResolvedValue();
     const { body } = render(AdminShell, { props: {
       activeItem: 'connectors',
@@ -93,7 +92,11 @@ describe('admin shell logout', () => {
     const document = new Window().document;
     document.body.innerHTML = body;
     const logoutButton = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Log out');
-    expect(logoutButton?.type).toBe('button');
+    expect(logoutButton).toBeUndefined();
+    const trigger = document.querySelector('aside button[aria-haspopup="menu"]');
+    expect(trigger?.getAttribute('aria-label')).toBe(kind === 'visible' ? 'Administrator account menu' : 'Account menu');
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('[role="menu"]')).toBeNull();
     expect(logout).not.toHaveBeenCalled();
   });
 });

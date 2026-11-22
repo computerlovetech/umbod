@@ -19,12 +19,12 @@ afterEach(async (): Promise<void> => {
   vi.restoreAllMocks();
 });
 
-function render(telemetryInstaller?: TelemetryInstaller): HTMLDivElement {
+function render(telemetryInstaller?: TelemetryInstaller, logsEndpoint?: string): HTMLDivElement {
   const target = document.createElement('div');
   document.body.append(target);
   const component = mount(McpSetupGuide, {
     target,
-    props: { installerBaseUrl: 'https://site.test/api/install/v1', telemetryInstaller }
+    props: { installerBaseUrl: 'https://site.test/api/install/v1', telemetryInstaller, logsEndpoint }
   });
   cleanups.push(async (): Promise<void> => { await unmount(component); target.remove(); });
   flushSync();
@@ -125,11 +125,17 @@ test.each([
 
 test('never prepares a package for Codex or on skip, even when a telemetry installer is available', (): void => {
   const prepare = vi.fn<TelemetryInstaller['prepare']>();
-  const target = render({ prepare });
+  const logsEndpoint = 'https://collector.test/v1/logs';
+  const target = render({ prepare }, logsEndpoint);
   visit(target, 'Telemetry');
   expect(target.querySelector('input[value="logs"]')).toBeNull();
-  const tomlLink = 'a[href="/settings/tokens"]';
-  expect(requiredElement(target, tomlLink).textContent).toContain('Generate Codex telemetry TOML');
+  const tokensLink = 'a[href="/settings/tokens"]';
+  expect(requiredElement(target, 'details > summary').textContent).toBe('Set up Codex logs manually');
+  const manualSetup = requiredElement(target, 'details');
+  expect(requiredElement(manualSetup, tokensLink).textContent).toContain('Create an access token for sending agent logs');
+  expect(manualSetup.textContent).toContain(logsEndpoint);
+  expect(manualSetup.textContent).toContain('Authorization');
+  expect(manualSetup.textContent).toContain('log_user_prompt');
   expect(target.textContent).toContain('Step 3 of 4');
   visit(target, 'Review and install');
   expect(prepare).not.toHaveBeenCalled();
@@ -137,7 +143,7 @@ test('never prepares a package for Codex or on skip, even when a telemetry insta
   select(target, 'claude-code');
   visit(target, 'Telemetry');
   expect(requiredElement<HTMLInputElement>(target, 'input[value="skip"]').checked).toBe(true);
-  expect(target.querySelector(tomlLink)).toBeNull();
+  expect(target.querySelector(tokensLink)).toBeNull();
   visit(target, 'Review and install');
   expect(prepare).not.toHaveBeenCalled();
 });

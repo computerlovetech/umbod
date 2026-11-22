@@ -1,7 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { InMemoryPersonalAccessTokens } from '#lib/personal-access-tokens/in-memory-api.test-support.js';
-import { InMemoryTelemetrySetup } from '#lib/telemetry-setup/in-memory-api.test-support.js';
 import type { ClipboardWriter } from '#lib/admin/clipboard.js';
 import PersonalTokens from './PersonalTokens.svelte';
 import { HttpError } from '#lib/admin/infrastructure/transport.js';
@@ -12,10 +11,10 @@ afterEach(async (): Promise<void> => {
   for (const cleanup of cleanups.splice(0)) await cleanup();
 });
 
-function render(api: InMemoryPersonalAccessTokens = new InMemoryPersonalAccessTokens(), setup: InMemoryTelemetrySetup = new InMemoryTelemetrySetup(), clipboard: ClipboardWriter = { writeText: async (): Promise<void> => {} }): HTMLDivElement {
+function render(api: InMemoryPersonalAccessTokens = new InMemoryPersonalAccessTokens(), clipboard: ClipboardWriter = { writeText: async (): Promise<void> => {} }): HTMLDivElement {
   const target = document.createElement('div');
   document.body.append(target);
-  const component = mount(PersonalTokens, { target, props: { apiFactory: () => api, setupApiFactory: () => setup, clipboardFactory: () => clipboard } });
+  const component = mount(PersonalTokens, { target, props: { apiFactory: () => api, clipboardFactory: () => clipboard } });
   cleanups.push(async (): Promise<void> => { await unmount(component); target.remove(); });
   flushSync();
   return target;
@@ -39,15 +38,21 @@ function fillName(target: ParentNode, value: string): void {
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-function combobox(target: ParentNode, name: string): HTMLButtonElement {
-  const label = [...target.querySelectorAll('label')].find((candidate): boolean => candidate.textContent === name);
+function labelledControl<T extends HTMLElement>(target: ParentNode, name: string): T {
+  const label = [...target.querySelectorAll('label')].find((candidate): boolean => candidate.textContent?.trim() === name);
   if (!label) throw new Error(`Missing label: ${name}`);
-  return element<HTMLButtonElement>(target, `[id="${label.htmlFor}"]`);
+  return element<T>(target, `[id="${label.htmlFor}"]`);
+}
+
+function agentLogsCheckbox(target: ParentNode): HTMLInputElement {
+  const checkbox = labelledControl<HTMLInputElement>(target, 'Send agent logs');
+  expect(checkbox.type).toBe('checkbox');
+  return checkbox;
 }
 
 async function openCreate(target: ParentNode): Promise<HTMLDialogElement> {
-  await vi.waitFor(() => expect(button(target, 'Create telemetry token').disabled).toBe(false));
-  button(target, 'Create telemetry token').click();
+  await vi.waitFor(() => expect(button(target, 'Create access token').disabled).toBe(false));
+  button(target, 'Create access token').click();
   await tick();
   return element<HTMLDialogElement>(target, 'dialog');
 }
@@ -61,27 +66,10 @@ it('reports denied access without creation or token actions', async (): Promise<
   expect(target.textContent).not.toContain('Simulated development identities');
 });
 
-it.each(['disabled', 'not_configured'] as const)('keeps the list and revocation without creation or refresh when %s', async (reason): Promise<void> => {
-  const api = new InMemoryPersonalAccessTokens();
-  await api.create({ name: 'Existing', expires_at: '2099-01-01T00:00:00Z', permissions: { telemetry: 'write' } });
-  const setup = new InMemoryTelemetrySetup();
-  setup.value = { status: 'unavailable', reason };
-  const target = render(api, setup);
-  await vi.waitFor(() => expect(target.textContent).toContain('Contact your operator'));
-  expect(target.querySelector('form, dialog, input, details')).toBeNull();
-  expect(target.textContent).not.toContain('Create telemetry token');
-  expect(target.textContent).not.toContain('Refresh');
-  expect(element<HTMLTimeElement>(target, 'time').dateTime).toBe('2099-01-01T00:00:00.000Z');
-  button(target, 'Delete Existing').click();
-  await vi.waitFor(() => expect(target.textContent).toContain('No personal access tokens.'));
-  expect(api.rows).toEqual([]);
-  expect(api.listCalls).toBe(1);
-});
-
 it('opens the form on demand, selects options and updates the list after issuance and revocation', async (): Promise<void> => {
   const api = new InMemoryPersonalAccessTokens();
   const copied: string[] = [];
-  const target = render(api, new InMemoryTelemetrySetup(), { writeText: async (value: string): Promise<void> => { copied.push(value); } });
+  const target = render(api, { writeText: async (value: string): Promise<void> => { copied.push(value); } });
   await vi.waitFor(() => expect(target.textContent).toContain('No personal access tokens.'));
   expect(target.querySelector('form, dialog, details')).toBeNull();
   expect(target.textContent).not.toContain('Refresh');
@@ -89,14 +77,9 @@ it('opens the form on demand, selects options and updates the list after issuanc
   expect(dialog.open).toBe(true);
   expect(element<HTMLInputElement>(dialog, 'input').required).toBe(true);
   expect(element<HTMLInputElement>(dialog, 'input').maxLength).toBe(256);
-  const agent = combobox(dialog, 'Agent');
-  expect(agent.textContent).toContain('Codex');
-  agent.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
-  await tick();
-  expect(element<HTMLElement>(dialog, '[role="listbox"]').getAttribute('aria-label')).toBe('Agent');
-  agent.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-  await vi.waitFor(() => expect(agent.textContent).toContain('Claude Code'));
-  const expiration = combobox(dialog, 'Expiration');
+  const permission = agentLogsCheckbox(dialog);
+  expect(permission.checked).toBe(false);
+  const expiration = labelledControl<HTMLButtonElement>(dialog, 'Expiration');
   expect(expiration.textContent).toContain('30 days');
   expiration.click();
   await tick();
@@ -107,26 +90,31 @@ it('opens the form on demand, selects options and updates the list after issuanc
   expect(api.createCalls).toBe(0);
   fillName(dialog, 'Agent logs');
   button(dialog, 'Create token').click();
-  await vi.waitFor(() => expect(element<HTMLTextAreaElement>(dialog, 'textarea').value).toContain('test-only-secret'));
+  await vi.waitFor(() => expect(element<HTMLElement>(dialog, '[role="alert"]').textContent).toBe('Select at least one permission.'));
+  expect(api.createCalls).toBe(0);
+  permission.click();
+  expect(permission.checked).toBe(true);
+  button(dialog, 'Create token').click();
+  await vi.waitFor(() => expect(element<HTMLTextAreaElement>(dialog, 'textarea').value).toBe('test-only-secret'));
   expect(dialog.querySelector('form, input')).toBeNull();
   expect(document.activeElement).toBe(element<HTMLTextAreaElement>(dialog, 'textarea'));
-  expect(JSON.parse(element<HTMLTextAreaElement>(dialog, 'textarea').value).env.OTEL_LOGS_EXPORTER).toBe('otlp');
   const list = element<HTMLUListElement>(target, 'ul[aria-label="Personal access tokens"]');
   expect(list.textContent).toContain('Agent logs');
   expect(list.textContent).toContain('active');
   expect(element<HTMLTimeElement>(list, 'time').dateTime).toBe(api.rows[0].expires_at);
   expect(api.listCalls).toBe(1);
   expect(copied).toEqual([]);
-  button(dialog, 'Copy configuration').click();
+  button(dialog, 'Copy token').click();
   await vi.waitFor(() => expect(copied).toHaveLength(1));
-  expect(copied[0]).toContain('/v1/logs');
+  expect(copied).toEqual(['test-only-secret']);
+  await vi.waitFor(() => expect(element<HTMLElement>(dialog, '[role="status"]').textContent).toBe('Token copied.'));
   button(dialog, 'Done').click();
   await tick();
   expect(target.querySelector('dialog, textarea')).toBeNull();
   const reopened = await openCreate(target);
   expect(element<HTMLInputElement>(reopened, 'input').value).toBe('');
-  expect(combobox(reopened, 'Agent').textContent).toContain('Codex');
-  expect(combobox(reopened, 'Expiration').textContent).toContain('30 days');
+  expect(agentLogsCheckbox(reopened).checked).toBe(false);
+  expect(labelledControl<HTMLButtonElement>(reopened, 'Expiration').textContent).toContain('30 days');
   expect(reopened.querySelector('textarea')).toBeNull();
   button(reopened, 'Cancel').click();
   await tick();
@@ -147,21 +135,21 @@ it('lists every token by default and matches a selected scope within a combined-
   const target = render(api);
   const rows = (): string[] => [...target.querySelectorAll('ul[aria-label="Personal access tokens"] > li')].map((row): string => row.textContent ?? '');
   await vi.waitFor(() => expect(rows()).toHaveLength(2));
-  expect(rows()[0]).toContain('files:read, telemetry:write');
-  expect(rows()[1]).toContain('tools:read');
-  const filter = combobox(target, 'Scope');
-  expect(filter.textContent).toContain('All scopes');
+  expect(rows()[0]).toContain('Files · read, Send agent logs');
+  expect(rows()[1]).toContain('Tools · read');
+  const filter = labelledControl<HTMLButtonElement>(target, 'Permission');
+  expect(filter.textContent).toContain('All permissions');
   filter.click();
   await tick();
-  const scopeOptions = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[role="listbox"][aria-label="Scope"] [role="option"]')];
+  const scopeOptions = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[role="listbox"][aria-label="Permission"] [role="option"]')];
   const options = scopeOptions();
-  expect(options.map((option): string | undefined => option.querySelector('span')?.textContent)).toEqual(['All scopes', 'files:read', 'telemetry:write', 'tools:read']);
+  expect(options.map((option): string | undefined => option.querySelector('span')?.textContent)).toEqual(['All permissions', 'Files · read', 'Send agent logs', 'Tools · read']);
   options[2].click();
-  await vi.waitFor(() => expect(filter.textContent).toContain('telemetry:write'));
+  await vi.waitFor(() => expect(filter.textContent).toContain('Send agent logs'));
   expect(rows()).toEqual([expect.stringContaining('Combined token')]);
   filter.click();
   await tick();
-  expect(scopeOptions()[0]?.textContent).toContain('All scopes');
+  expect(scopeOptions()[0]?.textContent).toContain('All permissions');
   scopeOptions()[0].click();
   await tick();
   expect(rows()).toEqual([expect.stringContaining('Combined token'), expect.stringContaining('Other token')]);
@@ -191,6 +179,7 @@ it('blocks duplicate submission and dismissal while issuing', async (): Promise<
   const target = render(api);
   const dialog = await openCreate(target);
   fillName(dialog, 'Pending token');
+  agentLogsCheckbox(dialog).click();
   button(dialog, 'Create token').click();
   await tick();
   expect(element<HTMLFieldSetElement>(dialog, 'fieldset').disabled).toBe(true);
@@ -211,31 +200,15 @@ it('blocks duplicate submission and dismissal while issuing', async (): Promise<
   expect(reopened.querySelector('textarea')).toBeNull();
 });
 
-it('copies generated Codex TOML and explains how to merge it into an existing config', async (): Promise<void> => {
-  const copied: string[] = [];
-  const target = render(new InMemoryPersonalAccessTokens(), new InMemoryTelemetrySetup(), {
-    writeText: async (value: string): Promise<void> => { copied.push(value); }
-  });
-  const dialog = await openCreate(target);
-  fillName(dialog, 'Codex logs');
-  button(dialog, 'Create token').click();
-  await vi.waitFor(() => expect(dialog.textContent).toContain('without adding a second section'));
-  button(dialog, 'Copy configuration').click();
-  await vi.waitFor(() => expect(copied).toHaveLength(1));
-  expect(copied[0]).toBe(element<HTMLTextAreaElement>(dialog, 'textarea').value);
-  expect(copied[0]).toContain('[otel.exporter.otlp-http]');
-  expect(copied[0]).toContain('/v1/logs');
-  expect(copied[0]).toContain('Authorization = "Bearer test-only-secret"');
-});
-
 it('allows dismissal while copying and fences the late result', async (): Promise<void> => {
   let finishCopy: () => void = (): void => {};
-  const target = render(new InMemoryPersonalAccessTokens(), new InMemoryTelemetrySetup(), { writeText: (): Promise<void> => new Promise<void>((resolve): void => { finishCopy = resolve; }) });
+  const target = render(new InMemoryPersonalAccessTokens(), { writeText: (): Promise<void> => new Promise<void>((resolve): void => { finishCopy = resolve; }) });
   const dialog = await openCreate(target);
   fillName(dialog, 'Copy token');
+  agentLogsCheckbox(dialog).click();
   button(dialog, 'Create token').click();
   await vi.waitFor(() => expect(dialog.querySelector('textarea')).not.toBeNull());
-  button(dialog, 'Copy configuration').click();
+  button(dialog, 'Copy token').click();
   await tick();
   expect(button(dialog, 'Done').disabled).toBe(false);
   button(dialog, 'Done').click();
@@ -244,7 +217,7 @@ it('allows dismissal while copying and fences the late result', async (): Promis
   await tick();
   const reopened = await openCreate(target);
   expect(reopened.querySelector('textarea')).toBeNull();
-  expect(target.textContent).not.toContain('Configuration copied.');
+  expect(target.textContent).not.toContain('Token copied.');
 });
 
 it('removes secret output on unmount and never renders a late issued secret', async (): Promise<void> => {
@@ -252,6 +225,7 @@ it('removes secret output on unmount and never renders a late issued secret', as
   const target = render(api);
   const dialog = await openCreate(target);
   fillName(dialog, 'First token');
+  agentLogsCheckbox(dialog).click();
   button(dialog, 'Create token').click();
   await vi.waitFor(() => expect(target.querySelector('textarea')).not.toBeNull());
   const cleanup = cleanups.pop();
@@ -263,6 +237,7 @@ it('removes secret output on unmount and never renders a late issued secret', as
   const next = render(api);
   const pendingDialog = await openCreate(next);
   fillName(pendingDialog, 'Late token');
+  agentLogsCheckbox(pendingDialog).click();
   button(pendingDialog, 'Create token').click();
   await tick();
   const dispose = cleanups.pop();

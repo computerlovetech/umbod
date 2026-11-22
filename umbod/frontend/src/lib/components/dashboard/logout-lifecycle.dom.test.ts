@@ -75,8 +75,13 @@ describe('page logout lifetimes', () => {
       await vi.waitFor(() => expect(document.querySelector('a[href="/admin/connectors"]')).not.toBeNull());
     }
     const readsBeforeLogout = [usage.mock.calls.length, list.mock.calls.length, personalList.mock.calls.length, health.mock.calls.length];
-    const button = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.textContent?.trim() === 'Log out');
+    const account = document.querySelector<HTMLButtonElement>('aside button[aria-haspopup="menu"]');
+    expect(account).not.toBeNull();
+    account!.click();
+    await tick();
+    const button = Array.from(document.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]')).find((candidate) => candidate.textContent?.trim() === 'Log out');
     expect(button).toBeDefined();
+    button!.click();
     button!.click();
     await vi.waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
     expect(document.querySelector('[aria-label="Tool activity"]')).toBeNull();

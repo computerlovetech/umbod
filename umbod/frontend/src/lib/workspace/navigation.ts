@@ -3,6 +3,7 @@ export type WorkspaceNavigationIcon =
   | 'files'
   | 'gettingStarted'
   | 'settings'
+  | 'key'
   | 'administration'
   | 'connectors'
   | 'groups'
@@ -15,6 +16,12 @@ export interface WorkspaceNavigationItem {
   href: string;
   icon?: WorkspaceNavigationIcon;
   startsSection?: boolean;
+}
+
+export interface WorkspaceAccountLink {
+  label: string;
+  href: string;
+  icon: WorkspaceNavigationIcon;
 }
 
 export const workspacePresentation = {
@@ -30,13 +37,17 @@ export const personalInsightsLogsHref = '/insights/logs';
 export const workspaceSettingsHref = '/settings';
 export const workspaceTokensHref = `${workspaceSettingsHref}/tokens`;
 
+export const workspaceAccountLinks: readonly WorkspaceAccountLink[] = [
+  { label: 'Account settings', href: workspaceSettingsHref, icon: 'settings' },
+  { label: 'Access tokens', href: workspaceTokensHref, icon: 'key' }
+];
+
 const dashboardNavigation: readonly WorkspaceNavigationItem[] = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: 'dashboard' },
   { id: 'connectors', label: 'Connectors', href: '/connectors', icon: 'connectors' },
   { id: 'files', label: 'Files', href: '/files', icon: 'files' },
   { id: 'insights', label: 'Insights', href: personalInsightsHref, icon: 'analytics' },
-  { id: 'gettingStarted', label: 'Getting started', href: '/getting-started', icon: 'gettingStarted' },
-  { id: 'settings', label: 'Settings', href: workspaceSettingsHref, icon: 'settings' }
+  { id: 'gettingStarted', label: 'Getting started', href: '/getting-started', icon: 'gettingStarted' }
 ];
 
 const administratorWorkspaceNavigation: readonly WorkspaceNavigationItem[] = [

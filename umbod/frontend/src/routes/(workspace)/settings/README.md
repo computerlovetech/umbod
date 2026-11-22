@@ -1,13 +1,14 @@
 ---
 type: Software Module
-title: Workspace Settings route
+title: Account settings routes
 description: Personal settings within the authenticated workspace frame.
 ---
 
 # Files
 
-- [+page.svelte](./+page.svelte) — Settings landing with a link to Tokens.
-- [Tokens page](./tokens/+page.svelte) — Personal access token management and telemetry token creation.
-- [Settings components](../../../lib/components/settings/README.md) — Token management and one-time harness configuration.
-- [settings.test.ts](./settings.test.ts) — Settings and Tokens page composition and navigation.
+- [+layout.svelte](./+layout.svelte) — Shared account settings frame and current destination.
+- [+page.svelte](./+page.svelte) — Read-only profile using the effective workspace identity.
+- [Access tokens page](./tokens/+page.svelte) — Creation and management of personal access tokens.
+- [Settings components](../../../lib/components/settings/README.md) — Profile, account navigation, and token management.
+- [settings.test.ts](./settings.test.ts) — Breadcrumbs, destination links, profile visibility and the token anchor.
 - [Route tests](../../navigation.test.ts) — Workspace recognition and legacy telemetry redirect.

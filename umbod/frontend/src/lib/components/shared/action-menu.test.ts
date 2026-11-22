@@ -89,6 +89,29 @@ describe('neutral controlled menu mechanics', () => {
     expect(state.menu).toBeNull();
   });
 
+  test.each([
+    { alignment: 'start', x: 16, y: 716, width: 200, left: 16, top: 592 },
+    { alignment: 'end', x: 235, y: 12, width: 111, left: 146, top: 56 },
+    { alignment: 'end', x: 260, y: 12, width: 100, left: 152, top: 56 }
+  ] as const)('positions a menu at ($left, $top) without covering its trigger or crossing the viewport', ({ alignment, x, y, width, left, top }): void => {
+    const { window } = fixture();
+    window.happyDOM.setViewport({ width: 360, height: 768 });
+    const state = new ActionMenuState(() => alignment);
+    const trigger = document.querySelector<HTMLButtonElement>('#trigger')!;
+    const menu = document.querySelector<HTMLDivElement>('#menu')!;
+    const rect = { x, y, width, height: 40, left: x, right: x + width, top: y, bottom: y + 40 };
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({ ...rect, toJSON: (): typeof rect => rect });
+    vi.spyOn(menu, 'offsetWidth', 'get').mockReturnValue(200);
+    vi.spyOn(menu, 'offsetHeight', 'get').mockReturnValue(120);
+    vi.spyOn(menu, 'clientHeight', 'get').mockReturnValue(118);
+    vi.spyOn(menu, 'scrollHeight', 'get').mockReturnValue(118);
+    state.setTrigger(trigger);
+    const cleanup = state.attachMenu(menu);
+    expect(menu.style.left).toBe(`${left}px`);
+    expect(menu.style.top).toBe(`${top}px`);
+    cleanup();
+  });
+
   test('administration keeps the same state class and controlled trigger semantics', (): void => {
     expect(AdminSidebarActionMenuState).toBe(ActionMenuState);
     const body = render(AdminSidebarActionMenu, { props: { open: false, label: 'Connector actions', menu: vi.fn(), onopenchange: vi.fn() } }).body;

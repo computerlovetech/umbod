@@ -38,6 +38,17 @@ describe('workspace shell public interface', () => {
     expect(logout).not.toHaveBeenCalled();
   });
 
+  test('an inert design preview account label offers no live account controls', (): void => {
+    const { body } = render(WorkspaceShell, { props: {
+      workspaceLabel: 'Workspace', homeHref: '/dashboard', navigationItems,
+      activeItem: 'dashboard', accountFallback: 'Design preview',
+      children: createRawSnippet(() => ({ render: (): string => '<p>Catalogue</p>' }))
+    } });
+    expect(body).toContain('Design preview');
+    expect(body).not.toContain('aria-haspopup="menu"');
+    expect(body).not.toContain('Log out');
+  });
+
   test.each([false, true])('explicit content loading marks the whole main view busy: %s', (contentLoading): void => {
     const { body } = render(WorkspaceShell, { props: {
       workspaceLabel: 'Workspace', homeHref: '/dashboard', navigationItems,

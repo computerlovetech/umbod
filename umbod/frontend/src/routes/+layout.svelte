@@ -3,6 +3,7 @@
   import { afterNavigate, beforeNavigate } from '$app/navigation';
   import { WorkspaceNavigationHistory } from '#lib/workspace/navigation-history.svelte.js';
   import { provideWorkspaceNavigationHistory } from '#lib/workspace/navigation-history-context.js';
+  import { SidebarPreference, provideSidebarPreference } from '#lib/workspace/sidebar-preference.svelte.js';
   import { operationState } from '#lib/admin/operations/operation-state.svelte.js';
   import { usesWorkspaceShell } from '#lib/workspace/navigation.js';
   import { ToastProvider } from '#lib/components/feedback/index.js';
@@ -19,6 +20,7 @@
 
   const navigationHistory = new WorkspaceNavigationHistory(new URL(page.url.href), hasSuccessfulRoute());
   provideWorkspaceNavigationHistory(navigationHistory);
+  provideSidebarPreference(new SidebarPreference());
 
   beforeNavigate(({ from, to, shallow }) => {
     if (!shallow) navigationHistory.startNavigation(from?.url ?? null, to?.url ?? null, hasSuccessfulRoute());

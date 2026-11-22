@@ -133,12 +133,12 @@ describe('independent workspace access', () => {
     expect(dashboard.phase).toBe('ready');
     expect(dashboard.connectors.length).toBeGreaterThan(0);
     expect(access.adminAccess).toBe('checking');
-    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/connectors', '/files', '/insights/agent-behaviour', '/getting-started', '/settings']);
+    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/connectors', '/files', '/insights/agent-behaviour', '/getting-started']);
     complete(user);
     await readingAccess;
     expect(access.accountIdentity).toMatchObject({ kind: 'visible', name: 'Alex' });
     expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual([
-      '/dashboard', '/connectors', '/files', '/insights/agent-behaviour', '/getting-started', '/settings', '/admin/connectors'
+      '/dashboard', '/connectors', '/files', '/insights/agent-behaviour', '/getting-started', '/admin/connectors'
     ]);
     dashboard.dispose();
     access.dispose();
@@ -157,7 +157,7 @@ describe('independent workspace access', () => {
     await access.load();
     expect(access.accountIdentity).toMatchObject({ kind: 'visible', name: 'Alex' });
     expect(access.adminAccess).toBe('denied');
-    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/connectors', '/files', '/insights/agent-behaviour', '/getting-started', '/settings']);
+    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/connectors', '/files', '/insights/agent-behaviour', '/getting-started']);
     access.dispose();
   });
 

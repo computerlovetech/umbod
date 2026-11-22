@@ -19,6 +19,8 @@
     <circle cx="13.5" cy="6" r="2.5" />
     <circle cx="9.5" cy="12" r="2.5" />
     <circle cx="16.5" cy="18" r="2.5" />
+  {:else if name === 'key'}
+    <path d="M15 3a6 6 0 0 0-5.7 7.8L3 17v4h4v-3h3v-3l1.2-1.2A6 6 0 1 0 15 3ZM16 8h.01" />
   {:else if name === 'administration'}
     <path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6Z" />
     <path d="m8 12 3 3 5-6" />

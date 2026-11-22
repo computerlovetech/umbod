@@ -3,6 +3,7 @@ import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { administrationNavigation, workspaceNavigation, workspacePresentation } from '#lib/workspace/navigation.js';
 import { WorkspaceNavigationHistory } from '#lib/workspace/navigation-history.svelte.js';
 import { workspaceNavigationHistoryKey } from '#lib/workspace/navigation-history-context.js';
+import { SidebarPreference, sidebarPreferenceKey } from '#lib/workspace/sidebar-preference.svelte.js';
 import AdminShell from '#lib/components/admin/AdminShell.svelte';
 import WorkspaceShell from './WorkspaceShell.svelte';
 
@@ -17,6 +18,68 @@ afterEach(async (): Promise<void> => {
 });
 
 describe('contextual sidebar rendering', (): void => {
+  test.each([false, true])('the desktop toggle preserves only eligible destinations and focus: administration %s', async (allowed: boolean): Promise<void> => {
+    component = mount(WorkspaceShell, {
+      target: document.body,
+      props: {
+        ...workspacePresentation, navigationItems: workspaceNavigation(allowed), activeItem: 'files',
+        children: createRawSnippet(() => ({ render: (): string => '<h1>Files</h1>' }))
+      }
+    });
+    await tick();
+    const toggle = document.querySelector<HTMLButtonElement>('button[aria-label="Collapse sidebar"]')!;
+    expect(toggle).not.toBeNull();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const sidebar = document.getElementById(toggle.getAttribute('aria-controls')!);
+    expect(sidebar?.tagName).toBe('ASIDE');
+    expect(sidebar?.contains(toggle)).toBe(false);
+    toggle.focus();
+    toggle.click();
+    await tick();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toBe('Expand sidebar');
+    expect(document.activeElement).toBe(toggle);
+    expect(sidebar?.querySelector('a[title="Umbod"]')?.getAttribute('href')).toBe('/dashboard');
+    expect(sidebar?.querySelector('nav a[title="Files"][aria-current="page"]')?.textContent.trim()).toBe('Files');
+    expect(Boolean(sidebar?.querySelector('nav a[title="Administration"]'))).toBe(allowed);
+    toggle.click();
+    await tick();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  test('the root preference retains icon-rail controls when replacing the workspace shell with administration', async (): Promise<void> => {
+    const context = new Map([[sidebarPreferenceKey, new SidebarPreference()]]);
+    const children = createRawSnippet(() => ({ render: (): string => '<p>Existing page</p>' }));
+    component = mount(WorkspaceShell, {
+      target: document.body, context,
+      props: { ...workspacePresentation, navigationItems: workspaceNavigation(true), activeItem: 'files', children }
+    });
+    await tick();
+    const collapse = document.querySelector<HTMLButtonElement>('button[aria-label="Collapse sidebar"]')!;
+    expect(collapse).not.toBeNull();
+    collapse.click();
+    await tick();
+    await unmount(component);
+    component = mount(AdminShell, {
+      target: document.body, context,
+      props: { activeItem: 'namespaces', accountIdentity: { kind: 'hidden' }, children }
+    });
+    await tick();
+    expect(document.querySelector('button[aria-label="Expand sidebar"]')?.getAttribute('aria-expanded')).toBe('false');
+    const sidebar = document.querySelector('aside');
+    expect(sidebar?.querySelector('a[title="Back to workspace"]')?.getAttribute('href')).toBe('/dashboard');
+    expect(sidebar?.querySelector('nav a[title="Shared namespaces"][aria-current="page"]')?.getAttribute('href')).toBe('/admin/namespaces');
+    const account = sidebar?.querySelector<HTMLButtonElement>('button[aria-label="Account menu"]')!;
+    expect(account?.querySelector('svg')).not.toBeNull();
+    account.focus();
+    account.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    await tick();
+    await Promise.resolve();
+    expect(account.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement?.getAttribute('href')).toBe('/settings');
+    expect(sidebar?.querySelector('[role="menuitem"][href="/settings/tokens"]')).not.toBeNull();
+  });
   test.each([false, true])('workspace renders preview icons and only eligible navigation: administration %s', async (allowed: boolean): Promise<void> => {
     component = mount(WorkspaceShell, {
       target: document.body,
@@ -29,8 +92,8 @@ describe('contextual sidebar rendering', (): void => {
     await tick();
     const links = Array.from(document.querySelectorAll('nav a'));
     expect(links.map((link): string => link.textContent.trim())).toEqual(allowed
-      ? ['Dashboard', 'Connectors', 'Files', 'Insights', 'Getting started', 'Settings', 'Administration']
-      : ['Dashboard', 'Connectors', 'Files', 'Insights', 'Getting started', 'Settings']);
+      ? ['Dashboard', 'Connectors', 'Files', 'Insights', 'Getting started', 'Administration']
+      : ['Dashboard', 'Connectors', 'Files', 'Insights', 'Getting started']);
     for (const link of links) {
       expect(link.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
       expect(link.querySelector('svg')?.getAttribute('focusable')).toBe('false');

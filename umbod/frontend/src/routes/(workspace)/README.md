@@ -13,4 +13,4 @@ description: Persistent user workspace layout and child routes with unchanged pu
 - [Files](./files/+page.svelte) — Filesystem content at /files.
 - [Insights](./insights/+layout.svelte) — Personal diagnostic reports and log analytics, scoped to the signed-in user.
 - [Getting started](./getting-started/README.md) — Harness onboarding under the retained workspace frame.
-- [Settings](./settings/README.md) — Personal settings landing and token management.
+- [Account settings](./settings/README.md) — Read-only profile and personal access token management.

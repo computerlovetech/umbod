@@ -20,7 +20,7 @@ description: Workspace frames, navigation, identity, dashboard layout, and share
 - [AdminPermissionRow](../src/lib/components/admin/shared/AdminPermissionRow.svelte) — Responsive permission-list row with shared identity layout and feature-owned controls or expanded details.
 - [CapabilityCatalogGrid](../src/lib/components/admin/shared/CapabilityCatalogGrid.svelte) — Responsive list grid; use to arrange capability cards consistently, supplying list items as content.
 - [ScrollableToolCatalog](../src/lib/components/admin/shared/ScrollableToolCatalog.svelte) — Height-bounded tool-list region; use for independently scrolling tool catalogues with a stable scrollbar gutter.
-- [WorkspaceShell](../src/lib/components/shared/workspace/WorkspaceShell.svelte) — Contextual sidebar with a mobile drawer, optional return link, account and logout; parents own destinations and eligibility.
+- [WorkspaceShell](../src/lib/components/shared/workspace/WorkspaceShell.svelte) — Workspace frame with a collapsible desktop icon rail, mobile drawer, account menu, and optional return link; parents supply eligible destinations.
 - [AccountPicture](../src/lib/components/header/AccountPicture.svelte) — Account image with accessible placeholder; use for consistent user identity imagery in headers and navigation.
 
 ## Dashboard layout

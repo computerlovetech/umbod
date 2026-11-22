@@ -7,8 +7,9 @@
   import { workspaceTokensHref } from '#lib/workspace/navigation.js';
   import type { TelemetryInstaller } from './telemetry-installer';
 
-  let { installerBaseUrl, telemetryInstaller }: {
+  let { installerBaseUrl, logsEndpoint, telemetryInstaller }: {
     installerBaseUrl: string;
+    logsEndpoint?: string;
     telemetryInstaller?: TelemetryInstaller;
   } = $props();
 
@@ -76,7 +77,17 @@
         {/if}
       </fieldset>
       {#if installation.harness === 'codex'}
-        <a class="manual-telemetry" href={workspaceTokensHref}>Generate Codex telemetry TOML in Tokens</a>
+        <details class="manual-telemetry">
+          <summary>Set up Codex logs manually</summary>
+          <ol>
+            <li><a href={workspaceTokensHref} target="_blank" rel="noreferrer">Create an access token for sending agent logs</a> and copy it.</li>
+            <li>In <code>~/.codex/config.toml</code>, update <code>otel.exporter.otlp-http</code> to use JSON and set the <code>Authorization</code> header to <code>Bearer</code> followed by your token. Keep existing headers and settings.</li>
+            {#if logsEndpoint}<li>Set the exporter endpoint to <code>{logsEndpoint}</code>.</li>{/if}
+            <li>Disable <code>analytics.enabled</code>. Under <code>otel</code>, disable <code>log_user_prompt</code>, <code>log_agent_responses</code> and <code>log_guardian_assessments</code>. Set <code>trace_exporter</code> and <code>metrics_exporter</code> to <code>none</code>.</li>
+            <li>Keep the config private and restart Codex.</li>
+          </ol>
+          <a href="https://developers.openai.com/codex/config-advanced#observability-and-telemetry" target="_blank" rel="noreferrer">Codex telemetry documentation</a>
+        </details>
       {/if}
     {:else}
       <dl class="summary">
@@ -159,7 +170,8 @@
   .choice input { flex: none; margin: 4px 0 0 auto; accent-color: var(--admin-accent); }
   .choice img, .choice svg { flex: none; width: 24px; height: 24px; object-fit: contain; }
   .choice svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-  .manual-telemetry { display: inline-block; margin-top: 12px; }
+  .manual-telemetry { margin-top: 12px; overflow-wrap: anywhere; }
+  .manual-telemetry summary { cursor: pointer; }
   .choice:has(:focus-visible), h2:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
   .summary { --columns: 3; }
   .summary div { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 9px 12px; }

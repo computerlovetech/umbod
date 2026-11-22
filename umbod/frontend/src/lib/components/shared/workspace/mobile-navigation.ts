@@ -1,4 +1,4 @@
-export function attachMobileNavigation(panel: HTMLElement): (() => void) | undefined {
+export function attachMobileNavigation(panel: HTMLElement, onModeChange?: () => void): (() => void) | undefined {
   if (typeof panel.hidePopover !== 'function') return;
 
   const mobile = window.matchMedia('(max-width: 720px)');
@@ -6,6 +6,11 @@ export function attachMobileNavigation(panel: HTMLElement): (() => void) | undef
   function syncPopover(): void {
     if (!mobile.matches && panel.matches(':popover-open')) panel.hidePopover();
     panel.toggleAttribute('popover', mobile.matches);
+  }
+
+  function changeMode(): void {
+    syncPopover();
+    onModeChange?.();
   }
 
   function dismissOnNavigation(event: MouseEvent): void {
@@ -16,10 +21,10 @@ export function attachMobileNavigation(panel: HTMLElement): (() => void) | undef
 
   panel.querySelector('.mobile-navigation-close button')?.setAttribute('autofocus', '');
   syncPopover();
-  mobile.addEventListener('change', syncPopover);
+  mobile.addEventListener('change', changeMode);
   panel.addEventListener('click', dismissOnNavigation);
   return (): void => {
-    mobile.removeEventListener('change', syncPopover);
+    mobile.removeEventListener('change', changeMode);
     panel.removeEventListener('click', dismissOnNavigation);
   };
 }

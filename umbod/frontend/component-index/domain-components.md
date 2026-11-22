@@ -63,7 +63,7 @@ description: Dashboard charts, insights, file previews, connector and tool prese
 - [Agent behaviour composition](../src/lib/components/admin/agent-behaviour/README.md) — Feature-owned pattern editing and report inspection; reuse its canonical controls, not these administrator workflows.
 - [Dashboard composition](../src/lib/components/dashboard/README.md) — Separate feature-owned usage and connector pages; reuse indexed controls, not either page workflow.
 - [Getting started composition](../src/lib/components/getting-started/README.md) — Feature-owned harness installer wizard and optional private script preparation.
-- [Settings composition](../src/lib/components/settings/README.md) — Feature-owned personal token management and telemetry token creation.
+- [Account settings composition](../src/lib/components/settings/README.md) — Feature-owned profile and personal access navigation, token management, and telemetry setup.
 - [Files compositions](../src/lib/components/files/README.md) — Feature-owned Locations navigation, details, sharing and mutation workflows; reuse neutral layouts and controls, not these compositions.
 - [Component modules](../src/lib/components/README.md) — Browse all presentation modules; this index selects reusable building blocks rather than feature screens or actor-owned workflows.
 - [Shared UI boundaries](../../project/architecture-records/ADR-007-actor-specific-ui-composition.md) — Use shared presentation for common mechanics; keep actor-specific policy and data loading in feature compositions.

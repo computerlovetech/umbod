@@ -3,14 +3,17 @@ import type { PersonalAccessTokensApi } from '#lib/personal-access-tokens/api.js
 import type { TokenMetadata } from '#lib/personal-access-tokens/domain/schemas.js';
 import type { ClipboardWriter } from '#lib/admin/clipboard.js';
 import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
-import type { TelemetrySetupSource } from '#lib/telemetry-setup/api.js';
-import type { TelemetrySetup } from '#lib/telemetry-setup/domain/schemas.js';
-import { telemetryConfiguration, type TelemetryAgent } from './telemetry-formatters';
 
-export class TelemetrySetupState {
-  private currentAgent = $state<TelemetryAgent>('codex');
+const agentLogsScope = 'telemetry:write';
+
+function permissionLabel(scope: string): string {
+  if (scope === agentLogsScope) return 'Send agent logs';
+  return scope.replaceAll(':', ' · ').replace(/^./, (initial: string): string => initial.toUpperCase());
+}
+
+export class PersonalTokenState {
   private creationDialogOpen = $state(false);
-  private setup = $state.raw<TelemetrySetup | undefined>();
+  private agentLogs = $state(false);
   private name = $state('');
   private expiration = $state(30);
   readonly expirationOptions: readonly number[] = Object.freeze([7, 30, 60, 90]);
@@ -28,31 +31,20 @@ export class TelemetrySetupState {
   private loading = $state(false);
   private secretRevision = 0;
 
-  constructor(private readonly api: PersonalAccessTokensApi, private readonly source: TelemetrySetupSource, private readonly clipboard: ClipboardWriter, private readonly now: () => number = Date.now) {}
+  constructor(private readonly api: PersonalAccessTokensApi, private readonly clipboard: ClipboardWriter, private readonly now: () => number = Date.now) {}
 
   get createDialogOpen(): boolean { return this.creationDialogOpen; }
-  get agent(): TelemetryAgent { return this.currentAgent; }
-  get agentOptions(): SelectOption[] {
-    return [{ value: 'codex', label: 'Codex' }, { value: 'claude-code', label: 'Claude Code' }];
-  }
+  get allowsAgentLogs(): boolean { return this.agentLogs; }
   get expirationSelectOptions(): SelectOption[] {
     return this.expirationOptions.map((days: number): SelectOption => ({ value: String(days), label: `${days} days` }));
   }
   get tokenName(): string { return this.name; }
   get expirationDays(): number { return this.expiration; }
-  get canGenerate(): boolean { return this.access === 'ready' && !this.loading && this.setup?.status === 'available'; }
-  get availabilityMessage(): string {
-    if (this.loading) return 'Checking telemetry availability…';
-    if (!this.setup) return 'Could not load telemetry setup. Contact your operator if the problem persists.';
-    if (this.setup.status === 'available') return '';
-    return this.setup.reason === 'disabled'
-      ? 'Telemetry collection is disabled on this instance. Contact your operator to enable it.'
-      : 'The telemetry collector endpoint is not configured on this instance. Contact your operator to configure it.';
-  }
+  get canGenerate(): boolean { return !this.disposed && this.access === 'ready' && !this.loading; }
   get status(): string { return this.access; }
   get tokens(): readonly TokenMetadata[] { return this.rows; }
   get scopeOptions(): SelectOption[] {
-    return this.scopes.length ? [{ value: '', label: 'All scopes' }, ...this.scopes.map((scope: string): SelectOption => ({ value: scope, label: scope }))] : [];
+    return this.scopes.length ? [{ value: '', label: 'All permissions' }, ...this.scopes.map((scope: string): SelectOption => ({ value: scope, label: permissionLabel(scope) }))] : [];
   }
   get selectedScope(): string { return this.scope; }
   get visibleTokens(): readonly TokenMetadata[] {
@@ -64,7 +56,8 @@ export class TelemetrySetupState {
   get error(): string { return this.message; }
   get pending(): boolean { return this.operation !== 'idle'; }
   get creating(): boolean { return this.operation === 'create'; }
-  get configuration(): string { return this.output; }
+  get issuedToken(): string { return this.output; }
+  permissionsFor = (token: TokenMetadata): string => token.scopes.map(permissionLabel).join(', ');
   get copyPending(): boolean { return this.copying; }
   get copySucceeded(): boolean { return this.copied; }
 
@@ -73,7 +66,7 @@ export class TelemetrySetupState {
     this.dismiss();
     this.name = '';
     this.expiration = 30;
-    this.currentAgent = 'codex';
+    this.agentLogs = false;
     this.message = '';
     this.creationDialogOpen = true;
   };
@@ -84,11 +77,7 @@ export class TelemetrySetupState {
     this.dismiss();
   };
 
-  setAgent = (value: string): void => {
-    if (value !== 'codex' && value !== 'claude-code') return;
-    this.currentAgent = value;
-    this.dismiss();
-  };
+  setAgentLogs = (enabled: boolean): void => { this.agentLogs = enabled; };
   setTokenName = (value: string): void => { this.name = value; };
   setExpirationDays = (value: number): void => {
     if (this.expirationOptions.includes(value)) this.expiration = value;
@@ -101,31 +90,33 @@ export class TelemetrySetupState {
     this.access = 'loading';
     this.message = '';
     try {
-      await Promise.all([this.loadTokens(), this.loadSetup()]);
+      await this.loadTokens();
     } finally {
       this.loading = false;
     }
   };
 
   create = async (): Promise<void> => {
-    if (this.disposed || this.pending || !this.canGenerate || this.setup?.status !== 'available') return;
+    if (this.pending || !this.canGenerate || this.output) return;
     this.message = '';
     if (!this.name.trim() || this.name.trim().length > 256 || !this.expirationOptions.includes(this.expiration)) {
       this.message = 'Enter a token name of 1–256 characters and choose a supported expiration duration.';
       return;
     }
-    const endpoint = this.setup.logs_endpoint;
+    if (!this.agentLogs) {
+      this.message = 'Select at least one permission.';
+      return;
+    }
     const expiresAt = new Date(this.now() + this.expiration * 86_400_000).toISOString();
     this.dismiss();
     const revision = this.secretRevision;
-    const agent = this.currentAgent;
     this.operation = 'create';
     try {
       const issued = await this.api.tokens.create({ name: this.name.trim(), expires_at: expiresAt, permissions: { telemetry: 'write' } });
       if (this.disposed) return;
       this.replaceRows([issued.metadata, ...this.rows.filter((row: TokenMetadata): boolean => row.token_id !== issued.metadata.token_id)]);
       if (revision === this.secretRevision) {
-        this.output = telemetryConfiguration(agent, endpoint, issued.token);
+        this.output = issued.token;
         this.outputTokenId = issued.metadata.token_id;
       }
     } catch {
@@ -161,7 +152,7 @@ export class TelemetrySetupState {
       await this.clipboard.writeText(this.output);
       if (!this.disposed && revision === this.secretRevision) this.copied = true;
     } catch {
-      if (!this.disposed && revision === this.secretRevision) this.message = 'Could not copy configuration. Select and copy it manually.';
+      if (!this.disposed && revision === this.secretRevision) this.message = 'Could not copy the token. Select and copy it manually.';
     } finally {
       this.copying = false;
     }
@@ -190,22 +181,6 @@ export class TelemetrySetupState {
       this.access = 'ready';
     } catch (error: unknown) {
       if (!this.disposed) this.failure(error, 'Could not load personal access tokens. Contact your operator if the problem persists.');
-    }
-  }
-
-  private async loadSetup(): Promise<void> {
-    const previousEndpoint = this.setup?.status === 'available' ? this.setup.logs_endpoint : undefined;
-    let setup: TelemetrySetup | undefined;
-    try {
-      setup = await this.source.get();
-    } catch {
-      setup = undefined;
-    }
-    if (this.disposed) return;
-    this.setup = setup;
-    if (setup?.status !== 'available' || setup.logs_endpoint !== previousEndpoint) {
-      this.creationDialogOpen = false;
-      this.dismiss();
     }
   }
 

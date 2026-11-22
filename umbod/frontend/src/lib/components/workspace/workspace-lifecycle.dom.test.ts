@@ -54,11 +54,16 @@ test('root retains sidebar and account DOM across child routes and reloads only 
   component = mount(WorkspaceRootHarness, { target: document.body, props: { route } });
   await vi.waitFor(() => expect(document.querySelector('.account-name')?.textContent).toBe('Member'));
   const sidebar = document.querySelector('[aria-label="Workspace sidebar"]');
-  const account = document.querySelector('.account-details');
-  const logout = document.querySelector('.logout-action button');
+  const account = sidebar?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
   expect(sidebar).not.toBeNull();
+  expect(account).toBeDefined();
   expect(account).not.toBeNull();
-  expect(logout).not.toBeNull();
+  account!.click();
+  await tick();
+  expect(document.querySelector('[role="menu"] a[href="/settings"]')?.textContent?.trim()).toBe('Account settings');
+  expect(document.querySelector('[role="menu"] a[href="/settings/tokens"]')?.textContent?.trim()).toBe('Access tokens');
+  document.body.click();
+  await tick();
   let heading = document.querySelector('h1');
 
   for (const path of ['/connectors', '/files', '/getting-started', '/settings', '/settings/tokens', '/dashboard']) {
@@ -69,9 +74,13 @@ test('root retains sidebar and account DOM across child routes and reloads only 
     expect(document.querySelector('h1')).not.toBe(heading);
     heading = document.querySelector('h1');
     expect(document.querySelector('[aria-label="Workspace sidebar"]')).toBe(sidebar);
-    expect(document.querySelector('.account-details')).toBe(account);
-    expect(document.querySelector('.logout-action button')).toBe(logout);
-    expect(document.querySelector('nav a[aria-current="page"]')?.getAttribute('href')).toBe(path === '/settings/tokens' ? '/settings' : path);
+    expect(sidebar?.querySelector('button[aria-haspopup="menu"]')).toBe(account);
+    const currentLink = document.querySelector('nav a[aria-current="page"]');
+    if (path.startsWith('/settings')) {
+      expect(currentLink).toBeNull();
+    } else {
+      expect(currentLink?.getAttribute('href')).toBe(path);
+    }
     expect(get).toHaveBeenCalledTimes(1);
   }
 

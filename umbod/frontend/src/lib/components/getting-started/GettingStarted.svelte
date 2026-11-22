@@ -29,5 +29,5 @@
 <svelte:head><title>Getting started · Umbod</title></svelte:head>
 
 <SubpageContainer title="Getting started" lede="Install the Umbod plugin for Codex or Claude Code so your coding agent can use the tools available to you in Umbod.">
-  <McpSetupGuide {installerBaseUrl} telemetryInstaller={availability.available ? telemetryInstaller : undefined} />
+  <McpSetupGuide {installerBaseUrl} logsEndpoint={availability.logsEndpoint} telemetryInstaller={availability.logsEndpoint ? telemetryInstaller : undefined} />
 </SubpageContainer>
