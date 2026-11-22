@@ -1,7 +1,7 @@
 import type { ClipboardWriter } from '#lib/admin/clipboard.js';
 import type { ToastApi } from '#lib/components/feedback/toast-state.svelte.js';
 
-export type CopyFeedback = 'idle' | 'copied' | 'failed';
+export type CopyFeedback = 'idle' | 'copied' | 'selected' | 'failed';
 
 export class CopyableValueState {
   feedback = $state<CopyFeedback>('idle');
@@ -12,14 +12,19 @@ export class CopyableValueState {
     private readonly toast: ToastApi
   ) {}
 
-  copy = async (): Promise<void> => {
+  copy = async (selectValue?: () => boolean): Promise<void> => {
     try {
       await this.clipboard.writeText(this.value);
       this.feedback = 'copied';
-      this.toast.success('URI copied to clipboard');
+      this.toast.success('Copied to clipboard');
     } catch {
+      if (selectValue?.()) {
+        this.feedback = 'selected';
+        this.toast.warning('Value selected. Use your keyboard shortcut to copy it.');
+        return;
+      }
       this.feedback = 'failed';
-      this.toast.error('Could not copy URI');
+      this.toast.error('Could not copy to clipboard');
     }
   };
 }

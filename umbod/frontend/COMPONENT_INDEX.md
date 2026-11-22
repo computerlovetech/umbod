@@ -99,7 +99,10 @@ tags:
 - [ConnectorIcon](src/lib/components/admin/connectors/ConnectorIcon.svelte) — Decorative image or initials in standard sizes; use for connector identity, with accessible naming supplied elsewhere.
 - [ConnectorSidebarList](src/lib/components/admin/connectors/ConnectorSidebarList.svelte) — Controlled connector rows with optional linked peers; use to combine local selection and navigation in one sidebar.
 - [UnifiedConnectorWorkspace](src/lib/components/admin/connectors/UnifiedConnectorWorkspace.svelte) — Shared admin connector layout; use for mixed inventories with route-owned selection, details, and actions.
-- [ConnectorDetailSummary](src/lib/components/admin/connectors/ConnectorDetailSummary.svelte) — Connector header and slotted detail layout; use for consistent connector identity, descriptions, and technical details.
+- [ConnectorDetailSummary](src/lib/components/admin/connectors/ConnectorDetailSummary.svelte) — Connector header and optional technical-details disclosure; compose the reference list with connector-owned groups.
+- [PersonalServerPolicyPanel](src/lib/components/admin/personal-mcp-servers/PersonalServerPolicyPanel.svelte) — Admin-only OAuth configuration and check state alongside private user responsibilities.
+- [ConnectorStatusOverview](src/lib/components/admin/connectors/ConnectorStatusOverview.svelte) — Icon-led connector indicators with an optional spotlight; use with caller-selected status and context fields.
+- [ConnectorReferenceGroup](src/lib/components/admin/connectors/ConnectorReferenceGroup.svelte) — Titled definition-list section; use with technical-detail rows inside the connector reference list.
 - [ConnectorDetailItem](src/lib/components/admin/connectors/ConnectorDetailItem.svelte) — Definition-list label/value row with indicator tones; use for connector summary or technical-detail properties.
 - [ConnectorListEmptyState](src/lib/components/admin/connectors/ConnectorListEmptyState.svelte) — Empty connector split workspace with a centred sidebar icon, accessible message and blank detail pane; use for empty connector inventories.
 - [AdminPublicationStatus](src/lib/components/admin/shared/AdminPublicationStatus.svelte) — Publication-status pill; use for published, draft, or unconfigured states, not as a general-purpose badge.

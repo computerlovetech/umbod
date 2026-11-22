@@ -24,7 +24,7 @@ description: Actor-owned registration, OAuth policy editing and pre-publication 
 - [personal-server-edit-dialog.dom.test.ts](personal-server-edit-dialog.dom.test.ts) — Automatic edit discovery, pending/failure gates, backend-proposed methods, manual retention and explicit save tests.
 - [PolicyFields.svelte](PolicyFields.svelte) — OAuth application settings and explicit discovered-setting acceptance.
 - [policy-form.svelte.ts](policy-form.svelte.ts) — Backend-proposed automatic client transitions, manual settings, edit preservation and safe secret clearing.
-- [PersonalServerPolicyPanel.svelte](PersonalServerPolicyPanel.svelte) — Group access and owner authorization guidance.
+- [PersonalServerPolicyPanel.svelte](PersonalServerPolicyPanel.svelte) — Admin-owned OAuth policy and check state alongside user-owned sign-in and discovery.
 - [PersonalServerDialog.svelte](PersonalServerDialog.svelte) — Feature dialog composition over shared modal mechanics.
 - [modal-dialog.ts](modal-dialog.ts) — Dialog lifecycle integration.
 - [form-validation.ts](form-validation.ts) — Native validation integration that clears confidential input.

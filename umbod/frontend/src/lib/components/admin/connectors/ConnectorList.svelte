@@ -13,7 +13,10 @@
   import ConnectorCapabilities from '#lib/components/admin/connectors/ConnectorCapabilities.svelte';
   import ConnectorConfigurationForm from '#lib/components/admin/connectors/ConnectorConfigurationForm.svelte';
   import ConnectorDetailItem from '#lib/components/admin/connectors/ConnectorDetailItem.svelte';
+  import ConnectorStatusOverview from './ConnectorStatusOverview.svelte';
   import ConnectorDetailSummary from '#lib/components/admin/connectors/ConnectorDetailSummary.svelte';
+  import ConnectorReferenceGroup from '#lib/components/admin/connectors/ConnectorReferenceGroup.svelte';
+  import CopyableValue from '#lib/components/admin/connectors/CopyableValue.svelte';
   import ConnectorPublicationMenuAction from '#lib/components/admin/connectors/ConnectorPublicationMenuAction.svelte';
   import UnifiedConnectorWorkspace from '#lib/components/admin/connectors/UnifiedConnectorWorkspace.svelte';
   import type { UnifiedConnectorKind, UnifiedConnectorRow } from '#lib/admin/unified-connectors.js';
@@ -212,13 +215,18 @@
         {#snippet description()}
           <p class="description">{state.selectedConnector.description}</p>
         {/snippet}
-        {#snippet summary()}
-          <ConnectorDetailItem label="Source" tone="neutral">{state.selectedConnector.sourceLabel}</ConnectorDetailItem>
-          <ConnectorDetailItem label="Tools" tone="neutral">{state.selectedConnector.tools.length} tools</ConnectorDetailItem>
+        {#snippet statusOverview()}
+          {@const toolCount = state.selectedConnector.tools.length}
+          <ConnectorStatusOverview entries={[
+            { label: 'Source', value: state.selectedConnector.sourceLabel, icon: 'source' },
+            { label: 'Tools', value: toolCount === 1 ? '1 tool' : `${toolCount} tools`, icon: 'tools' }
+          ]} />
         {/snippet}
         {#snippet technicalDetails()}
-          <ConnectorDetailItem label="Connector ID" variant="detail"><code>{state.selectedConnector.id}</code></ConnectorDetailItem>
-          <ConnectorDetailItem label="Publication status" variant="detail">{state.selectedConnector.publicationStatus}</ConnectorDetailItem>
+          <ConnectorReferenceGroup title="Identity">
+            <ConnectorDetailItem label="Connector ID" variant="detail"><CopyableValue value={state.selectedConnector.id} inlineLabel="connector ID" /></ConnectorDetailItem>
+            <ConnectorDetailItem label="Publication status" variant="detail">{state.selectedConnector.publicationStatus}</ConnectorDetailItem>
+          </ConnectorReferenceGroup>
         {/snippet}
 
         <ConnectorCapabilities selected={selectedCapability} counts={capabilityCounts} currentUrl={new URL((page.shallow?.url ?? page.url).href)}>

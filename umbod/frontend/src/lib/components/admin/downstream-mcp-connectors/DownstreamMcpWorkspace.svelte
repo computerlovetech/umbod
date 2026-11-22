@@ -10,7 +10,9 @@
   import ConnectorCapabilities from '#lib/components/admin/connectors/ConnectorCapabilities.svelte';
   import ConnectorDetailItem from '#lib/components/admin/connectors/ConnectorDetailItem.svelte';
   import CopyableValue from '#lib/components/admin/connectors/CopyableValue.svelte';
+  import ConnectorStatusOverview, { type ConnectorStatusSpotlight } from '../connectors/ConnectorStatusOverview.svelte';
   import ConnectorDetailSummary from '#lib/components/admin/connectors/ConnectorDetailSummary.svelte';
+  import ConnectorReferenceGroup from '#lib/components/admin/connectors/ConnectorReferenceGroup.svelte';
   import UnifiedConnectorWorkspace from '#lib/components/admin/connectors/UnifiedConnectorWorkspace.svelte';
   import type { UnifiedConnectorKind, UnifiedConnectorRow } from '#lib/admin/unified-connectors.js';
   import PublicationConfirmationModal from '#lib/components/admin/connectors/PublicationConfirmationModal.svelte';
@@ -82,6 +84,13 @@
       };
     };
   }
+  const credentialNames = { bearer: 'Bearer token', basic: 'Basic auth credential', custom: 'Custom header credential' } as const;
+
+  const discoveryIndicators = {
+    healthy: { value: 'Healthy', icon: 'check', tone: 'success' },
+    unhealthy: { value: 'Discovery failed', icon: 'failed', tone: 'danger' },
+    unknown: { value: 'Unknown', icon: 'unknown', tone: 'neutral' }
+  } as const;
 </script>
 {#if !state.operations.authenticationLost}
 <DownstreamMcpSetupModal {state} connector={state.modal === 'configure' ? detailSelected : undefined} message={form?.message} values={form?.mode === 'create' ? form.values : undefined} />
@@ -135,31 +144,66 @@
  {#if state.detailLoading}<div class="feedback"><DelayedSpinner active label="Loading MCP connector details" /></div>
  {:else if state.detailFailed}<div class="feedback" role="alert"><p>Connector details are unavailable.</p><Button onclick={state.retrySelected}>Try again</Button></div>
  {:else if selectedDetailReady && detailSelected}<ConnectorDetailSummary headingId="selected-mcp-connector-heading" title={detailSelected.display_name} iconDataUrl={detailSelected.icon_url || undefined} publicationStatus={detailSelected.publication_status}>
-  {#snippet description()}<p>{detailSelected.capability_description}</p>{/snippet}
-  {#snippet summary()}
-   <ConnectorDetailItem label="Authorization mode" tone="neutral">{detailSelected.authorization_mode === 'personal' ? 'Personal' : 'Shared'}</ConnectorDetailItem>
+  {#snippet description()}{#if detailSelected.authorization_mode === 'shared'}<p>{detailSelected.capability_description}</p>{/if}{/snippet}
+  {#snippet statusOverview()}
    {#if detailSelected.authorization_mode === 'shared'}
-   <ConnectorDetailItem label="Discovery health" tone={detailSelected.health.status === 'healthy' ? 'success' : detailSelected.health.status === 'unhealthy' ? 'danger' : 'warning'}>{detailSelected.health.status}</ConnectorDetailItem>
-   <ConnectorDetailItem label="Authentication" tone={detailSelected.auth_mode === 'none' ? 'neutral' : detailSelected.credential_configured ? 'success' : 'warning'}>{detailSelected.auth_mode === 'none' ? 'Not required' : detailSelected.credential_configured ? 'Bearer token configured' : 'Bearer token missing'}</ConnectorDetailItem>
-   <ConnectorDetailItem label="Discovered tools" tone="neutral">{catalog?.tools.length ?? 0} tools</ConnectorDetailItem>
+    {@const authenticationRequired = detailSelected.auth_mode === 'static_bearer'}
+    {@const missingCredential = authenticationRequired && !detailSelected.credential_configured}
+    {@const credentialName = credentialNames[detailSelected.header_type]}
+    {@const authentication = {
+      label: 'Authentication',
+      value: authenticationRequired ? `${credentialName} ${missingCredential ? 'missing' : 'configured'}` : 'Not required',
+      icon: missingCredential ? 'warning' : authenticationRequired ? 'lock' : 'open',
+      tone: missingCredential ? 'warning' : 'neutral'
+    } satisfies ConnectorStatusSpotlight}
+    {@const discoveryStatus = detailSelected.health.status}
+    {@const discovery = {
+      label: 'Discovery health',
+      ...discoveryIndicators[discoveryStatus],
+      value: discoveryStatus === 'unknown' && !detailSelected.health.checked_at ? 'Not checked' : discoveryIndicators[discoveryStatus].value
+    } satisfies ConnectorStatusSpotlight}
+    {@const toolCount = catalog?.tools.length ?? 0}
+    <ConnectorStatusOverview spotlight={missingCredential ? authentication : discovery} entries={[
+      { label: 'Authorization mode', value: 'Shared', icon: 'shared' },
+      missingCredential ? discovery : authentication,
+      { label: 'Discovered tools', value: toolCount === 1 ? '1 tool' : `${toolCount} tools`, icon: 'tools' }
+    ]} />
+   {:else}
+    {#key detailSelected.connector_id}
+      <PersonalMcpDetails
+        state={state.personalSetup}
+        connectorId={detailSelected.connector_id}
+        locked={state.operations.locked}
+        oncheck={(trigger) => state.checkConfiguration(trigger, detailSelected)}
+        onreview={(trigger) => state.open('personal-setup', trigger, detailSelected)}
+      />
+    {/key}
    {/if}
   {/snippet}
   {#snippet technicalDetails()}
-   <ConnectorDetailItem label={detailSelected.authorization_mode === 'personal' ? 'Server ID' : 'Connector ID'} variant="detail"><code>{detailSelected.connector_id}</code></ConnectorDetailItem>
-   <ConnectorDetailItem label="Downstream endpoint" variant="detail"><code>{detailSelected.endpoint_url}</code></ConnectorDetailItem>
-   <ConnectorDetailItem label="Tool name prefix" variant="detail"><code>{detailSelected.tool_name_prefix}</code></ConnectorDetailItem>
-   {#if detailSelected.authorization_mode === 'personal'}
-   <ConnectorDetailItem label="Registration path" variant="detail"><code>{detailSelected.public_path}</code></ConnectorDetailItem>
-   {:else}
-   <ConnectorDetailItem label="Shared endpoint" variant="detail"><CopyableValue value={sharedMcpUri} /></ConnectorDetailItem>
-   <ConnectorDetailItem label="Dedicated endpoint" variant="detail"><CopyableValue value={detailSelected.public_url} /></ConnectorDetailItem>
-   <ConnectorDetailItem label="Discovery detail" variant="detail">{#if detailSelected.health.reason}{detailSelected.health.reason}{:else}No discovery issue reported{/if}</ConnectorDetailItem>
-   <ConnectorDetailItem label="Last attempt / success" variant="detail"><div class="datetime-pair"><span><strong>Attempt</strong>{#if detailSelected.health.checked_at}<DateTimeView value={detailSelected.health.checked_at} />{:else}Not attempted{/if}</span><span><strong>Success</strong>{#if catalog?.discovered_at}<DateTimeView value={catalog.discovered_at} />{:else}No successful discovery{/if}</span></div></ConnectorDetailItem>
+   {@const personal = detailSelected.authorization_mode === 'personal'}
+   <ConnectorReferenceGroup title={personal ? 'Connection' : 'Endpoints'}>
+    {#if personal}
+     <ConnectorDetailItem label="Registration path" variant="detail"><CopyableValue value={detailSelected.public_path} inlineLabel="registration path" /></ConnectorDetailItem>
+    {:else}
+     <ConnectorDetailItem label="Shared endpoint" variant="detail"><CopyableValue value={sharedMcpUri} inlineLabel="shared endpoint" /></ConnectorDetailItem>
+     <ConnectorDetailItem label="Dedicated endpoint" variant="detail"><CopyableValue value={detailSelected.public_url} inlineLabel="dedicated endpoint" /></ConnectorDetailItem>
+    {/if}
+    <ConnectorDetailItem label="Downstream endpoint" variant="detail"><CopyableValue value={detailSelected.endpoint_url} inlineLabel="downstream endpoint" /></ConnectorDetailItem>
+   </ConnectorReferenceGroup>
+   {#if !personal}
+    <ConnectorReferenceGroup title="Discovery">
+     <ConnectorDetailItem label="Discovery detail" variant="detail">{detailSelected.health.reason || 'No discovery issue reported'}</ConnectorDetailItem>
+     <ConnectorDetailItem label="Last attempt" variant="detail">{#if detailSelected.health.checked_at}<DateTimeView value={detailSelected.health.checked_at} />{:else}Not attempted{/if}</ConnectorDetailItem>
+     <ConnectorDetailItem label="Last success" variant="detail">{#if catalog?.discovered_at}<DateTimeView value={catalog.discovered_at} />{:else}No successful discovery{/if}</ConnectorDetailItem>
+    </ConnectorReferenceGroup>
    {/if}
+   <ConnectorReferenceGroup title="Identity">
+    <ConnectorDetailItem label={personal ? 'Server ID' : 'Connector ID'} variant="detail"><CopyableValue value={detailSelected.connector_id} inlineLabel={personal ? 'server ID' : 'connector ID'} /></ConnectorDetailItem>
+    <ConnectorDetailItem label="Tool name prefix" variant="detail"><CopyableValue value={detailSelected.tool_name_prefix} inlineLabel="tool name prefix" /></ConnectorDetailItem>
+   </ConnectorReferenceGroup>
   {/snippet}
-  {#if detailSelected.authorization_mode === 'personal'}
-    {#key detailSelected.connector_id}<PersonalMcpDetails state={state.personalSetup} connectorId={detailSelected.connector_id} />{/key}
-  {:else}
+  {#if detailSelected.authorization_mode === 'shared'}
   <ConnectorCapabilities selected={selectedCapability} counts={capabilityCounts} currentUrl={new URL((page.shallow?.url ?? page.url).href)}>
    {#snippet children(activeCapability)}
    {#if activeCapability === 'tools'}
@@ -181,9 +225,6 @@
 <style>
   button:not(:disabled){cursor:pointer}
   button:disabled{cursor:not-allowed}
-  .datetime-pair { display: grid; gap: .35rem; }
-  .datetime-pair span { display: grid; gap: .1rem; }
-  .datetime-pair strong { color: var(--admin-muted); font-size: 11px; font-weight: 600; }
   .tools h3 { color: var(--admin-ink); font-size: 1rem; margin: 0 0 .875rem; }
   .deletion-description { color: var(--admin-muted); font-size: 14px; line-height: 1.55; margin: 1rem 0 1.5rem; }
   .deletion-actions { border-top: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: .7rem; justify-content: flex-end; padding-top: 1rem; }

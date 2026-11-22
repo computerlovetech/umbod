@@ -15,17 +15,31 @@ import { configurationFixture } from '#lib/admin/personal-mcp-servers/availabili
 
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));
 
+const policyPanelProps = {
+  policy: { ...policyFixture(), requested_scopes: ['records:read'] },
+  checkStatus: 'Configuration ready',
+  checkMessage: 'Provider metadata checked. User sign-in not tested.',
+  checked: true,
+  locked: false,
+  checkAction: 'View check',
+  oncheck: vi.fn()
+};
+
 describe('personal server administration presentation', () => {
-  test('renders a standalone selected policy panel with whole-server guidance and no second inventory', () => {
-    const body = render(PersonalServerPolicyPanel).body;
-    expect(body).toContain('href="/admin/group-permissions/connectors"');
-    expect(body).toContain('including future tools after explicit rediscovery');
-    expect(body).toContain('No per-tool approval, activation or tool grants are required');
-    expect(body).toContain('Each user manages their own enablement, OAuth sign-in and private tool discovery');
+  test('separates saved OAuth configuration from private user setup', (): void => {
+    const body = render(PersonalServerPolicyPanel, { props: policyPanelProps }).body;
+    expect(body).not.toContain('href="/admin/group-permissions/connectors"');
+    expect(body).toContain('including tools found after rediscovery');
+    expect(body).toContain('Managed by admins');
+    expect(body).toContain('Automatic · Public');
+    expect(body).toContain('records:read');
+    expect(body).toContain('User sign-in not tested');
+    expect(body).toContain('Managed by each user');
+    expect(body).toContain('Private to each account');
     expect(body).toContain('href="/dashboard"');
     expect(body).not.toContain('<form');
     expect(body).not.toContain('<input');
-    expect(body).not.toContain('<button');
+    expect(body).toContain('View check');
     expect(body).not.toContain('<nav');
     expect(body).not.toContain('AdminShell');
     expect(body).not.toContain('ready to execute');
@@ -74,7 +88,7 @@ describe('personal server administration presentation', () => {
     const document = new Window().document;
     const registration = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null, null);
     registration.form.setKind('preconfigured_confidential');
-    document.body.innerHTML = `<section data-scope="selected">${render(PersonalServerPolicyPanel).body}</section><section data-scope="registration">${render(PersonalServerRegistration, { props: { state: registration, close: vi.fn(), reload: vi.fn() } }).body}</section>`;
+    document.body.innerHTML = `<section data-scope="selected">${render(PersonalServerPolicyPanel, { props: policyPanelProps }).body}</section><section data-scope="registration">${render(PersonalServerRegistration, { props: { state: registration, close: vi.fn(), reload: vi.fn() } }).body}</section>`;
     const ids = [...document.querySelectorAll('[id]')].map((element) => element.id);
     expect(new Set(ids).size).toBe(ids.length);
     const scope = document.querySelector('[data-scope="registration"]')!;

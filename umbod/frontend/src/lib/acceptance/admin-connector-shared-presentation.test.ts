@@ -110,7 +110,8 @@ describe('admin connector shared presentation', () => {
     for (const list of connectorLists) {
       expect(list).toContain('import ConnectorDetailSummary');
       expect(list).toContain('<ConnectorDetailSummary');
-      expect(list).toContain('{#snippet summary()}');
+      expect(list).toContain('{#snippet statusOverview()}');
+      expect(list).toContain('<ConnectorStatusOverview');
       expect(list).toContain('{#snippet technicalDetails()}');
       expect(list).not.toContain('<article class="connector-detail"');
     }

@@ -14,7 +14,10 @@
   import CapabilityDescriptionOverrideModal from '#lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
   import ConnectorCapabilities from '#lib/components/admin/connectors/ConnectorCapabilities.svelte';
   import ConnectorDetailItem from '#lib/components/admin/connectors/ConnectorDetailItem.svelte';
+  import ConnectorStatusOverview from '#lib/components/admin/connectors/ConnectorStatusOverview.svelte';
   import ConnectorDetailSummary from '#lib/components/admin/connectors/ConnectorDetailSummary.svelte';
+  import ConnectorReferenceGroup from '#lib/components/admin/connectors/ConnectorReferenceGroup.svelte';
+  import CopyableValue from '#lib/components/admin/connectors/CopyableValue.svelte';
   import ConnectorPublicationMenuAction from '#lib/components/admin/connectors/ConnectorPublicationMenuAction.svelte';
   import UnifiedConnectorWorkspace from '#lib/components/admin/connectors/UnifiedConnectorWorkspace.svelte';
   import type { UnifiedConnectorKind, UnifiedConnectorRow } from '#lib/admin/unified-connectors.js';
@@ -146,12 +149,14 @@
         {#snippet description()}
           <p>{selectedConnector.capabilityDescription}</p>
         {/snippet}
-        {#snippet summary()}
-          <ConnectorDetailItem label="Updated" tone="neutral"><DateTimeView value={selectedConnector.updatedAt} /></ConnectorDetailItem>
-          <ConnectorDetailItem label="Status" tone={selectedConnector.publicationStatus === 'published' ? 'success' : 'neutral'}>{selectedConnector.publicationStatus}</ConnectorDetailItem>
+        {#snippet statusOverview()}
+          {#snippet updated()}<DateTimeView value={selectedConnector.updatedAt} />{/snippet}
+          <ConnectorStatusOverview entries={[{ label: 'Updated', value: updated, icon: 'calendar' }]} />
         {/snippet}
         {#snippet technicalDetails()}
-          <ConnectorDetailItem label="Connector ID" variant="detail"><code>{selectedConnector.id}</code></ConnectorDetailItem>
+          <ConnectorReferenceGroup title="Identity">
+            <ConnectorDetailItem label="Connector ID" variant="detail"><CopyableValue value={selectedConnector.id} inlineLabel="connector ID" /></ConnectorDetailItem>
+          </ConnectorReferenceGroup>
         {/snippet}
 
         {#if (form?.status === 'stale' || form?.status === 'failed' || form?.status === 'conflict') && !form.mode}

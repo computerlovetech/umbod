@@ -94,6 +94,9 @@ test.each(['tools', 'prompts', 'resources'])('native %s save reconciles in place
   renderNative();
   await vi.waitFor(() => expect(document.querySelector('#selected-connector-heading')?.textContent).toBe('Connector b'));
   await vi.waitFor(() => expect(document.querySelector('form.save-tools')).not.toBeNull());
+  const indicators = document.querySelector('[aria-label="Connector indicators"]');
+  expect(Array.from(indicators?.querySelectorAll('dt') ?? [], (term): string => term.textContent!.trim())).toEqual(['Source', 'Tools']);
+  expect(document.querySelector('[aria-label="Status spotlight"]')).toBeNull();
   const form = document.querySelector<HTMLFormElement>('form.save-tools');
   expect(form).not.toBeNull();
   const toggle = document.querySelector<HTMLInputElement>('input[type="checkbox"]');
@@ -130,6 +133,16 @@ test('MCP refreshed data for A reloads shallow-selected B without seeding A cata
     await vi.waitFor(() => expect(document.querySelector('#selected-mcp-connector-heading')?.textContent).toBe('MCP b'));
     expect(document.body.textContent).toContain('b-prompt');
     expect(document.body.textContent).not.toContain('a-prompt');
+    const technicalDetails = document.querySelector<HTMLDetailsElement>('details.technical-details')!;
+    expect(technicalDetails.open).toBe(false);
+    technicalDetails.querySelector('summary')!.click();
+    expect(technicalDetails.open).toBe(true);
+    expect(Array.from(technicalDetails.querySelectorAll('h3'), (heading): string => heading.textContent!)).toEqual(['Endpoints', 'Discovery', 'Identity']);
+    expect(Array.from(technicalDetails.querySelectorAll('dt'), (term): string => term.textContent!)).toEqual([
+      'Shared endpoint', 'Dedicated endpoint', 'Downstream endpoint',
+      'Discovery detail', 'Last attempt', 'Last success', 'Connector ID', 'Tool name prefix'
+    ]);
+    expect(technicalDetails.querySelector('button[aria-label="Copy connector ID"]')?.parentElement?.querySelector('code')?.textContent).toBe('b');
     expect(get).toHaveBeenLastCalledWith('b');
     await unmount(component!);
     component = undefined;
@@ -155,6 +168,10 @@ test.each(['tools', 'prompts'])('OpenAPI refreshed data for A reloads shallow-se
     await vi.waitFor(() => expect(document.querySelector('#selected-openapi-connector-heading')?.textContent).toBe('OpenAPI b'));
     await vi.waitFor(() => expect(document.body.textContent).toContain('Description b'));
     expect(document.body.textContent).not.toContain('Description a');
+    const indicators = document.querySelector('[aria-label="Connector indicators"]');
+    expect(Array.from(indicators?.querySelectorAll('dt') ?? [], (term): string => term.textContent!.trim())).toEqual(['Updated']);
+    expect(indicators?.querySelector('time')?.dateTime).toBe('2026-01-02T00:00:00.000Z');
+    expect(document.querySelector('[aria-label="Status spotlight"]')).toBeNull();
     expect(get).toHaveBeenLastCalledWith('b', expect.any(AbortSignal));
     await unmount(component!);
     component = undefined;

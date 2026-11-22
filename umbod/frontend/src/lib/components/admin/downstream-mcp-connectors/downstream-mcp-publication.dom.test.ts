@@ -261,12 +261,14 @@ describe('personal MCP editing from the action menu', (): void => {
     expect(api.publish).not.toHaveBeenCalled();
   });
 
-  test('checks OAuth from the menu and updates sidebar publication eligibility without reloading details', async (): Promise<void> => {
+  test('checks OAuth from the admin card and updates publication eligibility without reloading details', async (): Promise<void> => {
     const { composite, api } = await renderPersonalWorkspace(false);
     const article = document.querySelector('article');
-    button('Open actions for Personal server').click();
-    await tick();
-    button('Check configuration', document.querySelector('[role="menu"]')!).click();
+    const adminCard = document.querySelector('[aria-label="Managed by admins"]');
+    if (!adminCard) throw new Error('Admin card is missing');
+    expect(adminCard.textContent).toContain('OAuth client');
+    expect(adminCard.textContent).toContain('Requested scopes');
+    button('Check configuration', adminCard).click();
     await tick();
     const dialog = document.querySelector('[role="dialog"]');
     if (!dialog) throw new Error('Configuration check dialog is missing');
@@ -282,6 +284,12 @@ describe('personal MCP editing from the action menu', (): void => {
     await tick();
     expect(document.querySelector('dialog')).toBeNull();
     expect(document.querySelector('article')).toBe(article);
+    expect(adminCard.textContent).toContain('User sign-in not tested');
+    button('View check', adminCard).click();
+    await tick();
+    expect(composite.personalOAuthSetup.validate).toHaveBeenCalledOnce();
+    button('Close', document.querySelector('dialog')!).click();
+    await tick();
     expect(composite.personalOAuthSetup.status).toHaveBeenCalledTimes(1);
     button('Open actions for Personal server').click();
     await tick();
@@ -348,7 +356,7 @@ describe('personal MCP editing from the action menu', (): void => {
     expect(api.publish).not.toHaveBeenCalled();
   });
 
-  test('moving from setup into Edit restores focus to the persistent action trigger on close', async (): Promise<void> => {
+  test('reviews a failed configuration without rerunning it and restores focus after editing', async (): Promise<void> => {
     const { composite } = await renderPersonalWorkspace(false);
     vi.mocked(composite.personalOAuthSetup.validate).mockResolvedValueOnce(setupFixture({ status: 'failed', checked_at: '2026-01-01T00:00:00Z', stage: 'discovery', reason: 'registration_unavailable' }));
     const trigger = button('Open actions for Personal server');
@@ -356,9 +364,17 @@ describe('personal MCP editing from the action menu', (): void => {
     await tick();
     button('Check configuration', document.querySelector('[role="menu"]')!).click();
     await tick();
-    const setupDialog = document.querySelector('[role="dialog"]');
-    if (!setupDialog) throw new Error('Configuration check dialog is missing');
-    await vi.waitFor(() => expect(setupDialog.textContent).toContain('Changes required'));
+    await vi.waitFor(() => expect(document.querySelector('dialog')?.textContent).toContain('Changes required'));
+    button('Close', document.querySelector('dialog')!).click();
+    await tick();
+    const adminCard = document.querySelector('[aria-label="Managed by admins"]')!;
+    expect(adminCard.textContent).toContain('Changes required');
+    expect(adminCard.textContent).toContain('Automatic registration is unavailable');
+    const review = button('Review check', adminCard);
+    review.click();
+    await tick();
+    const setupDialog = document.querySelector('dialog')!;
+    expect(composite.personalOAuthSetup.validate).toHaveBeenCalledOnce();
     button('Edit settings', setupDialog).click();
     await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('#personal-name')?.value).toBe('Personal server'));
     const editor = document.querySelector('[role="dialog"]');
@@ -367,7 +383,7 @@ describe('personal MCP editing from the action menu', (): void => {
     button('Cancel', editor).click();
     await tick();
     expect(document.querySelector('dialog')).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(document.activeElement).toBe(review);
   });
 
   test('validated personal publication reconciles in place without testing sign-in', async (): Promise<void> => {

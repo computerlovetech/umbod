@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Umbod · Technical details previews</title>
+<style>
+:root{color-scheme:light;--canvas:#eff2ed;--paper:#fff;--ink:#16241c;--muted:#526258;--line:#d9e1d9;--soft:#f4f7f3;--accent:#215c45;--mint:#e1eee5;--mono:ui-monospace,SFMono-Regular,Consolas,monospace;font:15px/1.5 system-ui,sans-serif;color:var(--ink);background:var(--canvas)}
+*{box-sizing:border-box}body{margin:0}button,select{font:inherit;color:inherit}button,select,summary{cursor:pointer}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}h1,h2,h3,p,dl,dd{margin:0}button{border:0}main{max-width:1260px;margin:auto;padding:52px 32px 48px}.masthead{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:26px}.eyebrow,.number{font:600 .72rem/1.4 var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--accent)}h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.05;letter-spacing:-.06em;margin-top:10px}.picker{display:grid;gap:5px;font-size:.8rem;font-weight:650}.picker select{padding:9px 30px 9px 12px;background:var(--paper);border:1px solid var(--line);border-radius:8px}.layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:20px;align-items:start}.concepts{display:grid;gap:8px}.concept{background:transparent;text-align:left;border:1px solid transparent;border-radius:12px;padding:13px;display:grid;grid-template-columns:30px 1fr;gap:7px}.concept .number{padding-top:4px}.concept strong,.concept small{display:block}.concept small{color:var(--muted);margin-top:2px}.concept[aria-pressed="true"]{background:var(--mint);border-color:#c6dbcb}.concept:hover:not([aria-pressed="true"]){background:var(--soft)}.workspace{background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 30px #1c38220a;min-width:0}.connector{display:flex;align-items:center;gap:12px;padding:18px 24px;border-bottom:1px solid var(--line)}.avatar{display:grid;place-items:center;width:40px;height:40px;flex:none;border-radius:12px;background:#182e23;color:white;font:600 .82rem var(--mono)}.connector h2{font-size:1.15rem;letter-spacing:-.025em;overflow-wrap:anywhere}.connector p{font-size:.82rem;color:var(--muted)}.badge{margin-left:auto;border-radius:999px;padding:4px 10px;background:var(--mint);color:var(--accent);font-size:.78rem;font-weight:650}.technical{padding:22px 24px 25px}.technical-title{font-size:1.16rem;letter-spacing:-.02em;list-style:none;display:flex;gap:10px;align-items:center;font-weight:700}.technical-title::after,.fold summary::after{content:"";margin-left:auto;width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);flex:none}.technical[open]>.technical-title::after,.fold[open]>summary::after{transform:rotate(45deg)}summary::-webkit-details-marker{display:none}.panel{margin-top:17px}.group{min-width:0}.group h3{font-size:.88rem;letter-spacing:.01em}.field{min-width:0;display:grid;gap:3px;padding:8px 0}.field dt{font-size:.78rem;font-weight:650;color:var(--muted)}.field dd{display:flex;align-items:center;gap:8px;min-width:0}.value{min-width:0;overflow-wrap:anywhere}.value:is(code){font: .81rem/1.55 var(--mono);user-select:all}.copy{flex:none;margin-left:auto;min-width:62px;padding:4px 7px;border:1px solid var(--line);border-radius:6px;background:var(--paper);font-size:.74rem;font-weight:650;color:var(--accent)}.copy:hover{background:var(--mint)}.healthy{font-weight:650;color:var(--accent)}.message{font-size:.83rem}.grouped{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.grouped .group{border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--soft)}.grouped .group:first-child{grid-column:1/-1}.grouped .field:first-child{margin-top:4px}.grouped .field+.field{border-top:1px solid var(--line)}.reference{border:1px solid var(--line);border-radius:11px;overflow:hidden}.reference .group:not(:first-child){border-top:1px solid var(--line)}.reference h3{background:var(--soft);padding:6px 12px}.reference .field{grid-template-columns:minmax(130px,23%) minmax(0,1fr);gap:12px;padding:7px 12px;align-items:baseline}.reference .field+.field{border-top:1px solid var(--line)}.layered{display:grid;gap:8px}.fold{border:1px solid var(--line);border-radius:10px;background:var(--soft);min-width:0}.fold summary{display:flex;align-items:center;gap:12px;list-style:none;padding:10px 13px;font-weight:700;font-size:.88rem}.fold small{color:var(--muted);font-weight:500}.fold dl{padding:0 13px 7px}.fold .field{border-top:1px solid var(--line)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+@media(max-width:860px){main{padding:28px 20px}.layout{grid-template-columns:minmax(0,1fr);gap:12px}.concepts{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:540px){.masthead{align-items:start;flex-direction:column;gap:13px}.concept{display:block;padding:8px}.concept small{display:none}.concept strong{font-size:.82rem}.connector,.technical{padding:14px}.grouped{grid-template-columns:minmax(0,1fr)}.reference .field{grid-template-columns:minmax(0,1fr);gap:3px}.fold summary{flex-wrap:wrap;gap:4px 10px}}
+</style>
+</head>
+<body>
+<main>
+  <header class="masthead">
+    <div><p class="eyebrow">Umbod / Connectors / Design preview</p><h1>Technical details</h1></div>
+    <label class="picker">Sample connector<select id="sample"><option value="shared">Shared MCP</option><option value="personal">Personal MCP</option><option value="openapi">OpenAPI</option><option value="plugin">SDK plugin</option><option value="failed">Shared MCP · discovery failed</option></select></label>
+  </header>
+  <div class="layout">
+    <nav class="concepts" aria-label="Design concepts">
+      <button class="concept" type="button" value="grouped" aria-pressed="true"><span class="number">01</span><span><strong>Grouped cards</strong><small>Scan by topic</small></span></button>
+      <button class="concept" type="button" value="reference" aria-pressed="false"><span class="number">02</span><span><strong>Reference list</strong><small>Find a field fast</small></span></button>
+      <button class="concept" type="button" value="layered" aria-pressed="false"><span class="number">03</span><span><strong>Quick access</strong><small>Expand only what you need</small></span></button>
+    </nav>
+    <article class="workspace" aria-labelledby="connector-name">
+      <header class="connector"><span class="avatar" aria-hidden="true"></span><div><h2 id="connector-name"></h2><p id="connector-type"></p></div><span class="badge">Published</span></header>
+      <details class="technical" open><summary class="technical-title">Technical details</summary><div id="panel" class="panel"></div></details>
+    </article>
+  </div>
+  <div role="status" class="visually-hidden" id="feedback"></div>
+</main>
+<script>
+const connectorId = '212ec6ca-0db7-4249-bb11-9dc68aa5af95';
+const published = 'https://workspace.example.com/mcp';
+const timestamp = 'Nov 22, 2026 · 09:05:39 UTC';
+const codeField = (label, value) => ({label, value, kind:'code'});
+const textField = (label, value) => ({label, value, kind:'text'});
+const identity = (id) => ({title:'Identity', fields:[codeField('Connector ID',id)]});
+const shared = {
+  name:'agent-backend', initials:'AG', type:'MCP · Shared authorization', groups:[
+    {title:'Endpoints', fields:[codeField('Shared endpoint',published),codeField('Dedicated endpoint',`${published}/proxies/agent-backend`),codeField('Downstream endpoint','https://agent-backend-mcp.internal.example.com/mcp/')]},
+    {title:'Discovery', summary:'Healthy', fields:[{...textField('Discovery detail','No discovery issue reported'),tone:'healthy'},textField('Last attempt',timestamp),textField('Last success',timestamp)]},
+    {title:'Identity', fields:[codeField('Connector ID',connectorId),codeField('Tool name prefix','agent-backend')]}
+  ]
+};
+const samples = {
+  shared,
+  personal:{name:'writing-assistant',initials:'WA',type:'MCP · Personal authorization',groups:[
+    {title:'Connection',fields:[codeField('Registration path','/mcp/proxies/writing-assistant'),codeField('Downstream endpoint','https://writing-assistant.example.com/mcp')]},
+    {title:'Identity',fields:[codeField('Server ID','c16a5c67-9873-4cbb-a88a-96f5e5de1fef'),codeField('Tool name prefix','writing-assistant')]}
+  ]},
+  openapi:{name:'issue-tracker',initials:'IT',type:'OpenAPI',groups:[identity('b86d6536-5bc8-41d7-b7d8-c5af70e2d26a')]},
+  plugin:{name:'workspace-files',initials:'WF',type:'SDK plugin',groups:[{title:'Identity',fields:[codeField('Connector ID','workspace-files'),textField('Publication status','Published')]}]},
+  failed:{...shared,groups:[shared.groups[0],{title:'Discovery',summary:'Failed',fields:[textField('Discovery detail','The downstream server timed out.'),textField('Last attempt',timestamp),textField('Last success','No successful discovery')]},shared.groups[2]]}
+};
+const samplePicker = document.querySelector('#sample');
+const conceptButtons = [...document.querySelectorAll('.concept')];
+const panel = document.querySelector('#panel');
+const feedback = document.querySelector('#feedback');
+const element = (tag, className, text) => {
+  const node = document.createElement(tag);
+  node.className = className;
+  node.textContent = text;
+  return node;
+};
+const selectValue = (node) => {
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+};
+const copyButton = (field, value) => {
+  const button = element('button','copy','Copy');
+  button.type = 'button';
+  button.setAttribute('aria-label',`Copy ${field.label.toLowerCase()}`);
+  let reset;
+  button.addEventListener('click',async () => {
+    clearTimeout(reset);
+    try {
+      await navigator.clipboard.writeText(field.value);
+      button.textContent = 'Copied';
+      feedback.textContent = `${field.label} copied.`;
+    } catch {
+      selectValue(value);
+      button.textContent = 'Selected';
+      feedback.textContent = `${field.label} selected. Use your keyboard shortcut to copy.`;
+    }
+    reset = setTimeout(() => { button.textContent = 'Copy'; },1600);
+  });
+  return button;
+};
+const fieldList = (fields) => {
+  const list = element('dl','','');
+  for (const field of fields) {
+    const row = element('div','field','');
+    const description = element('dd','','');
+    const value = element(field.kind === 'code' ? 'code' : 'span',`value ${field.tone ?? ''}`,field.value);
+    description.append(value);
+    if(field.kind === 'code') description.append(copyButton(field,value));
+    row.append(element('dt','',field.label),description);
+    list.append(row);
+  }
+  return list;
+};
+const renderGroup = (group,index,concept) => {
+  if (concept === 'layered') {
+    const fold = element('details','fold','');
+    fold.open = index === 0;
+    const title = element('summary','',group.title);
+    const count = group.fields.length;
+    title.append(element('small','',group.summary ?? `${count} ${count === 1 ? 'field' : 'fields'}`));
+    fold.append(title,fieldList(group.fields));
+    return fold;
+  }
+  const section = element('section','group','');
+  section.append(element('h3','',group.title),fieldList(group.fields));
+  return section;
+};
+const render = () => {
+  const sample = samples[samplePicker.value];
+  const concept = conceptButtons.find(button => button.getAttribute('aria-pressed') === 'true').value;
+  document.querySelector('.avatar').textContent = sample.initials;
+  document.querySelector('#connector-name').textContent = sample.name;
+  document.querySelector('#connector-type').textContent = sample.type;
+  panel.className = `panel ${concept}`;
+  panel.replaceChildren(...sample.groups.map((group,index) => renderGroup(group,index,concept)));
+  panel.closest('details').open = true;
+};
+for (const button of conceptButtons) button.addEventListener('click',() => {
+  for (const option of conceptButtons) option.setAttribute('aria-pressed',String(option === button));
+  render();
+});
+samplePicker.addEventListener('change',render);
+render();
+</script>
+</body>
+</html>

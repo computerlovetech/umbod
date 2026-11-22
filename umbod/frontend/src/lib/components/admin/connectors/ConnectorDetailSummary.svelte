@@ -9,12 +9,11 @@
     iconDataUrl?: string;
     publicationStatus?: string;
     description?: Snippet;
-    summary: Snippet;
     technicalDetails?: Snippet;
     children: Snippet;
-  };
+  } & ({ summary: Snippet; statusOverview?: never } | { statusOverview: Snippet; summary?: never });
 
-  let { headingId, title, iconDataUrl, publicationStatus, description, summary, technicalDetails, children }: Props = $props();
+  let { headingId, title, iconDataUrl, publicationStatus, description, summary, statusOverview, technicalDetails, children }: Props = $props();
 </script>
 
 <article class="connector-detail" aria-labelledby={headingId}>
@@ -35,14 +34,16 @@
     <div class="description">{@render description()}</div>
   {/if}
 
-  <dl class="summary-row">
-    {@render summary()}
-  </dl>
+  {#if statusOverview}
+    {@render statusOverview()}
+  {:else if summary}
+    <dl class="summary-row">{@render summary()}</dl>
+  {/if}
 
   {#if technicalDetails}
     <details class="technical-details">
       <summary>Technical details</summary>
-      <dl>{@render technicalDetails()}</dl>
+      <div class="reference-list">{@render technicalDetails()}</div>
     </details>
   {/if}
 
@@ -62,9 +63,10 @@
   .summary-row :global(.detail-item) { padding: 0 1.25rem; }
   .summary-row :global(.detail-item:first-child) { padding-left: 0; }
   .summary-row :global(.detail-item + .detail-item) { border-left: 1px solid var(--admin-border); }
-  .technical-details { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 8px; margin-top: 0.8rem; padding: 0.85rem 1rem; }
-  summary { color: var(--admin-ink); cursor: pointer; font-size: 0.85rem; font-weight: 650; }
-  .technical-details dl { display: grid; gap: 1.25rem 2rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 1rem 0 0; }
+  .technical-details { margin-top: 0.8rem; }
+  summary { color: var(--admin-ink); cursor: pointer; font-size: 0.9rem; font-weight: 650; padding: 0.45rem 0; }
+  .reference-list { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: 8px; margin-top: 0.5rem; }
+  .reference-list :global(.reference-group + .reference-group) { border-top: 1px solid var(--admin-border); }
   .body { margin-top: 1.5rem; }
 
   @media (max-width: 760px) {
@@ -74,7 +76,6 @@
     .summary-row :global(.detail-item:first-child) { padding-top: 0; }
     .summary-row :global(.detail-item:last-child) { padding-bottom: 0; }
     .summary-row :global(.detail-item + .detail-item) { border-left: 0; border-top: 1px solid var(--admin-border); }
-    .technical-details dl { grid-template-columns: 1fr; }
     .body { margin-top: 1.25rem; }
   }
 </style>

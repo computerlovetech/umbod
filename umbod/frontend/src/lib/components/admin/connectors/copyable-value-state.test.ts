@@ -25,7 +25,17 @@ describe('copyable value clipboard contract', () => {
 
     expect(state.feedback).toBe('copied');
     expect(clipboard.text).toBe('connector-id');
-    expect(toast.toasts[0]?.message).toBe('URI copied to clipboard');
+    expect(toast.toasts[0]?.message).toBe('Copied to clipboard');
+  });
+
+  it('offers manual copying when the clipboard is unavailable and the value can be selected', async () => {
+    const toast = new ToastState();
+    const state = new CopyableValueState('connector-id', new InMemoryClipboardWriter(new Error('unavailable')), toast);
+
+    await state.copy((): boolean => true);
+
+    expect(state.feedback).toBe('selected');
+    expect(toast.toasts[0]?.message).toBe('Value selected. Use your keyboard shortcut to copy it.');
   });
 
   it('reports clipboard failures through its public state', async () => {
@@ -35,6 +45,6 @@ describe('copyable value clipboard contract', () => {
     await state.copy();
 
     expect(state.feedback).toBe('failed');
-    expect(toast.toasts[0]?.message).toBe('Could not copy URI');
+    expect(toast.toasts[0]?.message).toBe('Could not copy to clipboard');
   });
 });

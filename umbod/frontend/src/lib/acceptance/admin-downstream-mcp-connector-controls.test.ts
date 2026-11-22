@@ -74,6 +74,11 @@ function input(body: string, name: string): string {
   return tag;
 }
 
+function indicatorValues(body: string, label: 'Status spotlight' | 'Connector indicators'): string[] {
+  const list = body.match(new RegExp(`<dl[^>]*aria-label="${label}"[^>]*>(.*?)</dl>`, 's'))?.[1] ?? '';
+  return Array.from(list.replace(/<!--.*?-->/gs, '').matchAll(/<dd[^>]*>(.*?)<\/dd>/gs), (match): string => match[1].trim());
+}
+
 const controls = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpWorkspace.svelte', 'utf8');
 const page = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
 const pageRoute = readFileSync('src/routes/admin/(connector-workspace)/downstream-mcp-connectors/+page.svelte', 'utf8');
@@ -83,22 +88,60 @@ describe('downstream MCP connector administration', () => {
   test('personal selection keeps common details and actions without shared readiness, proxy instructions or catalogues', (): void => {
     const personal = workspace(serverFixture());
     expect(personal).toContain('Personal server');
-    expect(personal).toContain('Search records');
+    expect(personal).not.toContain('Search records');
     expect(personal).toContain('Registration path');
     expect(personal).toContain('Unpublished');
     expect(personal).not.toContain('>Publish</button>');
     expect(personal).toContain('Check unavailable');
     expect(personal).toContain('Check configuration');
+    expect(personal).not.toContain('aria-label="Status spotlight"');
+    expect(personal).toContain('Managed by admins');
+    expect(personal).toContain('Managed by each user');
     expect(personal).not.toContain('Personal OAuth setup');
     expect(personal).not.toContain('Sign-in not tested');
     expect(personal).toContain('>Delete</button>');
     expect(personal).toContain('href="/dashboard"');
-    expect(personal).toContain("do not show a user's authorization or private inventory");
-    for (const absent of ['Discovery health', 'Bearer token missing', '0 tools', 'Search tools', 'Shared endpoint', 'Dedicated endpoint', '>Configure</button>', 'Refresh discovery', 'Edit capability description', 'title="Copy URI"']) expect(personal).not.toContain(absent);
+    expect(personal).toContain('Private to each account');
+    for (const absent of ['Discovery health', 'Bearer token missing', '0 tools', 'Search tools', 'Shared endpoint', 'Dedicated endpoint', '>Configure</button>', 'Refresh discovery', 'Edit capability description', '>Discovery</h3>', 'aria-label="Copy shared endpoint"', 'aria-label="Copy dedicated endpoint"']) expect(personal).not.toContain(absent);
 
     const shared = workspace(sharedConnector());
     for (const present of ['Discovery health', 'Discovered tools', 'Search tools', '>Configure</button>', 'Refresh discovery', 'Edit capability description', '>Publish</button>', '>Delete</button>']) expect(shared).toContain(present);
     expect(shared).not.toContain('Personal OAuth settings');
+  });
+
+  test.each([
+    ['healthy', true, 'Healthy', 'Bearer token configured'],
+    ['unhealthy', true, 'Discovery failed', 'Bearer token configured'],
+    ['unknown', true, 'Not checked', 'Bearer token configured'],
+    ['unknown', false, 'Bearer token missing', 'Not checked'],
+    ['healthy', false, 'Bearer token missing', 'Healthy'],
+    ['unhealthy', false, 'Bearer token missing', 'Discovery failed']
+  ] as const)('shared discovery %s with credentials configured=%s spotlights %s', (status, configured, primary, secondary): void => {
+    const connector = sharedConnector();
+    const body = workspace({
+      ...connector,
+      publication_status: 'published',
+      auth_mode: 'static_bearer',
+      credential_configured: configured,
+      health: { ...connector.health, status }
+    });
+    expect(indicatorValues(body, 'Status spotlight')).toEqual([primary]);
+    expect(indicatorValues(body, 'Connector indicators')).toEqual(['Shared', secondary, '1 tool']);
+    expect(body).toMatch(/<span class="publication-status published[^>]*>.*Published\s*<\/span>/s);
+  });
+
+  test.each([
+    ['basic', 'Basic auth credential'],
+    ['custom', 'Custom header credential']
+  ] as const)('names the required %s credential in the spotlight', (headerType, credentialName): void => {
+    const body = workspace({
+      ...sharedConnector(),
+      auth_mode: 'static_bearer',
+      header_type: headerType,
+      custom_header_name: headerType === 'custom' ? 'X-API-Key' : null,
+      credential_configured: false
+    });
+    expect(indicatorValues(body, 'Status spotlight')).toEqual([`${credentialName} missing`]);
   });
 
   test('existing published personal connectors remain withdrawable without a setup receipt', (): void => {
@@ -222,9 +265,9 @@ describe('downstream MCP connector administration', () => {
     expect(input(configure, 'publicPath')).toContain('value="internal-shared-id"');
     const detail = workspace(sharedConnector());
     expect(detail).toContain('Shared endpoint');
-    expect(detail).toContain('aria-label="Copy https://umbod.test/mcp"');
+    expect(detail).toMatch(/>https:\/\/umbod\.test\/mcp<\/code>(?:(?!<\/dd>)[\s\S])*aria-label="Copy shared endpoint"/);
     expect(detail).toContain('Dedicated endpoint');
-    expect(detail).toContain('aria-label="Copy https://umbod.test/mcp/proxies/internal-shared-id"');
+    expect(detail).toMatch(/>https:\/\/umbod\.test\/mcp\/proxies\/internal-shared-id<\/code>(?:(?!<\/dd>)[\s\S])*aria-label="Copy dedicated endpoint"/);
     for (const absent of ['namespaced alongside tools from other connectors', 'Only this connector’s tools appear here, using their original downstream names', 'Public MCP path']) expect(detail).not.toContain(absent);
   });
 
