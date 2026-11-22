@@ -1,8 +1,10 @@
 <script lang="ts">
+  import AdminPermissionRow from '../shared/AdminPermissionRow.svelte';
   import AdminSaveAction from '../shared/AdminSaveAction.svelte';
   import Button from '../shared/Button.svelte';
   import DelayedSpinner from '../shared/DelayedSpinner.svelte';
   import SegmentedRadio from '../../shared/SegmentedRadio.svelte';
+  import NamespaceIcon from './NamespaceIcon.svelte';
   import type { NamespaceManagementState } from './namespace-management-state.svelte';
 
   let { state }: { state: NamespaceManagementState } = $props();
@@ -19,17 +21,16 @@
     </div>
   {/if}
   {#if state.selectedGroupId === null}<p class="empty">Select a group to assign access.</p>{/if}
-  <ul aria-label="Shared namespaces" aria-busy={state.busy}>
+  <ul aria-label="Shared namespaces" role="list" aria-busy={state.busy}>
     {#each state.namespaces as namespace (namespace.id)}
-      <li>
-        <div class="namespace-identity">
-          <span class="namespace-name">{namespace.name}</span>
-          {#if namespace.description}<p class="namespace-description">{namespace.description}</p>{/if}
-        </div>
-        {#if state.selectedGroupId !== null}
-          <SegmentedRadio size="compact" label="Access" accessibleName={'Access to ' + namespace.name} options={state.accessOptions} value={state.access(namespace.id)} disabled={!state.canAssignAccess} onchange={(access) => state.stageAccess(namespace.id, access)} />
-        {/if}
-      </li>
+      <AdminPermissionRow name={namespace.name} description={namespace.description}>
+        {#snippet icon()}<NamespaceIcon />{/snippet}
+        {#snippet actions()}
+          {#if state.selectedGroupId !== null}
+            <SegmentedRadio size="compact" label="Access" accessibleName={'Access to ' + namespace.name} options={state.accessOptions} value={state.access(namespace.id)} disabled={!state.canAssignAccess} onchange={(access) => state.stageAccess(namespace.id, access)} />
+          {/if}
+        {/snippet}
+      </AdminPermissionRow>
     {:else}
       {#if !state.busy && !state.error && !state.needsReload}<li class="empty">No shared namespaces</li>{/if}
     {/each}
@@ -42,23 +43,18 @@
     </div>
   {/if}
   {#if state.permissionError}<p role="alert">{state.permissionError}</p>{/if}
-  <form class="permission-save" onsubmit={(event) => { event.preventDefault(); void state.savePermissions(); }}>
-    <AdminSaveAction label="Save permissions" loadingLabel="Saving permissions..." loading={state.savingPermissions} disabled={!state.canSavePermissions} message={state.permissionFeedback.message} tone={state.permissionFeedback.tone} icon={state.permissionFeedback.icon} />
-  </form>
 </section>
+
+<form class="permission-save" onsubmit={(event) => { event.preventDefault(); void state.savePermissions(); }}>
+  <AdminSaveAction label="Save permissions" loadingLabel="Saving permissions..." loading={state.savingPermissions} disabled={!state.canSavePermissions} message={state.permissionFeedback.message} tone={state.permissionFeedback.tone} icon={state.permissionFeedback.icon} />
+</form>
 
 <style>
   .namespaces { display: grid; gap: 1rem; }
   h3 { font-size: 0.9375rem; margin: 0; }
   ul { list-style: none; margin: 0; padding: 0; }
-  li { align-items: center; border-top: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; padding: 1rem 0; }
-  .namespace-identity { flex: 1; min-width: 0; }
-  .namespace-description { color: var(--admin-muted); font-size: 0.875rem; margin: 0.35rem 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
-  .namespace-name { font-size: 0.9375rem; font-weight: 600; overflow-wrap: anywhere; }
+  li.empty { border-top: 1px solid var(--admin-border); padding: 1rem 0; }
   .reload-warning { background: var(--admin-warning-bg); border: 1px solid var(--admin-warning-border); border-radius: var(--admin-radius); color: var(--admin-warning-text); padding: 1rem; }
   .empty { color: var(--admin-muted); font-size: 0.875rem; margin: 0; }
   p[role='alert'] { color: var(--admin-danger-text); }
-  @media (max-width: 680px) {
-    li { display: grid; grid-template-columns: minmax(0, 1fr); }
-  }
 </style>

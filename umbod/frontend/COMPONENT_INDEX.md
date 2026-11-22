@@ -59,6 +59,7 @@ tags:
 
 - [AdminSplitWorkspace](src/lib/components/admin/shared/AdminSplitWorkspace.svelte) — Responsive master/detail surface with optional mobile sidebar drawer and flush detail padding.
 - [AdminRecordList](src/lib/components/admin/shared/AdminRecordList.svelte) — Responsive record list with identity, detail, and action slots; use for administration inventories with feature-owned actions.
+- [AdminPermissionRow](src/lib/components/admin/shared/AdminPermissionRow.svelte) — Responsive permission-list row with shared identity layout and feature-owned controls or expanded details.
 - [CapabilityCatalogGrid](src/lib/components/admin/shared/CapabilityCatalogGrid.svelte) — Responsive list grid; use to arrange capability cards consistently, supplying list items as content.
 - [ScrollableToolCatalog](src/lib/components/admin/shared/ScrollableToolCatalog.svelte) — Height-bounded tool-list region; use for independently scrolling tool catalogues with a stable scrollbar gutter.
 - [WorkspaceShell](src/lib/components/shared/workspace/WorkspaceShell.svelte) — Contextual sidebar with a mobile drawer, optional return link, account and logout; parents own destinations and eligibility.
@@ -94,6 +95,7 @@ tags:
 
 - [PermissionBadge](src/lib/components/files/PermissionBadge.svelte) — Compact caller-permission summary for file and folder rows; accepts permissions only, without ownership or operation eligibility.
 - [FileTypeIcon](src/lib/components/files/FileTypeIcon.svelte) — Accessible file-format, folder and explicit home SVGs; groups MIME types and extensions without loading file contents.
+- [NamespaceIcon](src/lib/components/admin/filesystem/NamespaceIcon.svelte) — Decorative folder tile for shared namespace rows with a visible name.
 
 ## Connector and catalogue presentation
 

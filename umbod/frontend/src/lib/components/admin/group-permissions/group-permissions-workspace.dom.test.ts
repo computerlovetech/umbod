@@ -16,6 +16,8 @@ afterEach(async (): Promise<void> => {
   document.body.replaceChildren();
 });
 
+const grantedAccessSelector = 'fieldset[aria-label="Access to Reports"] input[value="granted"]';
+
 const settle = async (): Promise<void> => { await tick(); await tick(); await tick(); };
 
 describe('persistent group permissions composition', () => {
@@ -30,18 +32,18 @@ describe('persistent group permissions composition', () => {
     const selectors = ['.workspace-shell', '[aria-label="Administration navigation"]', '.page-header', 'nav[aria-label="Group permission type"]', '.admin-split-workspace', 'aside[aria-label="Groups"]', '.groups', '.group-header'];
     const nodes = selectors.map((selector) => document.querySelector(selector));
     for (const node of nodes) expect(node).not.toBeNull();
-    const firstCheckbox = document.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
-    firstCheckbox.click();
+    const grantedAccess = document.querySelector<HTMLInputElement>(grantedAccessSelector)!;
+    grantedAccess.click();
     await settle();
     expect(state.connectors?.hasUnsavedChanges).toBe(true);
     state.activate('filesystem');
     inputs.set('tab', 'filesystem');
     await vi.waitFor(() => expect(document.body.textContent).toContain('Shared namespaces'));
-    expect(firstCheckbox.isConnected).toBe(false);
+    expect(grantedAccess.isConnected).toBe(false);
     state.activate('connectors');
     inputs.set('tab', 'connectors');
     await settle();
-    expect(document.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
+    expect(document.querySelector<HTMLInputElement>(grantedAccessSelector)?.checked).toBe(true);
     selectors.forEach((selector, index) => expect(document.querySelector(selector)).toBe(nodes[index]));
     const readers = [...document.querySelectorAll<HTMLButtonElement>('aside[aria-label="Groups"] button')].find((button) => button.textContent?.includes('Readers'))!;
     readers.click();
@@ -118,7 +120,7 @@ describe('persistent group permissions composition', () => {
     await vi.waitFor(() => expect(state.connectors?.editorStatus).toBe('ready'));
     component = mount(WorkspaceTestHarness, { target: document.body, props: { state, get tab(): GroupPermissionsTab { return inputs.get('tab')!; } } });
     flushSync();
-    document.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+    document.querySelector<HTMLInputElement>(grantedAccessSelector)!.click();
     await settle();
     document.querySelector<HTMLButtonElement>('button[aria-label="Save permissions"]')!.click();
     await settle();
@@ -133,7 +135,7 @@ describe('persistent group permissions composition', () => {
     await settle();
     expect(state.connectors?.saving).toBe(false);
     expect(state.connectors?.hasUnsavedChanges).toBe(false);
-    expect(document.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
+    expect(document.querySelector<HTMLInputElement>(grantedAccessSelector)?.checked).toBe(true);
     expect(document.querySelector<HTMLButtonElement>('button[aria-label="Save permissions"]')?.disabled).toBe(true);
     state.dispose();
   });

@@ -5,6 +5,7 @@
   import LoadingButton from '../shared/LoadingButton.svelte';
   import ModalShell from '../../shared/ModalShell.svelte';
   import NamespaceFormModal from './NamespaceFormModal.svelte';
+  import NamespaceIcon from './NamespaceIcon.svelte';
   import type { NamespaceManagementState } from './namespace-management-state.svelte';
 
   let { state }: { state: NamespaceManagementState } = $props();
@@ -23,7 +24,7 @@
     <AdminRecordList items={state.namespaces} keyOf={(namespace) => namespace.id} label="Shared namespaces" recordHeading="Namespace" detailHeading="Groups with access" emptyMessage="No shared namespaces">
       {#snippet identity(namespace)}
         <div class="namespace-identity">
-          <span class="namespace-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg></span>
+          <NamespaceIcon />
           <div>
             <h2>{namespace.name}</h2>
             {#if namespace.description}<p class="namespace-description">{namespace.description}</p>{/if}
@@ -43,7 +44,6 @@
       {/snippet}
     </AdminRecordList>
   {/if}
-  <a class="permissions-link" href="/admin/group-permissions/filesystem">Manage group access</a>
 </section>
 
 {#if state.editorOpen}<NamespaceFormModal {state} />{/if}
@@ -60,11 +60,9 @@
 <style>
   .namespaces { display: grid; gap: 1rem; }
   .namespace-identity { align-items: center; display: flex; gap: .75rem; min-width: 0; }
-  .namespace-icon { background: var(--admin-soft); border-radius: var(--admin-radius); color: var(--admin-muted); display: grid; flex: none; height: 2.25rem; place-items: center; width: 2.25rem; }
   h2 { font-size: .9375rem; margin: 0; overflow-wrap: anywhere; }
   .namespace-description { color: var(--admin-muted); font-size: .875rem; margin: .2rem 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
   .group-count { background: var(--admin-soft); border-radius: 999px; color: var(--admin-muted); display: inline-block; font-size: .8125rem; padding: .2rem .6rem; }
-  .permissions-link { color: var(--admin-muted); font-size: .875rem; justify-self: start; }
   .delete-actions { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: flex-end; }
   .delete-description { overflow-wrap: anywhere; }
   [role='alert'] { color: var(--admin-danger-text); }

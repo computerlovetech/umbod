@@ -1,4 +1,6 @@
 <script lang="ts">
+  import AdminPermissionRow from '#lib/components/admin/shared/AdminPermissionRow.svelte';
+  import SegmentedRadio from '#lib/components/shared/SegmentedRadio.svelte';
   import AdminToggle from '#lib/components/admin/shared/AdminToggle.svelte';
   import AdminSaveAction from '#lib/components/admin/shared/AdminSaveAction.svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
@@ -6,33 +8,39 @@
   import type { GroupPermissionsState, ConnectorPermissionTarget } from './group-permissions-state.svelte';
 
   let { state }: { state: GroupPermissionsState } = $props();
+  const id = $props.id();
+  const accessOptions = [
+    { value: 'none', label: 'No access' },
+    { value: 'granted', label: 'Granted' }
+  ] as const;
 
   const inputChecked = (event: Event): boolean => event.currentTarget instanceof HTMLInputElement && event.currentTarget.checked;
 
   const connectorBadgeLabel = (connector: ConnectorPermissionTarget): string => {
     if (!state.connectorIsGranted(connector.id)) {
-      return 'No access';
+      return 'Access required';
     }
 
     const granted = state.grantedCapabilityCount(connector.id);
 
     if (granted === 0) {
-      return 'No capabilities';
+      return 'No capabilities granted';
     }
 
     if (granted === connector.capabilities.length) {
-      return `All ${granted} capabilities`;
+      return granted === 1 ? '1 capability' : `All ${granted} capabilities`;
     }
 
     return `${granted} / ${connector.capabilities.length} capabilities`;
   };
 
   const connectorBadgeClass = (connector: ConnectorPermissionTarget): string => {
-    if (!state.connectorIsGranted(connector.id) || state.grantedCapabilityCount(connector.id) === 0) {
+    if (!state.connectorIsGranted(connector.id)) {
       return 'group-permissions__tag-muted';
     }
 
-    return state.grantedCapabilityCount(connector.id) === connector.capabilities.length
+    const granted = state.grantedCapabilityCount(connector.id);
+    return granted > 0 && granted === connector.capabilities.length
       ? 'group-permissions__tag-green'
       : 'group-permissions__tag-orange';
   };
@@ -61,19 +69,6 @@
           <Button onclick={state.retrySelection}>Retry</Button>
         </div>
       {:else if state.editorStatus === 'ready' && state.selectedGroupId !== null && state.selectedPermissionSet !== null}
-        <p class="permission-description">What agents in this group can do. Toggle a connector to grant or revoke access, then expand it to choose which capabilities the agents may use.</p>
-
-        <div class="group-permissions__stats">
-          <div class="group-permissions__stat-card">
-            <div>{state.selectedPermissionSet.connectorIds.length}<span> / {state.visibleConnectorCount}</span></div>
-            <p>Connectors</p>
-          </div>
-        </div>
-
-        {#if state.hasUnsavedChanges}
-          <p class="group-permissions__warning">Unsaved changes</p>
-        {/if}
-
         {#if state.unsavedChangesWarning !== null}
           <div class="group-permissions__warning-panel" role="alert">
             <p>{state.unsavedChangesWarning}</p>
@@ -101,52 +96,61 @@
           </section>
         {/if}
 
-        <div class="permission-block">
-          <h3>Connectors &amp; permissions</h3>
-          <p>{state.exactMatchGuidance} Granting a connector does not grant its capabilities. Expand any connector to grant tools, prompts, and resources individually.</p>
-
-          <div class="group-permissions__connectors">
+        <section class="connector-permissions" aria-labelledby={id + '-title'}>
+          <h3 id={id + '-title'}>Connectors</h3>
+          <ul aria-labelledby={id + '-title'} role="list">
             {#each state.connectors as connector (connector.id)}
-              <article class="group-permissions__connector">
-                <div class="group-permissions__connector-row">
-                  <span class="group-permissions__connector-icon">{state.connectorInitials(connector.displayName)}</span>
-                  <span class="group-permissions__connector-name">
-                    {connector.displayName}
-                    <span>{connector.description}</span>
-                  </span>
-                  <span class={`group-permissions__tag ${connectorBadgeClass(connector)}`}>{connectorBadgeLabel(connector)}</span>
-                  <Button variant={state.expandedConnectorId === connector.id ? 'primary' : 'secondary'} size="compact" class="group-permissions__edit-button" type="button" aria-expanded={state.expandedConnectorId === connector.id} onclick={() => state.toggleConnectorExpansion(connector.id)}>{state.expandedConnectorId === connector.id ? 'Done' : 'Capabilities'}</Button>
-                  <AdminToggle checked={state.connectorIsGranted(connector.id)} disabled={state.saving} ariaLabel={`${connector.displayName} access`} onchange={(event) => state.setConnectorPermission(connector.id, inputChecked(event))} />
-                </div>
-
-                {#if state.expandedConnectorId === connector.id}
-                  <div class="group-permissions__operations-wrap">
-                    <div class="group-permissions__operations">
-                      <div class="group-permissions__operations-heading">Capabilities this group's agents may use through {connector.displayName}</div>
-                      {#each state.capabilitiesBySection(connector) as section (section.kind)}
-                        <div class="group-permissions__section-heading">{section.label}</div>
-                        {#each section.capabilities as capability (`${capability.kind}:${capability.key}`)}
-                          <div class:group-permissions__operation-selected={capability.kind === 'tool' && state.selectedOperationId === capability.key} class="group-permissions__operation" aria-current={capability.kind === 'tool' && state.selectedOperationId === capability.key ? 'true' : undefined}>
-                            <span>
-                              <code>{capability.key}</code>
-                              <span>{capability.description}</span>
-                            </span>
-                            <AdminToggle
-                              checked={state.capabilityIsGranted({ connectorId: connector.id, kind: capability.kind, key: capability.key })}
-                              disabled={state.saving || !state.connectorIsGranted(connector.id)}
-                              ariaLabel={`${capability.label} permission`}
-                              onchange={(event) => state.setCapabilityPermission({ connectorId: connector.id, kind: capability.kind, key: capability.key }, inputChecked(event))}
-                            />
-                          </div>
-                        {/each}
-                      {/each}
+              {@const expanded = state.expandedConnectorId === connector.id}
+              {@const granted = state.connectorIsGranted(connector.id)}
+              {@const detailsId = `${id}-capabilities-${connector.id}`}
+              <AdminPermissionRow name={connector.displayName} description={connector.description}>
+                {#snippet icon()}
+                  <span class="group-permissions__connector-icon" aria-hidden="true">{state.connectorInitials(connector.displayName)}</span>
+                {/snippet}
+                {#snippet actions()}
+                  <div class="connector-actions">
+                    <SegmentedRadio size="compact" label="Access" accessibleName={'Access to ' + connector.displayName} options={accessOptions} value={granted ? 'granted' : 'none'} disabled={state.saving} onchange={(access) => state.setConnectorPermission(connector.id, access === 'granted')} />
+                    <div class="capability-action">
+                      <span id={`${detailsId}-status`} class={`group-permissions__tag ${connectorBadgeClass(connector)}`}>{connectorBadgeLabel(connector)}</span>
+                      <Button variant={expanded ? 'primary' : 'secondary'} size="compact" type="button" aria-label={`Capabilities for ${connector.displayName}`} aria-describedby={`${detailsId}-status`} aria-expanded={expanded} aria-controls={detailsId} onclick={() => state.toggleConnectorExpansion(connector.id)}>Capabilities</Button>
                     </div>
                   </div>
-                {/if}
-              </article>
+                {/snippet}
+                {#snippet details()}
+                  <div class="group-permissions__operations-wrap" id={detailsId} hidden={!expanded}>
+                    {#if expanded}
+                      <div class="group-permissions__operations">
+                        <div class="group-permissions__operations-heading">{granted ? `Capabilities this group's agents may use through ${connector.displayName}` : 'Grant connector access to assign capabilities.'}</div>
+                        {#each state.capabilitiesBySection(connector) as section (section.kind)}
+                          <div class="group-permissions__section-heading">{section.label}</div>
+                          {#each section.capabilities as capability (`${capability.kind}:${capability.key}`)}
+                            {@const selected = capability.kind === 'tool' && state.selectedOperationId === capability.key}
+                            <div class={['group-permissions__operation', selected && 'group-permissions__operation-selected']} aria-current={selected ? 'true' : undefined}>
+                              <span>
+                                <code>{capability.key}</code>
+                                <span>{capability.description}</span>
+                              </span>
+                              <AdminToggle
+                                checked={state.capabilityIsGranted({ connectorId: connector.id, kind: capability.kind, key: capability.key })}
+                                disabled={state.saving || !granted}
+                                ariaLabel={`${capability.label} permission`}
+                                onchange={(event) => state.setCapabilityPermission({ connectorId: connector.id, kind: capability.kind, key: capability.key }, inputChecked(event))}
+                              />
+                            </div>
+                          {/each}
+                        {:else}
+                          <p class="empty">No capabilities available</p>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                {/snippet}
+              </AdminPermissionRow>
+            {:else}
+              <li class="empty connector-empty">No connectors available</li>
             {/each}
-          </div>
-        </div>
+          </ul>
+        </section>
 
         {@const currentSaveFeedback = saveFeedback()}
         <form class="permission-save" onsubmit={(event) => { event.preventDefault(); void state.save(); }}>
@@ -174,70 +178,40 @@
     padding: 12px 16px;
   }
 
-  .group-permissions__connector-row :global(.group-permissions__edit-button) {
-    flex-shrink: 0;
+  .connector-permissions { display: grid; gap: 1rem; }
+  .connector-permissions h3 { font-size: 0.9375rem; margin: 0; }
+  .connector-permissions ul { list-style: none; margin: 0; padding: 0; }
+  .connector-actions { align-items: end; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .capability-action {
+    display: grid;
+    gap: 0.25rem;
+    grid-template-columns: minmax(0, 1fr);
+    inline-size: 9.5rem;
+    justify-items: start;
+    max-inline-size: 100%;
   }
-
-  .group-permissions__stats {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 26px;
+  .capability-action .group-permissions__tag {
+    box-sizing: border-box;
+    display: block;
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
   }
-
-  .group-permissions__stat-card {
-    border: 1px solid var(--admin-border);
-    border-radius: 8px;
-    min-width: 118px;
-    padding: 10px 15px;
-  }
-
-  .group-permissions__stat-card div {
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
-  }
-
-  .group-permissions__stat-card span {
-    color: var(--admin-muted);
-    font-size: 13px;
-    font-weight: 500;
-  }
-
-  .group-permissions__stat-card p {
-    color: var(--admin-muted);
-    font-size: 11px;
-    margin: 1px 0 0;
-  }
-
-  .group-permissions__connector {
-    border-bottom: 1px solid var(--admin-soft);
-  }
-
-  .group-permissions__connector:last-child {
-    border-bottom: 0;
-  }
-
-  .group-permissions__connector-row {
-    align-items: center;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 11px;
-    padding: 11px 0;
-  }
+  .empty { color: var(--admin-muted); font-size: 0.875rem; }
+  .connector-empty { border-top: 1px solid var(--admin-border); padding: 1rem 0; }
 
   .group-permissions__connector-icon {
-    align-items: center;
-    background: var(--admin-panel);
-    border: 1px solid var(--admin-border);
-    border-radius: 6px;
-    color: var(--admin-ink);
-    display: inline-flex;
-    flex-shrink: 0;
-    font-size: 11px;
+    background: var(--admin-soft);
+    border-radius: var(--admin-radius);
+    color: var(--admin-muted);
+    display: grid;
+    flex: none;
+    font-size: 0.75rem;
     font-weight: 700;
-    height: 24px;
-    justify-content: center;
-    width: 24px;
+    height: 2.25rem;
+    place-items: center;
+    width: 2.25rem;
   }
 
   .group-permissions__connector-name {
@@ -376,26 +350,6 @@
     padding: 10px 0;
   }
 
-  .group-permissions__error,
-  .group-permissions__success,
-  .group-permissions__warning,
-  .group-permissions__warning-panel {
-    margin: 12px 0;
-  }
-
-  .group-permissions__error {
-    color: var(--admin-danger);
-  }
-
-  .group-permissions__success {
-    color: var(--admin-success-text);
-  }
-
-  .group-permissions__warning,
-  .group-permissions__warning-panel {
-    color: var(--admin-warning-text);
-  }
-
   .group-permissions__target-notice {
     color: var(--admin-accent);
     font-size: 14px;
@@ -411,7 +365,9 @@
     background: var(--admin-warning-bg);
     border: 1px solid var(--admin-warning-border);
     border-radius: var(--admin-radius);
+    color: var(--admin-warning-text);
     font-size: 14px;
+    margin: 12px 0;
     line-height: 1.6;
     padding: 14px 16px;
   }
@@ -421,29 +377,6 @@
   }
 
   @media (max-width: 820px) {
-    .group-permissions__connector-row {
-      align-items: center;
-      display: grid;
-      gap: 10px 8px;
-      grid-template-columns: 24px minmax(0, 1fr) auto 34px;
-    }
-
-    .group-permissions__connector-name {
-      grid-column: 2 / -1;
-    }
-
-    .group-permissions__operations-wrap {
-      padding-left: 0;
-    }
-
-    .group-permissions__tag {
-      grid-column: 2;
-      justify-self: start;
-      white-space: normal;
-    }
-
-    .group-permissions__connector-row :global(.group-permissions__edit-button) {
-      grid-column: 3;
-    }
+    .group-permissions__operations-wrap { padding-left: 0; }
   }
 </style>

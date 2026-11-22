@@ -31,7 +31,6 @@
   .page-actions { flex-shrink: 0; }
   .admin-title { margin-bottom: 0; }
   .back-link { color: var(--admin-accent); display: inline-block; margin-bottom: 16px; }
-  .permission-page :global(.permission-description) { color: var(--admin-muted); font-size: 13px; line-height: 1.55; margin: 0 0 18px; max-width: 640px; }
   .permission-page :global(.permission-block > h3) { color: var(--admin-muted); font-family: var(--admin-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.5px; margin: 0 0 4px; text-transform: uppercase; }
   .permission-page :global(.permission-block > p) { color: var(--admin-muted); font-size: 13px; line-height: 1.55; margin: 0 0 12px; }
   .permission-page :global(.permission-save) { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 24px; }

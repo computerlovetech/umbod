@@ -29,7 +29,7 @@ describe('unavailable saved grant presentation', () => {
     expect(body).not.toContain('Groups are shared with filesystem access');
     expect(body).not.toContain('Registration alone grants no access');
     expect(body).not.toContain('Delete group');
-    expect(body).toContain('Available server access');
+    expect(body).toContain('aria-label="Access to Available server"');
     expect(body).not.toContain('Unavailable connectors');
   });
 
@@ -48,7 +48,7 @@ describe('unavailable saved grant presentation', () => {
     }
     expect(body).not.toContain('Remove saved grants for available');
     expect(body).not.toContain('Remove saved grants for unknown');
-    expect(body).toContain('Available server access');
+    expect(body).toContain('aria-label="Access to Available server"');
     expect(body).toContain('<form');
     expect(body).toMatch(/<button[^>]*type="submit"/);
     expect(body).not.toContain('data-operation=');
@@ -62,7 +62,7 @@ describe('unavailable saved grant presentation', () => {
     data.preloadedGroup = { groupId: 'team', connectorIds: ['available'], capabilities: [] };
     const body = render(GroupPermissionsManager, { props: { state: new GroupPermissionsState(data, null, null, loader) } }).body;
     expect(body).not.toContain('Unavailable connectors');
-    expect(body).toContain('Available server access');
+    expect(body).toContain('aria-label="Access to Available server"');
   });
 
   test('keeps long identifiers in the accessible name rather than the nonwrapping button text', (): void => {

@@ -163,7 +163,6 @@ describe('unavailable saved connector grants', () => {
     const state = new GroupPermissionsState(initial, null, null, loader);
 
     expect(state.unavailableGrantedConnectorIds).toEqual(['capability-only', 'other-unavailable', 'z-unavailable']);
-    expect(state.visibleConnectorCount).toBe(4);
     expect(state.selectedPermissionSet).toEqual(initial.preloadedGroup);
     expect(state.hasUnsavedChanges).toBe(false);
     expect(JSON.parse(state.selectedPermissionChangesJson)).toEqual({ connectors: [], capabilities: [] });
@@ -179,7 +178,6 @@ describe('unavailable saved connector grants', () => {
     state.removeUnavailableConnectorGrants('z-unavailable');
 
     expect(state.unavailableGrantedConnectorIds).toEqual(['capability-only', 'other-unavailable']);
-    expect(state.visibleConnectorCount).toBe(3);
     expect(state.selectedPermissionSet).toEqual({
       ...initial.preloadedGroup,
       connectorIds: ['available', 'other-unavailable'],

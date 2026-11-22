@@ -19,9 +19,19 @@
   {#if !state.denied}
     <AdminRecordList items={state.groups} keyOf={(group) => group.group_id} label="Groups" recordHeading="Group" detailHeading="Provider group ID" emptyMessage="No groups yet.">
       {#snippet identity(group)}
-        <h2>{group.label}</h2>
-        {#if group.description}<p class="group-description">{group.description}</p>{/if}
-        <a class="permissions-link" href={'/admin/group-permissions/connectors?group=' + encodeURIComponent(group.group_id)} aria-label={'View permissions for ' + group.label}>View permissions</a>
+        <div class="group-identity">
+          <span class="group-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+              <circle cx="9" cy="7" r="4" />
+            </svg>
+          </span>
+          <div>
+            <h2>{group.label}</h2>
+            {#if group.description}<p class="group-description">{group.description}</p>{/if}
+            <a class="permissions-link" href={'/admin/group-permissions/connectors?group=' + encodeURIComponent(group.group_id)} aria-label={'View permissions for ' + group.label}>View permissions</a>
+          </div>
+        </div>
       {/snippet}
       {#snippet detail(group)}
         <div class="group-provider"><span>Provider group ID</span><code>{group.group_id}</code></div>
@@ -53,6 +63,10 @@
 
 <style>
   .groups-page { display: grid; gap: 16px; }
+  .group-identity { align-items: center; display: flex; gap: .75rem; }
+  .group-identity > div { min-width: 0; }
+  .group-icon { background: var(--admin-soft); border-radius: var(--admin-radius); color: var(--admin-muted); display: grid; flex: none; height: 2.25rem; place-items: center; width: 2.25rem; }
+  .group-icon svg { display: block; height: 1.125rem; width: 1.125rem; }
   .actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
   .permissions-link { color: var(--admin-muted); display: inline-block; font-size: .8125rem; margin-top: .25rem; }
   .group-description { margin: 4px 0 0; font-size: 14px; }

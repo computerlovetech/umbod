@@ -61,7 +61,7 @@ describe('unavailable connector removal interactions', () => {
     expect(section.textContent).toContain('Unavailable connectors');
     await vi.waitFor(() => expect(section.textContent).toContain('Unpublished'));
     expect(section.querySelector('input')).toBeNull();
-    expect([...target.querySelectorAll('h3')].map((heading) => heading.textContent)).toEqual(['Unavailable connectors', 'Connectors & permissions']);
+    expect([...target.querySelectorAll('h3')].map((heading) => heading.textContent)).toEqual(['Unavailable connectors', 'Connectors']);
     const remove = section.querySelector<HTMLButtonElement>('button[aria-label="Remove saved grants for Retired search"]')!;
     expect(remove).not.toBeNull();
     const row = remove.closest('li')!;
@@ -98,6 +98,44 @@ describe('unavailable connector removal interactions', () => {
   });
 });
 
+describe('inline connector access', () => {
+  it('requires an explicit capability selection after granting connector access', async (): Promise<void> => {
+    const initial = initialData();
+    initial.assignableTargets[0].capabilities = [{ kind: 'tool', key: 'read', label: 'Read reports', description: '' }];
+    const state = new GroupPermissionsState(initial, null, null);
+    const target = document.createElement('div');
+    document.body.append(target);
+    component = mount(GroupPermissionsManager, { target, props: { state } });
+    await tick();
+
+    const disclosure = target.querySelector<HTMLButtonElement>('button[aria-label="Capabilities for Reports"]')!;
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+    disclosure.click();
+    await tick();
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+    const details = document.getElementById(disclosure.getAttribute('aria-controls')!)!;
+    const capability = details.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    expect(capability.disabled).toBe(true);
+
+    const access = target.querySelector('fieldset[aria-label="Access to Reports"]')!;
+    access.querySelector<HTMLInputElement>('input[value="granted"]')!.click();
+    await tick();
+    expect(capability.disabled).toBe(false);
+    expect(capability.checked).toBe(false);
+    const capabilityStatus = document.getElementById(disclosure.getAttribute('aria-describedby')!)!;
+    expect(capabilityStatus.textContent).toBe('No capabilities granted');
+
+    capability.click();
+    await tick();
+    expect(capabilityStatus.textContent).toBe('1 capability');
+    access.querySelector<HTMLInputElement>('input[value="none"]')!.click();
+    await tick();
+    expect(details.hidden).toBe(true);
+    expect(target.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+    state.dispose();
+  });
+});
+
 describe('reactive permission catalogue integration', () => {
   it('retains staged detail through catalogue changes and clears controls when the selected group is removed', async (): Promise<void> => {
     const initial = initialData();
@@ -106,25 +144,28 @@ describe('reactive permission catalogue integration', () => {
     document.body.append(target);
     component = mount(GroupPermissionsManager, { target, props: { state } });
     flushSync();
-    const toggle = target.querySelector<HTMLInputElement>('label[aria-label="Reports access"] input[type="checkbox"]')!;
+    const access = target.querySelector('fieldset[aria-label="Access to Reports"]')!;
+    const noAccess = access.querySelector<HTMLInputElement>('input[value="none"]')!;
+    const granted = access.querySelector<HTMLInputElement>('input[value="granted"]')!;
     const save = target.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     const form = target.querySelector('form');
-    expect(toggle.checked).toBe(false);
+    expect(noAccess.checked).toBe(true);
+    expect(granted.checked).toBe(false);
     expect(save.disabled).toBe(true);
-    toggle.click();
+    granted.click();
     await tick();
     const draft = state.selectedPermissionChangesJson;
     expect(draft).toContain('enabled');
     expect(draft).toContain('reports');
-    expect(toggle.checked).toBe(true);
+    expect(granted.checked).toBe(true);
     expect(save.disabled).toBe(false);
     const renamed = { ...initial.groups[0], label: 'Renamed operators', description: 'New description', revision: 2 };
     const added = { groupId: 'c', label: 'Auditors', description: 'Audit description', revision: 1 };
     state.synchronizeCatalogue([renamed, added]);
     await tick();
     expect(state.selectedPermissionChangesJson).toBe(draft);
-    expect(target.querySelector('label[aria-label="Reports access"] input[type="checkbox"]')).toBe(toggle);
-    expect(toggle.checked).toBe(true);
+    expect(target.querySelector('fieldset[aria-label="Access to Reports"]')).toBe(access);
+    expect(granted.checked).toBe(true);
     expect(target.querySelector('button[type="submit"]')).toBe(save);
     expect(save.disabled).toBe(false);
     expect(target.querySelector('form')).toBe(form);
@@ -132,7 +173,7 @@ describe('reactive permission catalogue integration', () => {
     await tick();
     expect(state.selectedGroupId).toBeNull();
     expect(state.selectedPermissionChangesJson).toBe(JSON.stringify({ connectors: [], capabilities: [] }));
-    expect(target.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(target.querySelector('input[type="radio"]')).toBeNull();
     expect(target.querySelector('button[type="submit"]')).toBeNull();
     expect(target.querySelector('form')).toBeNull();
     expect(target.textContent).toContain('Select a group to edit permissions');

@@ -248,7 +248,6 @@ export class GroupPermissionsState {
   connectors = $state.raw<ConnectorPermissionTarget[]>([]);
   editorStatus = $state<'unselected' | 'loading' | 'ready' | 'failed'>('unselected');
   editorError = $state<string | null>(null);
-  readonly exactMatchGuidance: string;
   private readonly constructorTarget: { connectorId: string; operationId: string } | null;
   private appliedTarget: string | undefined;
   private savingInProgress = $state(false);
@@ -287,7 +286,6 @@ export class GroupPermissionsState {
     this.serverData = data;
     this.loader = loader;
     this.connectors = data.preloadedGroup === null ? [] : data.assignableTargets;
-    this.exactMatchGuidance = data.exactMatchGuidance;
     this.constructorTarget = data.initialTarget;
     this.originHref = data.originHref;
     this.applyInitialTarget(this.connectors);
@@ -354,7 +352,6 @@ export class GroupPermissionsState {
     ]);
     return [...grantedIds].filter((connectorId) => !assignableIds.has(connectorId)).sort();
   });
-  visibleConnectorCount = $derived(this.connectors.length + this.unavailableGrantedConnectorIds.length);
   unavailableGrantedConnectors = $derived(this.unavailableGrantedConnectorIds.map((id) => {
     const summary = this.connectorSummaries?.find((connector) => connector.id === id);
     return {
