@@ -21,16 +21,18 @@
   </div>
 </QueryPanel>
 {#if state.message}<p role="status">{state.message}</p>{/if}
+{#if state.busy || state.hasResult}
 <section class="insight-results" aria-label="Entries" aria-busy={state.busy}>
-  <div class="insight-result-meta"><span>{state.page.total} {state.page.total === 1 ? 'entry' : 'entries'}</span></div>
   {#if state.busy}<p class="insight-caption" role="status">Loading entries…</p>
   {:else}
+    <div class="insight-result-meta"><span>{state.page.total} {state.page.total === 1 ? 'entry' : 'entries'}</span></div>
     {#each state.page.items as report (report.report_id)}
       <Button variant="secondary" class="report-row" onclick={(): void => { void state.open(report.report_id); }}><span>{state.reportingName(report.playbook_id)}</span><span>{report.observed_pattern_ids.map(state.patternName).join(', ') || 'No patterns observed'}</span><DateTimeView value={report.received_at} /><span>{report.trigger === 'proactive' ? 'Proactive' : 'User requested'}</span></Button>
     {:else}<p class="insight-caption">No entries match this query.</p>{/each}
     <div class="insight-pagination"><Button disabled={state.query.offset === 0} onclick={(): void => state.paginate(-1)}>Previous</Button><span>Page {state.pageNumber}</span><Button disabled={!state.hasNext} onclick={(): void => state.paginate(1)}>Next</Button></div>
   {/if}
 </section>
+{/if}
 {#if state.detailBusy}<p role="status">Loading…</p>{/if}
 {#if state.detail}
   <ModalShell title={state.detail.instructions.playbook.name} titleId="entry-detail-title" close={state.close} closeDisabled={state.detailBusy || state.deleteConfirmation} --modal-overflow="auto">

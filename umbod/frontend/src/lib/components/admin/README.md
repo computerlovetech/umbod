@@ -6,7 +6,7 @@ description: Actor-owned administration views and shared administration controls
 
 # Workspaces
 
-- [Insights](./insights/README.md) — Identity-scoped findings, configuration and analytics navigation.
+- [Insights](./insights/README.md) — Shared identity-scoped composition for Insights and Agent diagnostics.
 - [Agent behaviour](./agent-behaviour/README.md) — Definition forms and self-reported diagnostic report inspection.
 - [Log analytics](./analytics/README.md) — Administrator query form and results table.
 - [MCP connectors](./downstream-mcp-connectors/README.md) — Shared and personal MCP workspaces and capability controls.

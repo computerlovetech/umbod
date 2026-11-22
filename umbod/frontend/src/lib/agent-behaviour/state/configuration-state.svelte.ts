@@ -5,6 +5,12 @@ import { conflictSchema, identifierSchema, publishSchema, type Configuration, ty
 
 type ReadonlyPattern = Readonly<Omit<BehaviourPattern, 'categories'>> & { readonly categories: readonly string[] };
 type ReadonlySettings = Readonly<Omit<DiagnosticPlaybook, 'pattern_ids'>> & { readonly pattern_ids: readonly string[] };
+type CollectionStatus = 'unavailable' | 'unconfigured' | 'off' | 'configured';
+
+function activeReportingSettings(settings: readonly ReadonlySettings[], patterns: readonly ReadonlyPattern[]): readonly ReadonlySettings[] {
+  const enabledPatternIds = new Set(patterns.filter((pattern): boolean => pattern.enabled).map((pattern): string => pattern.id));
+  return settings.filter((setting): boolean => setting.enabled && setting.pattern_ids.some((id): boolean => enabledPatternIds.has(id)));
+}
 
 export class ConfigurationState {
   private value = $state<Configuration>({ revision: 0, patterns: [], playbooks: [] });
@@ -30,8 +36,13 @@ export class ConfigurationState {
   get message(): string { return this.notice; }
   get conflict(): boolean { return this.collision !== null; }
   get dirty(): boolean { return this.loaded && JSON.stringify(this.value) !== JSON.stringify(this.saved); }
+  get collectionStatus(): CollectionStatus {
+    if (!this.saved) return 'unavailable';
+    if (!this.publishedPlaybooks.length) return 'unconfigured';
+    return activeReportingSettings(this.publishedPlaybooks, this.publishedPatterns).length ? 'configured' : 'off';
+  }
   get reportingMode(): string {
-    const enabled = this.playbooks.filter((setting): boolean => setting.enabled && setting.pattern_ids.some((id): boolean => this.patterns.some((pattern): boolean => pattern.id === id && pattern.enabled)));
+    const enabled = activeReportingSettings(this.playbooks, this.patterns);
     if (!enabled.length) return 'Off';
     return enabled.some((setting): boolean => setting.allow_proactive) ? 'Automatic reports allowed' : 'When requested';
   }

@@ -5,5 +5,5 @@
   const state = getInsightsState();
 </script>
 
-<svelte:head><title>Configuration · Agent behaviour · Insights</title></svelte:head>
+<svelte:head><title>Agent diagnostics</title></svelte:head>
 <ConfigurationView state={state.behaviour.configuration} />

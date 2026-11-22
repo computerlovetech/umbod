@@ -22,8 +22,14 @@ function required<T extends Element>(selector: string): T {
   return found!;
 }
 
-function navigate(section: 'behaviour' | 'logs'): void {
-  required<HTMLAnchorElement>(`nav[aria-label="Insights views"] a[href="/admin/insights/${section === 'behaviour' ? 'agent-behaviour' : 'logs'}"]`).click();
+const findingsLink = '.subpage-container a[href="/admin/insights/agent-behaviour"]';
+const settingsLink = '.insight-heading a[href="/admin/agent-diagnostics"]';
+const logsTab = 'nav[aria-label="Insights views"] a[href="/admin/insights/logs"]';
+const findingsTab = 'nav[aria-label="Insights views"] a[href="/admin/insights/agent-behaviour"]';
+const activeAdminLink = 'nav[aria-label="Administration navigation"] a[aria-current="page"]';
+
+function follow(selector: string): void {
+  required<HTMLAnchorElement>(selector).click();
   flushSync();
 }
 
@@ -35,33 +41,39 @@ test('preserves configuration drafts across separate findings and analytics rout
   const factory = vi.fn((): InsightsState => new InsightsState(api, logs));
   component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: factory } }); flushSync();
   await vi.waitFor((): void => expect(document.querySelector('label[aria-label="Enable Missing context"] input')).not.toBeNull());
-  expect(required('h1').textContent).toBe('Insights');
-  expect(required('nav[aria-label="Insights views"] a[aria-current="location"]').textContent).toBe('Agent behaviour');
-  expect(document.querySelector('a[href$="/configuration"]')).toBeNull();
-  expect(document.body.textContent).toContain('Add pattern');
+  expect(required('h1').textContent).toBe('Agent diagnostics');
+  expect(required(activeAdminLink).getAttribute('href')).toBe('/admin/agent-diagnostics');
+  expect(document.querySelector('nav[aria-label="Insights views"]')).toBeNull();
+  expect(required('.subpage-container header button').textContent).toBe('Add pattern');
+  expect(required(findingsLink).textContent).toContain('View findings');
   required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').click(); flushSync();
   expect(document.body.textContent).toContain('Unsaved changes');
-  navigate('behaviour');
+  follow(findingsLink);
   await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(1));
+  expect(required('h1').textContent).toBe('Insights');
+  expect(required(activeAdminLink).getAttribute('href')).toBe('/admin/insights/agent-behaviour');
+  expect(required(findingsTab).getAttribute('aria-current')).toBe('page');
   expect(required('h2').textContent).toBe('Agent behaviour');
   expect(required<HTMLDetailsElement>('.query-panel').open).toBe(false);
   expect(document.querySelector('[role="tablist"]')).toBeNull();
-  expect(required('header a[href$="/configuration"]').textContent).toBe('Configure');
+  expect(required(settingsLink).textContent).toBe('Collection settings');
+  expect(document.querySelectorAll('.subpage-container a[href="/admin/agent-diagnostics"]')).toHaveLength(1);
   expect(document.body.textContent).not.toContain('Add pattern');
-  navigate('logs');
+  follow(logsTab);
   await vi.waitFor((): void => expect(logs.reportQueries).toHaveLength(1));
   expect(required('h2').textContent).toBe('Log analytics');
   expect(required<HTMLDetailsElement>('.query-panel').open).toBe(false);
-  expect(document.querySelector('a[href$="/configuration"]')).toBeNull();
-  navigate('behaviour');
+  expect(required(logsTab).getAttribute('aria-current')).toBe('page');
+  expect(document.querySelector('.subpage-container a[href="/admin/agent-diagnostics"]')).toBeNull();
+  follow(findingsTab);
   await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(2));
-  navigate('logs');
+  follow(logsTab);
   await vi.waitFor((): void => expect(logs.reportQueries).toHaveLength(2));
   expect(required<HTMLDetailsElement>('.query-panel').open).toBe(false);
   expect(document.querySelector('.query-summary')?.textContent).toBe('Stored logs · Last 7 days');
-  navigate('behaviour');
+  follow(findingsTab);
   await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(3));
-  required<HTMLAnchorElement>('header a[href$="/configuration"]').click(); flushSync();
+  follow(settingsLink);
   expect(required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').checked).toBe(false);
   expect(document.body.textContent).toContain('Unsaved changes');
   expect(factory).toHaveBeenCalledOnce();
@@ -99,10 +111,60 @@ test('a log-query authorization failure clears cached configuration and removes 
   await vi.waitFor((): void => expect(document.querySelector('label[aria-label="Enable Missing context"] input')).not.toBeNull());
   required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').click(); flushSync();
   logs.failure = new HttpError(403, 'Forbidden', null);
-  navigate('logs');
+  follow(findingsLink);
+  follow(logsTab);
   await vi.waitFor((): void => expect(document.querySelector('[role="alert"]')?.textContent).toContain('Administration access'));
   expect(state.behaviour.configuration.patterns).toEqual([]);
   expect(document.querySelector('nav[aria-label="Insights views"]')).toBeNull();
   expect(document.querySelector('.query-panel')).toBeNull();
-  expect(document.querySelector('header a[href$="/configuration"]')).toBeNull();
+  expect(document.querySelector(settingsLink)).toBeNull();
+  expect(document.querySelector(findingsLink)).toBeNull();
+});
+
+test('findings offer setup when collection is unpublished and still show the query', async (): Promise<void> => {
+  const state = new InsightsState(new InMemoryAgentBehaviourApi(), new InMemoryLogCounts());
+  const controls = new InsightsHarnessState('/admin/insights/agent-behaviour');
+  component = mount(InsightsHarness, { target: document.body, props: { controls, createState: (): InsightsState => state } });
+  await vi.waitFor((): void => expect(document.querySelector('.collection-notice')?.textContent).toContain('Collection isn’t configured'));
+  expect(required('.collection-notice a[href="/admin/agent-diagnostics"]').textContent).toBe('Set up collection');
+  expect(required('.query-panel summary').textContent).toContain('Query');
+});
+
+test('findings show collection is off only after the disabling draft is published', async (): Promise<void> => {
+  const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
+  const state = new InsightsState(api, new InMemoryLogCounts());
+  component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: (): InsightsState => state } });
+  await vi.waitFor((): void => expect(document.querySelector('label[aria-label="Enable Missing context"] input')).not.toBeNull());
+  required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').click(); flushSync();
+  expect(document.body.textContent).toContain('Unsaved changes');
+  follow(findingsLink);
+  expect(document.querySelector('.collection-notice')).toBeNull();
+
+  follow(settingsLink);
+  const save = Array.from(document.querySelectorAll<HTMLButtonElement>('.subpage-container button')).find((button): boolean => button.textContent === 'Save changes');
+  expect(save).toBeDefined();
+  expect(save!.disabled).toBe(false);
+  save!.click();
+  await vi.waitFor((): void => expect(document.body.textContent).toContain('Changes saved'));
+  follow(findingsLink);
+  expect(required('.collection-notice').textContent).toContain('Collection is off');
+  expect(required('.collection-notice').textContent).toContain('Existing entries remain available.');
+  expect(required('.collection-notice a[href="/admin/agent-diagnostics"]').textContent).toBe('Review collection settings');
+  expect(required('.query-panel summary').textContent).toContain('Query');
+});
+
+test('a failed findings query shows the error instead of a false empty result', async (): Promise<void> => {
+  const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
+  vi.spyOn(api.reports, 'list').mockRejectedValueOnce(new HttpError(503, 'Unavailable', null));
+  const state = new InsightsState(api, new InMemoryLogCounts());
+  const controls = new InsightsHarnessState('/admin/insights/agent-behaviour');
+  component = mount(InsightsHarness, { target: document.body, props: { controls, createState: (): InsightsState => state } });
+  await vi.waitFor((): void => expect(document.body.textContent).toContain('Entries could not be loaded'));
+  expect(document.querySelector('section[aria-label="Entries"]')).toBeNull();
+  const query = required<HTMLDetailsElement>('.query-panel');
+  query.open = true;
+  required<HTMLButtonElement>('#agent-behaviour-query button[type="submit"]').click();
+  await vi.waitFor((): void => expect(document.body.textContent).toContain('No entries match this query.'));
+  expect(query.open).toBe(false);
+  expect(document.body.textContent).not.toContain('Entries could not be loaded');
 });

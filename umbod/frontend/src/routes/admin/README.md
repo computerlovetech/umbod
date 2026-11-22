@@ -12,7 +12,7 @@ description: Capability-checked administration layout, workspaces and compatibil
 
 # Workspaces
 
-- [Insights](./insights/README.md) — Behaviour findings, configuration and log analytics routes.
+- [Insights and Agent diagnostics](./(agent-insights)/insights/README.md) — Behaviour findings, log analytics and the standalone diagnostics editor.
 - [Groups](./groups/README.md) — Central administrator group catalogue route.
 - [Shared namespaces](./namespaces/+page.svelte) — Administration inventory for creating, editing, and deleting shared namespaces.
 - [Permissions](./group-permissions/README.md) — Persistent permissions layout and lazy tab editors.

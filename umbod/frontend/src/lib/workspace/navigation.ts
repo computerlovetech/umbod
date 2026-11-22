@@ -36,12 +36,16 @@ const administratorWorkspaceNavigation: readonly WorkspaceNavigationItem[] = [
   { id: 'administration', label: 'Administration', href: '/admin/connectors', icon: 'administration', startsSection: true }
 ];
 
+export const agentBehaviourFindingsHref = '/admin/insights/agent-behaviour';
+export const agentDiagnosticsHref = '/admin/agent-diagnostics';
+
 export const administrationNavigation: readonly WorkspaceNavigationItem[] = [
   { id: 'connectors', label: 'Connectors', href: '/admin/connectors', icon: 'connectors' },
   { id: 'groups', label: 'Groups', href: '/admin/groups', icon: 'groups' },
   { id: 'namespaces', label: 'Shared namespaces', href: '/admin/namespaces', icon: 'files' },
   { id: 'groupPermissions', label: 'Permissions', href: '/admin/group-permissions/connectors', icon: 'permissions' },
-  { id: 'insights', label: 'Insights', href: '/admin/insights/agent-behaviour', icon: 'analytics' }
+  { id: 'insights', label: 'Insights', href: agentBehaviourFindingsHref, icon: 'analytics' },
+  { id: 'agentDiagnostics', label: 'Agent diagnostics', href: agentDiagnosticsHref, icon: 'administration' }
 ];
 
 export const administrationPresentation = {

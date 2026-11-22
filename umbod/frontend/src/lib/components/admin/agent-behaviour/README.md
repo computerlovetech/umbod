@@ -6,8 +6,8 @@ description: Administrator-owned definition editors and self-reported report ins
 
 # Files
 
-- [Page view](AgentBehaviourView.svelte) — Findings landing with externally owned state and an Agent behaviour heading.
-- [Configuration view](ConfigurationView.svelte) — Separate configuration heading, findings backlink and editor dismissal without discarding drafts.
+- [Page view](AgentBehaviourView.svelte) — Findings landing with collection status and links to Agent diagnostics.
+- [Configuration view](ConfigurationView.svelte) — Standalone Agent diagnostics heading, pattern action and findings link; leaving preserves drafts.
 - [Navigation tests](agent-behaviour-navigation.dom.test.ts) — Prop-owned findings, configuration exit, draft preservation and access revocation.
 - [Configuration editor](ConfigurationEditor.svelte) — Pattern cards, selected editing, shared polarity dropdown, reporting disclosure and explicit save or discard.
 - [Reports view](ReportsView.svelte) — Shared query panel, draft filters, entries, escaped evidence, historical criteria and technical details disclosure.

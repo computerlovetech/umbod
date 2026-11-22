@@ -17,7 +17,7 @@ test('renders findings directly with externally owned state and stops only repor
   try {
     await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(1));
     expect(target.querySelector('h2')?.textContent).toBe('Agent behaviour');
-    expect(target.querySelector('.insight-heading p')).toBeNull();
+    expect(target.querySelector('header a[href="/admin/agent-diagnostics"]')?.textContent).toBe('Collection settings');
     expect(target.textContent).not.toContain('Agent self-reported findings · Not independently verified');
     expect(target.querySelector('[role="tablist"]')).toBeNull();
     expect(target.textContent).not.toContain('Reports');
@@ -31,7 +31,7 @@ test('renders findings directly with externally owned state and stops only repor
   state.dispose();
 });
 
-test('configuration owns its backlink and closes the editor on exit without discarding its draft', async (): Promise<void> => {
+test('Agent diagnostics owns its findings link and closes the editor on exit without discarding its draft', async (): Promise<void> => {
   const api = new InMemoryAgentBehaviourApi();
   const state = new AgentBehaviourPageState(api);
   await state.configuration.load(); await state.configuration.addPattern();
@@ -41,10 +41,10 @@ test('configuration owns its backlink and closes the editor on exit without disc
   const target = document.createElement('div'); document.body.append(target);
   const component = mount(ConfigurationView, { target, props: { state: state.configuration } }); flushSync();
   try {
-    expect(target.querySelector('h2')?.textContent).toBe('Configuration');
-    expect(target.querySelector('a.admin-back-link')?.getAttribute('href')).toBe('/admin/insights/agent-behaviour');
+    expect(target.querySelector('h1')?.textContent).toBe('Agent diagnostics');
+    expect(target.querySelector('a[href="/admin/insights/agent-behaviour"]')?.textContent).toContain('View findings');
     expect(target.querySelector('dialog')).not.toBeNull();
-    expect(target.textContent).not.toContain('Add pattern');
+    expect(target.textContent).toContain('Add pattern');
     expect(target.textContent).not.toContain('Restore defaults');
   } finally { await unmount(component); target.remove(); }
   expect(state.configuration.selected).toBeUndefined();

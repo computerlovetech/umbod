@@ -6,7 +6,7 @@ export class ReportsState {
   private queryValue = $state<ReportQuery>({ limit: 25, offset: 0 });
   private draftQueryValue = $state<ReportQuery>({ limit: 25, offset: 0 });
   private summaryValue = $state('All reporting settings · All patterns · All statuses');
-  private pageValue = $state<ReportPage>({ items: [], total: 0 });
+  private pageValue = $state<ReportPage | null>(null);
   private detailValue = $state<DiagnosticReport | null>(null);
   private deleteConfirmationValue = $state(false);
   private busyValue = $state(false);
@@ -19,10 +19,11 @@ export class ReportsState {
   get query(): Readonly<ReportQuery> { return { ...this.queryValue }; }
   get draftQuery(): Readonly<ReportQuery> { return { ...this.draftQueryValue }; }
   get querySummary(): string { return this.summaryValue; }
-  get page(): { readonly items: readonly Readonly<ReportPage['items'][number]>[]; readonly total: number } { return structuredClone($state.snapshot(this.pageValue)); }
+  get page(): { readonly items: readonly Readonly<ReportPage['items'][number]>[]; readonly total: number } { return this.pageValue ? structuredClone($state.snapshot(this.pageValue)) : { items: [], total: 0 }; }
   get detail(): DiagnosticReport | null { return this.detailValue ? structuredClone($state.snapshot(this.detailValue)) : null; }
   get deleteConfirmation(): boolean { return this.deleteConfirmationValue; }
   get busy(): boolean { return this.busyValue; }
+  get hasResult(): boolean { return this.pageValue !== null; }
   get detailBusy(): boolean { return this.detailBusyValue; }
   get message(): string { return this.messageValue; }
   get patterns(): readonly { readonly id: string; readonly name: string }[] { return this.configuration().patterns; }
@@ -30,7 +31,7 @@ export class ReportsState {
   reportingName = (id: string): string => this.reportingOptions.find((setting): boolean => setting.id === id)?.name ?? 'Previous reporting settings';
   patternName = (id: string): string => this.patterns.find((pattern): boolean => pattern.id === id)?.name ?? 'Removed pattern';
 
-  get hasNext(): boolean { return this.queryValue.offset + this.queryValue.limit < this.pageValue.total; }
+  get hasNext(): boolean { return this.queryValue.offset + this.queryValue.limit < (this.pageValue?.total ?? 0); }
   get pageNumber(): number { return Math.floor(this.queryValue.offset / this.queryValue.limit) + 1; }
   get assessments(): Array<DiagnosticReport['submission']['assessments'][number] & { pattern: DiagnosticReport['instructions']['patterns'][number] | undefined }> {
     const detail = this.detail;
@@ -70,14 +71,14 @@ export class ReportsState {
     this.listRequest?.abort();
     this.listRequest = null;
     this.close();
-    this.pageValue = { items: [], total: 0 };
+    this.pageValue = null;
     this.busyValue = false;
     this.messageValue = '';
   };
   load = async (): Promise<boolean> => {
     if (this.disposed || this.detailBusyValue) return false;
     this.listRequest?.abort(); const request = new AbortController(); this.listRequest = request;
-    this.busyValue = true; this.messageValue = ''; this.pageValue = { items: [], total: 0 }; this.close();
+    this.busyValue = true; this.messageValue = ''; this.pageValue = null; this.close();
     try {
       const page = await this.api.list({ ...this.queryValue }, request.signal);
       if (this.disposed || this.listRequest !== request) return false;

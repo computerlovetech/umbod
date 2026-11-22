@@ -6,13 +6,17 @@ export function configuration(): Configuration {
 }
 
 export class InsightsHarnessState {
-  pathname = $state('/admin/insights/agent-behaviour/configuration');
+  pathname: string;
   identity = $state<HeaderAccountIdentityState>({ kind: 'visible', name: 'Administrator', email: null, picture: null, hiddenValues: { id: 'account-a' } });
+
+  constructor(pathname: string = '/admin/agent-diagnostics') {
+    this.pathname = $state(pathname);
+  }
 
   navigate = (event: MouseEvent): void => {
     if (!(event.target instanceof Element)) return;
     const link = event.target.closest<HTMLAnchorElement>('a');
-    if (!link || !link.pathname.startsWith('/admin/insights')) return;
+    if (!link || !(link.pathname === '/admin/agent-diagnostics' || link.pathname.startsWith('/admin/insights/'))) return;
     event.preventDefault();
     this.pathname = link.pathname;
   };

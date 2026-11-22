@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
+  import { agentDiagnosticsHref } from '#lib/workspace/navigation.js';
   import AdminShell from '#lib/components/admin/AdminShell.svelte';
   import InsightsWorkspace from './InsightsWorkspace.svelte';
   import { createInsightsState } from './insights-factory';
@@ -14,7 +15,7 @@
   } = $props();
 </script>
 
-<AdminShell activeItem="insights" {accountIdentity} contentWidth="wide" navigationScope="/admin/insights">
+<AdminShell activeItem={pathname === agentDiagnosticsHref ? 'agentDiagnostics' : 'insights'} {accountIdentity} contentWidth="wide" navigationScope="/admin/insights">
   {#if accountIdentity.kind === 'visible'}
     {#key accountIdentity.hiddenValues.id}
       <InsightsWorkspace {pathname} {createState}>{@render children()}</InsightsWorkspace>

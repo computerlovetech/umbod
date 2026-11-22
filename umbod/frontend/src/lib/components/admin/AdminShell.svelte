@@ -8,6 +8,7 @@
 
   type AdminShellActiveItem =
     | 'insights'
+    | 'agentDiagnostics'
     | 'connectors'
     | 'groups'
     | 'namespaces'
