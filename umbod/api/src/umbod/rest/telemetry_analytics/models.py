@@ -9,6 +9,7 @@ from umbod.core.telemetry.analytics import (
     LogCountQuery,
     LogDimension,
     NoTimeBuckets,
+    OwnersScope,
     PaginationQuery,
     TimeRange,
 )
@@ -23,9 +24,9 @@ class LogCountRequest(BaseModel):
     bucketing: Annotated[NoTimeBuckets | FixedTimeBuckets, Field(discriminator="kind")]
     pagination: PaginationQuery
 
-    def to_query(self) -> LogCountQuery:
+    def to_query(self, scope: InstanceScope | OwnersScope) -> LogCountQuery:
         return LogCountQuery(
-            scope=InstanceScope(kind="instance"),
+            scope=scope,
             time_range=self.time_range,
             filters=self.filters,
             group_by=self.group_by,
@@ -35,5 +36,5 @@ class LogCountRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_query(self) -> Self:
-        self.to_query()
+        self.to_query(InstanceScope(kind="instance"))
         return self

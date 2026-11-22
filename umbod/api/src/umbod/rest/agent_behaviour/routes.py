@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException
 from umbod.core.agent_behaviour import (
     AgentBehaviourService,
     BehaviourConfiguration,
+    CallerNotAuthorized,
     ConfigurationInvalid,
     DiagnosticReport,
     PublishConfiguration,
@@ -37,6 +38,8 @@ class AgentBehaviourRoute(APIRoute):
                 response = JSONResponse(status_code=422, content={"detail": {"code": error.code, "issues": [issue.model_dump(mode="json") for issue in error.issues]}})
             except ReportNotFound as error:
                 response = JSONResponse(status_code=404, content={"detail": {"code": error.code}})
+            except CallerNotAuthorized as error:
+                response = JSONResponse(status_code=403, content={"detail": {"code": error.code}})
             except StorageUnavailable as error:
                 response = JSONResponse(status_code=503, content={"detail": {"code": error.code}})
             except RequestValidationError as error:

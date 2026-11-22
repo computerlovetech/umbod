@@ -3,6 +3,7 @@ import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import { InMemoryAgentBehaviourApi, deferred } from '../in-memory.test-support';
 import { ConfigurationState } from './configuration-state.svelte';
 import { ReportsState } from './reports-state.svelte';
+import { AdminReportsState } from './admin-reports-state.svelte';
 import { AgentBehaviourPageState } from './page-state.svelte';
 import type { Configuration, DiagnosticReport, ReportPage } from '../domain/schemas';
 
@@ -248,7 +249,7 @@ describe('report inspection', (): void => {
     const api = new InMemoryAgentBehaviourApi(); api.rows = [report];
     const response = deferred<ReportPage>();
     const list = vi.spyOn(api.reports, 'list').mockReturnValueOnce(response.promise);
-    const state = new ReportsState(api.reports, vi.fn());
+    const state = new AdminReportsState(api.reports, vi.fn());
     state.filter('status', 'observed');
     const pending = state.runQuery();
     await state.open(report.report_id); state.confirmDelete();
@@ -277,7 +278,7 @@ describe('report inspection', (): void => {
     state.dispose();
   });
   test('retains original snapshots and requires confirmation before deletion', async (): Promise<void> => {
-    const api = new InMemoryAgentBehaviourApi(); api.rows = [report]; const state = new ReportsState(api.reports, vi.fn()); await state.load(); await state.open(report.report_id); api.current = { ...configuration, revision: 8 };
+    const api = new InMemoryAgentBehaviourApi(); api.rows = [report]; const state = new AdminReportsState(api.reports, vi.fn()); await state.load(); await state.open(report.report_id); api.current = { ...configuration, revision: 8 };
     expect(state.detail?.instructions.configuration_revision).toBe(1); await state.remove(); expect(api.rows).toHaveLength(1); state.confirmDelete(); await state.remove(); expect(api.rows).toHaveLength(0); expect(state.detail).toBeNull(); expect(state.page.total).toBe(0);
   });
   test('filters same assessments and resets offset', async (): Promise<void> => {

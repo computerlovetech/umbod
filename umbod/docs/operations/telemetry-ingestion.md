@@ -52,7 +52,7 @@ Authenticated users create and manage tokens through the general [personal acces
 
 Application persistence stores only token hashes and metadata. The API and collector share the exact application persistence runtime. Each personal-token export requires a fresh primary-key lookup, constant-time hash comparison, and expiry, scope, audience, and revocation checks. Invalid personal tokens never fall back to the configured shared bearer. Registry failures reject the export with 503. There is no cross-request authorization cache.
 
-The legacy shared bearer and its required deployment configuration remain supported. The independent `umbod telemetry serve` process remains shared-bearer-only; custom embedding must explicitly install a verifier backed by the authoritative application persistence runtime to accept personal tokens. It must not create an independent token database. Token authentication does not currently populate analytics ownership; normalized records remain unowned.
+The legacy shared bearer and its required deployment configuration remain supported. The independent `umbod telemetry serve` process remains shared-bearer-only; custom embedding must explicitly install a verifier backed by the authoritative application persistence runtime to accept personal tokens. It must not create an independent token database. When authentication is required, a validated personal token establishes ownership for newly stored analytics logs.
 
 ## Serving applications
 
@@ -136,7 +136,11 @@ Responses contain `rows` with `groups`, `count` and `bucket`, plus `has_more` in
 
 Keep the time range, filters, grouping and bucketing fixed during traversal, advancing `offset` by the number of rows returned until `has_more` is false. Reads are live, not a snapshot: late ingestion can change counts or insert earlier-sorting rows even within a fixed time range, causing repeated or skipped rows between pages. An offset at or beyond the end returns empty `rows` and `has_more: false`. The ungrouped, unbucketed zero-count row appears only at offset zero.
 
-The administrator subapplication creates request-local readers from the API host's analytics runtime. Logs received on the private collector listener use that same runtime. REST does not connect its reader to independently deployed collectors.
+### Personal query endpoint
+
+`POST /api/me/telemetry/log-counts` accepts the same query fields and returns the same aggregate response as the administrator endpoint. It requires a signed-in user, not an ingestion token. The server scopes the query to that user's verified issuer and subject; requests cannot select another owner or broaden the scope. Counts exclude historical unowned logs and exports sent with the shared credential. Cookie-bearing requests require the trusted Origin and `X-Umbod-Web-Request: 1`.
+
+Both REST subapplications create request-local readers from the API host's analytics runtime. Logs received on the private collector listener use that same runtime. REST does not connect its reader to independently deployed collectors.
 
 ### SQLite analytics configuration
 
@@ -155,7 +159,7 @@ Analytics stores occurrence time, trusted ownership state, the seven supported d
 
 Source comes from resource `service.name`. Event name uses the log `eventName`, falling back to string attribute `event.name`. Severity uses `severityText`; numeric-only severities remain missing. Session uses the first present string attribute among `session.id`, `session_id`, `conversation.id`, `conversation_id` and `mcp.session.id`. Tool uses `tool.name`, `tool_name` and `mcp.tool.name` in that order. Duplicate attribute keys use the last occurrence; nonstring values are missing. Empty string attributes remain distinct from missing fields.
 
-All records received through shared or personal ingestion credentials remain unowned. Client-provided identity attributes never populate trusted ownership. Owner-scoped queries therefore exclude these records until a trusted ownership mechanism is introduced.
+New logs authenticated with a valid personal ingestion token are attributed to its verified owner. Shared-credential exports, unauthenticated development exports, and historical records without an owner remain unowned. Client-provided identity attributes never establish ownership.
 
 ### Normalized activity fields
 

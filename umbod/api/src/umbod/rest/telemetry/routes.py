@@ -8,7 +8,7 @@ from umbod.config import OtlpReceiverConfig
 from umbod.core.signals import SignalPublisher
 from umbod.rest.telemetry.observations import AcceptedCollectorLogs, get_accepted_logs_publisher
 from umbod.core.telemetry import TelemetrySignal, TelemetrySink, TelemetryUnavailable
-from umbod.core.telemetry.analytics import TelemetryAnalyticsUnavailable, TelemetryAnalyticsWriter
+from umbod.core.telemetry.analytics import LogOwnership, TelemetryAnalyticsUnavailable, TelemetryAnalyticsWriter
 from umbod.rest.telemetry.body import read_export_body
 from umbod.rest.telemetry.dependencies import (
     authenticate_export,
@@ -26,7 +26,7 @@ from umbod.rest.telemetry.responses import (
 from umbod.rest.telemetry.validation import parse_export, parse_protobuf_export
 from umbod.rest.telemetry.normalization import normalize_analytics_logs
 
-router = APIRouter(prefix="/v1", dependencies=[Depends(authenticate_export)])
+router = APIRouter(prefix="/v1")
 
 
 async def _receive(
@@ -36,6 +36,7 @@ async def _receive(
     sink: TelemetrySink,
     analytics_writer: TelemetryAnalyticsWriter,
     accepted_logs: SignalPublisher[AcceptedCollectorLogs],
+    owner: LogOwnership,
 ) -> Response:
     media_type = export_media_type(request)
     if media_type not in {JSON_MEDIA_TYPE, PROTOBUF_MEDIA_TYPE}:
@@ -48,7 +49,7 @@ async def _receive(
     except TelemetryUnavailable:
         raise TelemetryHttpError(503, "Telemetry logging is unavailable") from None
     if signal == TelemetrySignal.LOGS and batch.item_count:
-        records = normalize_analytics_logs(batch.payload, datetime.now(timezone.utc))
+        records = normalize_analytics_logs(batch.payload, datetime.now(timezone.utc), owner)
         try:
             await analytics_writer.append_logs(records)
         except TelemetryAnalyticsUnavailable:
@@ -61,31 +62,34 @@ async def _receive(
 @router.post("/logs")
 async def receive_logs(
     request: Request,
+    owner: Annotated[LogOwnership, Depends(authenticate_export)],
     accepted_logs: Annotated[SignalPublisher[AcceptedCollectorLogs], Depends(get_accepted_logs_publisher)],
     config: Annotated[OtlpReceiverConfig, Depends(get_receiver_config)],
     sink: Annotated[TelemetrySink, Depends(get_telemetry_sink)],
     analytics_writer: Annotated[TelemetryAnalyticsWriter, Depends(get_analytics_writer)],
 ) -> Response:
-    return await _receive(TelemetrySignal.LOGS, request, config, sink, analytics_writer, accepted_logs)
+    return await _receive(TelemetrySignal.LOGS, request, config, sink, analytics_writer, accepted_logs, owner)
 
 
 @router.post("/metrics")
 async def receive_metrics(
     request: Request,
+    owner: Annotated[LogOwnership, Depends(authenticate_export)],
     accepted_logs: Annotated[SignalPublisher[AcceptedCollectorLogs], Depends(get_accepted_logs_publisher)],
     config: Annotated[OtlpReceiverConfig, Depends(get_receiver_config)],
     sink: Annotated[TelemetrySink, Depends(get_telemetry_sink)],
     analytics_writer: Annotated[TelemetryAnalyticsWriter, Depends(get_analytics_writer)],
 ) -> Response:
-    return await _receive(TelemetrySignal.METRICS, request, config, sink, analytics_writer, accepted_logs)
+    return await _receive(TelemetrySignal.METRICS, request, config, sink, analytics_writer, accepted_logs, owner)
 
 
 @router.post("/traces")
 async def receive_traces(
     request: Request,
+    owner: Annotated[LogOwnership, Depends(authenticate_export)],
     accepted_logs: Annotated[SignalPublisher[AcceptedCollectorLogs], Depends(get_accepted_logs_publisher)],
     config: Annotated[OtlpReceiverConfig, Depends(get_receiver_config)],
     sink: Annotated[TelemetrySink, Depends(get_telemetry_sink)],
     analytics_writer: Annotated[TelemetryAnalyticsWriter, Depends(get_analytics_writer)],
 ) -> Response:
-    return await _receive(TelemetrySignal.TRACES, request, config, sink, analytics_writer, accepted_logs)
+    return await _receive(TelemetrySignal.TRACES, request, config, sink, analytics_writer, accepted_logs, owner)

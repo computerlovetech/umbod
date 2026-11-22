@@ -5,6 +5,7 @@ export class WorkspaceNavigationState {
     const path = this.pathname();
     if (path === '/getting-started' || path.startsWith('/getting-started/')) return 'gettingStarted';
     if (path === '/files' || path.startsWith('/files/')) return 'files';
+    if (path === '/insights' || path.startsWith('/insights/')) return 'insights';
     if (path === '/connectors' || path.startsWith('/connectors/')) return 'connectors';
     return 'dashboard';
   }

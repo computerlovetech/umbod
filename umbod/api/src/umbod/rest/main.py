@@ -24,6 +24,7 @@ from umbod.rest.authentication import (
 from umbod.rest.authentication.authorization import JwtVerifier
 from umbod.rest.authentication.middleware import SuppliedJwtVerifierFactory
 from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
+from umbod.rest.agent_behaviour import personal_router as personal_agent_behaviour_router
 from umbod.rest.agent_behaviour import router as agent_behaviour_router
 from umbod.rest.admin_overview import router as admin_overview_router
 from umbod.rest.user_catalogue import router as user_catalogue_router
@@ -71,6 +72,7 @@ from umbod.rest.install import router as install_router
 from umbod.rest.system import router as system_router
 from umbod.rest.system.routes import health
 from umbod.rest.system.schemas import HealthResponse
+from umbod.rest.telemetry_analytics import personal_router as personal_telemetry_analytics_router
 from umbod.rest.telemetry_analytics import router as telemetry_analytics_router
 from umbod.rest.personal_access_tokens import router as personal_access_tokens_router
 from umbod.rest.telemetry_setup import router as telemetry_setup_router
@@ -219,16 +221,19 @@ def _mount_admin_app(
     return admin_routes
 
 
-def _mount_personal_connections_app(
+def _mount_personal_app(
     app: FastAPI,
     settings: APISettings,
     dependency_factories: ConnectorApiDependencyFactories,
+    analytics_runtime: TelemetryAnalyticsRuntime,
     application_failures: SignalPublisher[ApplicationFailure],
 ) -> None:
     user_router = APIRouter()
     user_router.include_router(create_user_profile_router())
     user_router.include_router(user_catalogue_router)
     user_router.include_router(personal_usage_router)
+    user_router.include_router(personal_agent_behaviour_router)
+    user_router.include_router(personal_telemetry_analytics_router)
     user_router.include_router(identity_directory_personal_router)
     user_router.include_router(personal_access_tokens_router)
     user_router.include_router(telemetry_setup_router)
@@ -247,6 +252,7 @@ def _mount_personal_connections_app(
         )
 
     _attach_dependency_factories(personal_app, dependency_factories)
+    install_analytics_dependencies(personal_app, analytics_runtime)
     install_oauth_diagnostics(personal_app, application_failures)
 
     def provide_app_config() -> AppConfig:
@@ -462,8 +468,8 @@ def _assemble_application(
         app, app_settings, dependency_factories, app_settings, verifier_factory,
         create_app_arguments.oauth_dependencies, analytics_runtime, application_failures,
     )
-    _mount_personal_connections_app(
-        app, app_settings, dependency_factories, application_failures,
+    _mount_personal_app(
+        app, app_settings, dependency_factories, analytics_runtime, application_failures,
     )
     transfer_app = SubApiAppFactory(title="umbod-filesystem-transfer-api", router=filesystem_transfer_router).create()
     _attach_dependency_factories(transfer_app, dependency_factories)

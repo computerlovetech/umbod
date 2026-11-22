@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import { InMemoryAgentBehaviourApi } from '#lib/agent-behaviour/in-memory.test-support.js';
+import { InMemoryAgentBehaviourApi, storedReport } from '#lib/agent-behaviour/in-memory.test-support.js';
 import { AgentBehaviourPageState } from '#lib/agent-behaviour/state/page-state.svelte.js';
 import AgentBehaviourView from './AgentBehaviourView.svelte';
 import ConfigurationView from './ConfigurationView.svelte';
@@ -29,6 +29,35 @@ test('renders findings directly with externally owned state and stops only repor
   await state.configuration.load();
   expect(state.configuration.loaded).toBe(true);
   state.dispose();
+});
+
+test('admin detail opens the deletion confirmation and refreshes entries after deletion', async (): Promise<void> => {
+  const api = new InMemoryAgentBehaviourApi();
+  api.rows = [storedReport()];
+  const state = new AgentBehaviourPageState(api);
+  const target = document.createElement('div'); document.body.append(target);
+  const component = mount(AgentBehaviourView, { target, props: { state } });
+  function action(root: ParentNode, label: string): HTMLButtonElement {
+    const match = Array.from(root.querySelectorAll('button')).find((button): boolean => button.textContent?.trim() === label);
+    expect(match).toBeDefined();
+    return match!;
+  }
+  try {
+    await vi.waitFor((): void => expect(target.querySelector('.report-row')).not.toBeNull());
+    target.querySelector<HTMLButtonElement>('.report-row')!.click();
+    await vi.waitFor((): void => expect(target.querySelector('dialog .detail')).not.toBeNull());
+    action(target, 'Delete entry').click(); flushSync();
+    const confirmation = target.querySelector('[role="alertdialog"]')!;
+    expect(confirmation.textContent).toContain('Delete this entry?');
+    action(confirmation, 'Cancel').click(); flushSync();
+    expect(target.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(api.rows).toHaveLength(1);
+    action(target, 'Delete entry').click(); flushSync();
+    action(target.querySelector('[role="alertdialog"]')!, 'Delete permanently').click();
+    await vi.waitFor((): void => expect(target.textContent).toContain('No entries match this query.'));
+    expect(target.querySelector('dialog')).toBeNull();
+    expect(api.rows).toHaveLength(0);
+  } finally { await unmount(component); target.remove(); state.dispose(); }
 });
 
 test('Agent diagnostics owns its findings link and closes the editor on exit without discarding its draft', async (): Promise<void> => {

@@ -1,6 +1,19 @@
 import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
-import type { ReportsPort } from '../api';
+import type { ReportReadsPort } from '../api';
 import { querySchema, type ReportQuery, type ReportPage, type DiagnosticReport } from '../domain/schemas';
+
+export interface ReportLabel {
+  readonly id: string;
+  readonly name: string;
+}
+
+export interface ReportLabels {
+  readonly patterns: readonly ReportLabel[];
+  readonly playbooks: readonly ReportLabel[];
+  readonly seenPage?: (page: ReportPage) => void;
+  readonly seenDetail?: (detail: DiagnosticReport) => void;
+  readonly clear?: () => void;
+}
 
 export class ReportsState {
   private queryValue = $state<ReportQuery>({ limit: 25, offset: 0 });
@@ -8,26 +21,24 @@ export class ReportsState {
   private summaryValue = $state('All reporting settings · All patterns · All statuses');
   private pageValue = $state<ReportPage | null>(null);
   private detailValue = $state<DiagnosticReport | null>(null);
-  private deleteConfirmationValue = $state(false);
   private busyValue = $state(false);
   private detailBusyValue = $state(false);
   private messageValue = $state('');
-  private disposed = false;
+  protected disposed = false;
   private listRequest: AbortController | null = null;
   private detailRequest: AbortController | null = null;
-  constructor(private readonly api: ReportsPort, private readonly revoke: () => void, private readonly configuration: () => { patterns: readonly { readonly id: string; readonly name: string }[]; playbooks: readonly { readonly id: string; readonly name: string }[] } = () => ({ patterns: [], playbooks: [] })) {}
+  constructor(private readonly api: ReportReadsPort, private readonly revoke: () => void, private readonly labels: () => ReportLabels = () => ({ patterns: [], playbooks: [] })) {}
   get query(): Readonly<ReportQuery> { return { ...this.queryValue }; }
   get draftQuery(): Readonly<ReportQuery> { return { ...this.draftQueryValue }; }
   get querySummary(): string { return this.summaryValue; }
   get page(): { readonly items: readonly Readonly<ReportPage['items'][number]>[]; readonly total: number } { return this.pageValue ? structuredClone($state.snapshot(this.pageValue)) : { items: [], total: 0 }; }
   get detail(): DiagnosticReport | null { return this.detailValue ? structuredClone($state.snapshot(this.detailValue)) : null; }
-  get deleteConfirmation(): boolean { return this.deleteConfirmationValue; }
   get busy(): boolean { return this.busyValue; }
   get hasResult(): boolean { return this.pageValue !== null; }
   get detailBusy(): boolean { return this.detailBusyValue; }
   get message(): string { return this.messageValue; }
-  get patterns(): readonly { readonly id: string; readonly name: string }[] { return this.configuration().patterns; }
-  get reportingOptions(): readonly { readonly id: string; readonly name: string }[] { return this.configuration().playbooks; }
+  get patterns(): readonly ReportLabel[] { return this.labels().patterns; }
+  get reportingOptions(): readonly ReportLabel[] { return this.labels().playbooks; }
   reportingName = (id: string): string => this.reportingOptions.find((setting): boolean => setting.id === id)?.name ?? 'Previous reporting settings';
   patternName = (id: string): string => this.patterns.find((pattern): boolean => pattern.id === id)?.name ?? 'Removed pattern';
 
@@ -37,9 +48,9 @@ export class ReportsState {
     const detail = this.detail;
     return detail?.submission.assessments.map((assessment) => ({ ...assessment, pattern: detail.instructions.patterns.find((pattern): boolean => pattern.id === assessment.pattern_id) })) ?? [];
   }
-  private failure = (error: unknown): void => {
+  private failure = (error: unknown, fallback: string = 'Entries could not be loaded. Try again.'): void => {
     if (error instanceof AuthenticationRequiredError || (error instanceof HttpError && [401, 403].includes(error.status))) { this.revoke(); return; }
-    this.messageValue = error instanceof HttpError && error.status === 404 ? 'This entry is no longer available.' : 'Entries could not be loaded or deleted. Try again.';
+    this.messageValue = error instanceof HttpError && error.status === 404 ? 'This entry is no longer available.' : fallback;
   };
   filter = (key: 'playbook_id' | 'pattern_id' | 'status', value: string): void => {
     if (this.disposed || this.detailBusyValue) return;
@@ -72,6 +83,7 @@ export class ReportsState {
     this.listRequest = null;
     this.close();
     this.pageValue = null;
+    this.labels().clear?.();
     this.busyValue = false;
     this.messageValue = '';
   };
@@ -82,29 +94,39 @@ export class ReportsState {
     try {
       const page = await this.api.list({ ...this.queryValue }, request.signal);
       if (this.disposed || this.listRequest !== request) return false;
+      this.labels().seenPage?.(page);
       this.pageValue = page;
       return true;
     }
     catch (error) { if (!this.disposed && this.listRequest === request) this.failure(error); return false; }
     finally { if (!this.disposed && this.listRequest === request) this.busyValue = false; }
   };
-  open = async (id: string): Promise<void> => {
-    if (this.disposed || this.deleteConfirmationValue) return;
-    this.detailRequest?.abort(); const request = new AbortController(); this.detailRequest = request;
-    this.detailValue = null; this.detailBusyValue = true; this.messageValue = '';
-    try { const detail = await this.api.get(id, request.signal); if (!this.disposed && this.detailRequest === request) this.detailValue = detail; }
-    catch (error) { if (!this.disposed && this.detailRequest === request) this.failure(error); }
-    finally { if (!this.disposed && this.detailRequest === request) this.detailBusyValue = false; }
-  };
-  close = (): void => { this.detailRequest?.abort(); this.detailRequest = null; this.detailValue = null; this.detailBusyValue = false; this.deleteConfirmationValue = false; };
-  confirmDelete = (): void => { if (this.detailValue) this.deleteConfirmationValue = true; };
-  cancelDelete = (): void => { this.deleteConfirmationValue = false; };
-  remove = async (): Promise<void> => {
-    if (this.disposed || !this.detailValue || !this.deleteConfirmationValue || this.detailBusyValue) return;
+  async open(id: string): Promise<void> {
+    if (this.disposed) return;
+    this.close(); this.messageValue = '';
+    await this.runDetailRequest(async (request): Promise<void> => {
+      const detail = await this.api.get(id, request.signal);
+      if (!this.isCurrentDetailRequest(request)) return;
+      this.labels().seenDetail?.(detail);
+      this.detailValue = detail;
+    });
+  }
+
+  protected isCurrentDetailRequest(request: AbortController): boolean {
+    return !this.disposed && this.detailRequest === request;
+  }
+
+  protected async runDetailRequest(operation: (request: AbortController) => Promise<void>, fallback?: string): Promise<void> {
     const request = new AbortController(); this.detailRequest = request; this.detailBusyValue = true;
-    try { await this.api.remove(this.detailValue.report_id, request.signal); if (!this.disposed && this.detailRequest === request) { this.close(); await this.load(); } }
-    catch (error) { if (!this.disposed && this.detailRequest === request) this.failure(error); }
-    finally { if (!this.disposed && this.detailRequest === request) this.detailBusyValue = false; }
-  };
+    try { await operation(request); }
+    catch (error) { if (this.isCurrentDetailRequest(request)) this.failure(error, fallback); }
+    finally { if (this.isCurrentDetailRequest(request)) this.detailBusyValue = false; }
+  }
+
+  protected closeDetail(): void {
+    this.detailRequest?.abort(); this.detailRequest = null; this.detailValue = null; this.detailBusyValue = false;
+  }
+
+  close = (): void => this.closeDetail();
   dispose = (): void => { this.disposed = true; this.stop(); };
 }

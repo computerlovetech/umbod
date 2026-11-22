@@ -1,9 +1,9 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from umbod.core.callers import CallerContext
+from umbod.core.callers import CallerContext, SubjectIdentity
 from umbod.core.persistence import AllFields, Database, DatabaseSession, DeleteQuery, Equals, Fields, GreaterThan, InsertCommand, LessThan, Not, Query, ReadSession, TransactionMode, Unordered, UpsertCommand
 
 from .defaults import get_default_configuration
@@ -119,9 +119,15 @@ class DatabaseAgentBehaviourStore:
             return DiagnosticReceipt(report_id=report_id, received_at=now, duplicate=False)
 
     async def list_reports(self, query: ReportQuery, now: datetime) -> ReportPage:
+        return await self._list_reports(query, now, lambda summary: True)
+
+    async def list_owned_reports(self, owner: SubjectIdentity, query: ReportQuery, now: datetime) -> ReportPage:
+        return await self._list_reports(query, now, lambda summary: summary.caller.subject == owner)
+
+    async def _list_reports(self, query: ReportQuery, now: datetime, includes: Callable[[ReportSummary], bool]) -> ReportPage:
         async with self._read() as session:
             rows = await session.find_many(REPORT_LIST_TABLE, Query(GreaterThan(LIST_EXPIRY, _instant(now)), AllFields(), Unordered()))
-        summaries = sorted((row.listing.summary for row in rows if _matches(row.listing, query)), key=lambda summary: (summary.received_at, str(summary.report_id)), reverse=True)
+        summaries = sorted((row.listing.summary for row in rows if includes(row.listing.summary) and _matches(row.listing, query)), key=lambda summary: (summary.received_at, str(summary.report_id)), reverse=True)
         return ReportPage(items=tuple(summaries[query.offset:query.offset + query.limit]), total=len(summaries))
 
     async def get_report(self, report_id: UUID, now: datetime) -> DiagnosticReport:
@@ -130,6 +136,12 @@ class DatabaseAgentBehaviourStore:
         if row is None or row.expires_at <= _instant(now):
             raise ReportNotFound()
         return row.report
+
+    async def get_owned_report(self, owner: SubjectIdentity, report_id: UUID, now: datetime) -> DiagnosticReport:
+        report = await self.get_report(report_id, now)
+        if report.caller.subject != owner:
+            raise ReportNotFound()
+        return report
 
     async def delete_report(self, report_id: UUID, now: datetime) -> None:
         async with self._write() as session:

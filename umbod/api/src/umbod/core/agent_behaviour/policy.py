@@ -1,7 +1,7 @@
 import json
 from hashlib import sha256
 
-from umbod.core.callers import AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity
+from umbod.core.callers import LOCAL_DEVELOPMENT_ISSUER, AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity
 
 from .errors import CallerNotAuthorized, ConfigurationInvalid, ConfigurationIssue, InstructionsUnavailable, ProactiveDisabled, ReportInvalid, StaleConfiguration
 from .models import BehaviourConfiguration, DiagnosticInstructions, DiagnosticPlaybook, PublishConfiguration, SubmitDiagnosticReport
@@ -38,6 +38,17 @@ def validate_caller(caller: CallerContext) -> SubjectIdentity:
         or not subject.subject.strip()
         or not subject.issuer.value.strip()
     ):
+        raise CallerNotAuthorized()
+    return subject
+
+
+def validate_report_reader(caller: CallerContext) -> SubjectIdentity:
+    subject = validate_caller(caller)
+    local_issuer = DeclaredIssuer(value=LOCAL_DEVELOPMENT_ISSUER)
+    if (caller.authentication, subject.issuer == local_issuer) not in {
+        (AuthenticationProvenance.UPSTREAM_VERIFIED, False),
+        (AuthenticationProvenance.LOCAL_SIMULATION, True),
+    }:
         raise CallerNotAuthorized()
     return subject
 

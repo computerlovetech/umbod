@@ -2,7 +2,10 @@
   import type { AgentBehaviourPageState } from '#lib/agent-behaviour/state/page-state.svelte.js';
   import ButtonLink from '#lib/components/admin/shared/ButtonLink.svelte';
   import { agentDiagnosticsHref } from '#lib/workspace/navigation.js';
-  import ReportsView from './ReportsView.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import ReportsView from '#lib/components/shared/agent-behaviour/ReportsView.svelte';
   let { state }: { state: AgentBehaviourPageState } = $props();
 </script>
 
@@ -22,12 +25,24 @@
       <ButtonLink variant="secondary" href={agentDiagnosticsHref}>Review collection settings</ButtonLink>
     </div>
   {/if}
-  <ReportsView state={state.reports} />
+  <ReportsView state={state.reports} detailCloseDisabled={state.reports.deleteConfirmation}>
+    {#snippet detailActions()}
+      <Button variant="danger" disabled={state.reports.detailBusy} onclick={state.reports.confirmDelete}>Delete entry</Button>
+    {/snippet}
+  </ReportsView>
+  {#if state.reports.deleteConfirmation && state.reports.detail}
+    <ModalShell title="Delete this entry?" titleId="delete-report-title" close={state.reports.cancelDelete} closeDisabled={state.reports.detailBusy} role="alertdialog">
+      <p>{state.reports.detail.report_id} · <DateTimeView value={state.reports.detail.received_at} /></p>
+      <p>Evidence and instructions are deleted immediately. This cannot be undone. An opaque retry receipt remains until 60 days after reporting.</p>
+      <div class="actions"><Button variant="secondary" data-dialog-cancel disabled={state.reports.detailBusy} onclick={state.reports.cancelDelete}>Cancel</Button><Button variant="danger" disabled={state.reports.detailBusy} onclick={state.reports.remove}>Delete permanently</Button></div>
+    </ModalShell>
+  {/if}
 {:else}
   <p role="alert">Administration access is no longer available. Reload or sign in again.</p>
 {/if}
 
 <style>
+  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
   .findings-heading, .collection-notice { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem 1.5rem; }
   .findings-heading a { margin-bottom: 0; }
   .collection-notice { margin-bottom: 1rem; }

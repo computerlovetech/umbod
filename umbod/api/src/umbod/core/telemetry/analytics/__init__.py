@@ -23,11 +23,20 @@ from .ports import (
     TelemetryAnalyticsRuntime,
     TelemetryAnalyticsWriter,
 )
-from .write_models import AnalyticsLogRecord, LogWriteBatch, OwnedLog, UnownedLog
+from .write_models import (
+    AnalyticsLogRecord,
+    LogOwnership,
+    LogWriteBatch,
+    OwnedLog,
+    UnownedLog,
+    analytics_owner_id,
+)
 
 __all__ = [
     "AnalyticsLogRecord",
+    "LogOwnership",
     "LogWriteBatch",
+    "analytics_owner_id",
     "OwnedLog",
     "UnownedLog",
     "TelemetryAnalyticsRuntime",

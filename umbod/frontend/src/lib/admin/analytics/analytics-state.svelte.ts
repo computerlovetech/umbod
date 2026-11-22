@@ -21,6 +21,16 @@ interface SubmittedResult extends Submission {
 
 const detailSchema = z.object({ detail: z.string() });
 
+interface AnalyticsWorkspaceOptions {
+  readonly accessLostMessage: string;
+  readonly unavailableMessage: string;
+}
+
+const adminOptions: AnalyticsWorkspaceOptions = {
+  accessLostMessage: 'Administration access is no longer available. Sign in again or contact your administrator.',
+  unavailableMessage: 'Log analytics is disabled or temporarily unavailable. Ask your administrator to enable analytics, or try again later.'
+};
+
 export class AnalyticsState {
   readonly draft = new QueryDraft();
   readonly reportRange = new QueryDraft();
@@ -37,7 +47,12 @@ export class AnalyticsState {
   private started = false;
   private controller: AbortController | undefined;
 
-  constructor(private readonly source: LogCountSource, private readonly now: () => Date = () => new Date(), private readonly onAccessLost: () => void = () => {}) {
+  constructor(
+    private readonly source: LogCountSource,
+    private readonly now: () => Date = () => new Date(),
+    private readonly onAccessLost: () => void = () => {},
+    private readonly options: AnalyticsWorkspaceOptions = adminOptions
+  ) {
     this.reportRange.setPreset('week');
     this.choices = new FilterChoices(this.draft, source, now, this.loseAccess);
   }
@@ -65,8 +80,9 @@ export class AnalyticsState {
   get countLabel(): string { return this.submittedReport?.countLabel ?? 'Log count'; }
   formatValue(dimension: LogCountQuery['group_by'][number], value: string): string { return this.submittedCustom ? value : reportValue(dimension, value); }
   setReport(value: string): void {
-    if (reportOptions.some((option) => option.value === value)) {
-      this.reportValue = value as ReportId;
+    const report = reportOptions.find((option) => option.value === value);
+    if (report) {
+      this.reportValue = report.value;
       if (!this.custom) this.choices.close();
     }
   }
@@ -205,7 +221,7 @@ export class AnalyticsState {
       if (failure instanceof AuthenticationRequiredError || (failure instanceof HttpError && [401, 403].includes(failure.status))) {
         this.loseAccess();
       } else if (failure instanceof HttpError && failure.status === 503) {
-        this.errorValue = 'Log analytics is disabled or temporarily unavailable. Ask your administrator to enable analytics, or try again later.';
+        this.errorValue = this.options.unavailableMessage;
       } else if (failure instanceof HttpError && failure.status === 422) {
         const detail = detailSchema.safeParse(failure.body);
         this.errorValue = detail.success ? detail.data.detail : 'The query could not be completed. Narrow the time range or filters, or remove grouping dimensions.';
@@ -226,7 +242,7 @@ export class AnalyticsState {
     this.resultValue = undefined;
     this.failedSubmission = undefined;
     this.accessLostValue = true;
-    this.errorValue = 'Administration access is no longer available. Sign in again or contact your administrator.';
+    this.errorValue = this.options.accessLostMessage;
     this.choices.dispose();
     this.onAccessLost();
   };

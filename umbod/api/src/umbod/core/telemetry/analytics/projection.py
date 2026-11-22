@@ -4,10 +4,12 @@ from umbod.core.telemetry.normalization.mapping import selected_tool
 from umbod.core.telemetry.normalization.models import MissingValue, NormalizedRecord, SkillActivation, TextValue, ToolActivity
 
 from .models import DimensionGroup, LogDimension, PresentDimensionValue
-from .write_models import AnalyticsLogRecord, UnownedLog
+from .write_models import AnalyticsLogRecord, LogOwnership
 
 
-def project_analytics_log(record: NormalizedRecord) -> AnalyticsLogRecord:
+def project_analytics_log(
+    record: NormalizedRecord, owner: LogOwnership,
+) -> AnalyticsLogRecord:
     source = record.source
     values: dict[LogDimension, str] = {}
     candidates = (
@@ -30,6 +32,6 @@ def project_analytics_log(record: NormalizedRecord) -> AnalyticsLogRecord:
     timestamp = timestamps.source_ns or timestamps.observed_ns or timestamps.receipt_ns
     occurred_at = datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(microseconds=timestamp // 1000)
     return AnalyticsLogRecord(
-        occurred_at=occurred_at, owner=UnownedLog(kind="unowned"), normalization=record,
+        occurred_at=occurred_at, owner=owner, normalization=record,
         dimensions=tuple(DimensionGroup(dimension=dimension, value=PresentDimensionValue(kind="present", value=value)) for dimension, value in values.items()),
     )

@@ -5,7 +5,7 @@ from uuid import UUID
 from umbod.core.callers import CallerContext
 from .defaults import get_default_configuration
 from .models import BehaviourConfiguration, DiagnosticInstructions, DiagnosticReceipt, DiagnosticReport, PublishConfiguration, ReportPage, ReportQuery, SubmitDiagnosticReport
-from .policy import resolve_instructions, validate_caller
+from .policy import resolve_instructions, validate_caller, validate_report_reader
 from .ports import AgentBehaviourStore
 
 
@@ -36,6 +36,12 @@ class AgentBehaviourService:
 
     async def get_report(self, report_id: UUID) -> DiagnosticReport:
         return await self._store.get_report(report_id, self._clock())
+
+    async def list_owned_reports(self, caller: CallerContext, query: ReportQuery) -> ReportPage:
+        return await self._store.list_owned_reports(validate_report_reader(caller), query, self._clock())
+
+    async def get_owned_report(self, caller: CallerContext, report_id: UUID) -> DiagnosticReport:
+        return await self._store.get_owned_report(validate_report_reader(caller), report_id, self._clock())
 
     async def delete_report(self, report_id: UUID) -> None:
         await self._store.delete_report(report_id, self._clock())

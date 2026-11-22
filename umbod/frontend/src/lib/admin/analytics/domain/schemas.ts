@@ -33,3 +33,13 @@ export const logCountResponseSchema = z.strictObject({
 });
 export type LogCountQuery = z.infer<typeof logCountQuerySchema>;
 export type LogCountResponse = z.infer<typeof logCountResponseSchema>;
+
+export function logCountResponseFor(query: LogCountQuery): z.ZodType<LogCountResponse> {
+  return logCountResponseSchema.refine((response) =>
+    response.rows.length <= query.pagination.limit && response.rows.every((row) =>
+      row.groups.length === query.group_by.length &&
+      row.groups.every((group, index) => group.dimension === query.group_by[index]) &&
+      row.bucket.kind === (query.bucketing.kind === 'fixed' ? 'bucket' : 'none')
+    ), 'Aggregate results must match the requested grouping, buckets and page limit'
+  );
+}

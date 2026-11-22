@@ -6,7 +6,14 @@ from pydantic import SecretStr
 
 from umbod.config import OtlpReceiverConfig
 from umbod.core.telemetry import TelemetrySink
-from umbod.core.telemetry.analytics import TelemetryAnalyticsReader, TelemetryAnalyticsWriter
+from umbod.core.telemetry.analytics import (
+    LogOwnership,
+    OwnedLog,
+    TelemetryAnalyticsReader,
+    TelemetryAnalyticsWriter,
+    UnownedLog,
+    analytics_owner_id,
+)
 from umbod.core.telemetry.adapters import StdoutTelemetrySink
 from umbod.rest.telemetry.errors import TelemetryHttpError
 from umbod.rest.telemetry.token_authentication import (
@@ -37,11 +44,11 @@ async def authenticate_export(
     personal_tokens: Annotated[
         TelemetryPersonalAccessTokenVerifier, Depends(get_telemetry_token_verifier)
     ],
-) -> None:
+) -> LogOwnership:
     if not config.enabled:
         raise TelemetryHttpError(503, "Telemetry ingestion is disabled")
     if config.allow_unauthenticated:
-        return
+        return UnownedLog(kind="unowned")
     authorization_values = request.headers.getlist("authorization")
     if len(authorization_values) != 1:
         raise TelemetryHttpError(401, "Bearer authentication is required")
@@ -49,11 +56,12 @@ async def authenticate_export(
     if scheme.lower() != "bearer" or not separator or not token:
         raise TelemetryHttpError(401, "Bearer authentication is required")
     if token.startswith("umbod_pat_"):
-        await personal_tokens.verify(SecretStr(token))
-        return
+        owner = await personal_tokens.verify(SecretStr(token))
+        return OwnedLog(kind="owned", owner_id=analytics_owner_id(owner.issuer, owner.subject))
     if not config.bearer_token:
         raise TelemetryHttpError(503, "Telemetry authentication is not configured")
     if not hmac.compare_digest(
         token.encode("utf-8"), config.bearer_token.encode("utf-8")
     ):
         raise TelemetryHttpError(401, "Invalid bearer credentials")
+    return UnownedLog(kind="unowned")

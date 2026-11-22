@@ -11,10 +11,41 @@ import { InMemoryPersonalConnectionsApi } from '#lib/personal-connections/infras
 import { workspaceNavigation } from './navigation';
 import { resolveWorkspaceAccess } from './admin-access';
 import { WorkspaceAccessState } from './workspace-access-state.svelte';
+import { WorkspaceScope } from './workspace-scope.svelte';
 
 const user: WorkspaceProfile = { identity_key: 'opaque-admin-key', user: { id: 'admin', name: 'Alex', email: null, picture: null }, capabilities: { administration: true } };
 
 describe('independent workspace access', () => {
+  test('personal views hide the previous account until session revalidation finishes', async (): Promise<void> => {
+    const next = deferred<WorkspaceProfile>();
+    const get = vi.fn<() => Promise<WorkspaceProfile>>().mockResolvedValueOnce(user).mockReturnValueOnce(next.promise);
+    const access = new WorkspaceAccessState({ profile: { get } });
+    const scope = new WorkspaceScope(access);
+    await access.load();
+    expect(scope.personalIdentity).toMatchObject({ hiddenValues: { id: user.identity_key } });
+
+    scope.suspendPersonal();
+    const refresh = scope.refreshPersonal();
+    expect(scope.personalChecking).toBe(true);
+    expect(scope.personalIdentity).toEqual({ kind: 'hidden' });
+    next.resolve({ ...user, identity_key: 'new-account' });
+    await refresh;
+    expect(scope.personalChecking).toBe(false);
+    expect(scope.personalIdentity).toMatchObject({ hiddenValues: { id: 'new-account' } });
+  });
+
+  test('workspace logout keeps personal identity hidden when a refresh finishes late', async (): Promise<void> => {
+    const next = deferred<WorkspaceProfile>();
+    const access = new WorkspaceAccessState({ profile: { get: (): Promise<WorkspaceProfile> => next.promise } });
+    const scope = new WorkspaceScope(access);
+    const refresh = scope.refreshPersonal();
+    scope.dispose();
+    next.resolve(user);
+    await refresh;
+    expect(scope.personalChecking).toBe(false);
+    expect(scope.personalIdentity).toEqual({ kind: 'hidden' });
+  });
+
   test('trusted profile keys distinguish equal raw subjects and fence earlier workspace profiles', async (): Promise<void> => {
     const subject = { id: 'same-raw-subject', name: 'Same display name', email: null, picture: null };
     const profileA: WorkspaceProfile = { identity_key: 'opaque-key-7ec4', user: subject, capabilities: { administration: true } };
@@ -102,12 +133,12 @@ describe('independent workspace access', () => {
     expect(dashboard.phase).toBe('ready');
     expect(dashboard.connectors.length).toBeGreaterThan(0);
     expect(access.adminAccess).toBe('checking');
-    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/connectors', '/files', '/getting-started']);
+    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/connectors', '/files', '/insights/agent-behaviour', '/getting-started']);
     complete(user);
     await readingAccess;
     expect(access.accountIdentity).toMatchObject({ kind: 'visible', name: 'Alex' });
     expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual([
-      '/dashboard', '/connectors', '/files', '/getting-started', '/admin/connectors'
+      '/dashboard', '/connectors', '/files', '/insights/agent-behaviour', '/getting-started', '/admin/connectors'
     ]);
     dashboard.dispose();
     access.dispose();
@@ -118,7 +149,7 @@ describe('independent workspace access', () => {
     await access.load();
     expect(access.adminAccess).toBe(status === 403 ? 'denied' : 'unavailable');
     expect(access.accountIdentity).toEqual({ kind: 'hidden' });
-    expect(workspaceNavigation(access.adminAccess === 'allowed')).toHaveLength(4);
+    expect(workspaceNavigation(access.adminAccess === 'allowed')).toHaveLength(5);
   });
 
   test('ordinary profile keeps visible identity without administration navigation', async (): Promise<void> => {
@@ -126,7 +157,7 @@ describe('independent workspace access', () => {
     await access.load();
     expect(access.accountIdentity).toMatchObject({ kind: 'visible', name: 'Alex' });
     expect(access.adminAccess).toBe('denied');
-    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/connectors', '/files', '/getting-started']);
+    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/connectors', '/files', '/insights/agent-behaviour', '/getting-started']);
     access.dispose();
   });
 

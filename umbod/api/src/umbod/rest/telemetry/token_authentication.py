@@ -8,6 +8,7 @@ from umbod.config.identity_policy import local_development_identity_enabled
 from umbod.core.callers import LOCAL_DEVELOPMENT_ISSUER
 from umbod.core.personal_access_tokens import (
     InvalidPersonalAccessToken,
+    TokenOwner,
     ValidatePersonalAccessToken,
     create_personal_access_token_service,
 )
@@ -21,11 +22,11 @@ from umbod.rest.telemetry.errors import TelemetryHttpError
 
 
 class TelemetryPersonalAccessTokenVerifier(Protocol):
-    async def verify(self, token: SecretStr) -> None: ...
+    async def verify(self, token: SecretStr) -> TokenOwner: ...
 
 
 class UnavailableTelemetryTokenVerifier:
-    async def verify(self, token: SecretStr) -> None:
+    async def verify(self, token: SecretStr) -> TokenOwner:
         raise TelemetryHttpError(401, "Invalid bearer credentials")
 
 
@@ -36,7 +37,7 @@ class DatabaseTelemetryTokenVerifier:
         self._runtime = runtime
         self._local_development_tokens_allowed = local_development_tokens_allowed
 
-    async def verify(self, token: SecretStr) -> None:
+    async def verify(self, token: SecretStr) -> TokenOwner:
         try:
             await self._runtime.readiness.ensure_ready()
             service = create_personal_access_token_service(
@@ -55,6 +56,7 @@ class DatabaseTelemetryTokenVerifier:
                 and not self._local_development_tokens_allowed
             ):
                 raise InvalidPersonalAccessToken()
+            return metadata.owner
         except InvalidPersonalAccessToken:
             raise TelemetryHttpError(401, "Invalid bearer credentials") from None
         except Exception:

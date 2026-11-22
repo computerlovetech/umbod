@@ -7,7 +7,7 @@ from opentelemetry.proto.common.v1.common_pb2 import AnyValue, KeyValue
 from pydantic import JsonValue
 
 from umbod.core.telemetry import TelemetrySignal
-from umbod.core.telemetry.analytics import LogWriteBatch
+from umbod.core.telemetry.analytics import LogOwnership, LogWriteBatch
 from umbod.core.telemetry.normalization.decoding import (
     DecodedAttribute, DecodedBoolean, DecodedInteger, DecodedInvalid, DecodedNumber, DecodedString,
     DecodedValue, ProducerKey,
@@ -28,7 +28,10 @@ _INDICATOR_KEYS = frozenset(("mcp_server", "mcp_server_origin", "mcp.server.name
 _RESOURCE_KEYS = frozenset(("service.name", "service.version"))
 
 
-def normalize_analytics_logs(payload: dict[str, JsonValue], received_at: datetime) -> LogWriteBatch:
+def normalize_analytics_logs(
+    payload: dict[str, JsonValue], received_at: datetime,
+    owner: LogOwnership,
+) -> LogWriteBatch:
     request = cast(ExportLogsServiceRequest, parse_message(TelemetrySignal.LOGS, payload))
     epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
     delta = received_at.astimezone(timezone.utc) - epoch
@@ -55,7 +58,8 @@ def normalize_analytics_logs(payload: dict[str, JsonValue], received_at: datetim
                     receipt_ns=receipt_ns,
                     effective_source="source" if record.time_unix_nano else "observed" if record.observed_time_unix_nano else "receipt",
                 )
-                records.append(project_analytics_log(normalize_log(source, timestamps, capture_producer_evidence(decoded))))
+                normalized = normalize_log(source, timestamps, capture_producer_evidence(decoded))
+                records.append(project_analytics_log(normalized, owner))
     return LogWriteBatch(records=tuple(records))
 
 

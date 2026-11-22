@@ -24,10 +24,14 @@ export const workspacePresentation = {
   navigationLabel: 'Workspace navigation'
 };
 
+export const personalInsightsHref = '/insights/agent-behaviour';
+export const personalInsightsLogsHref = '/insights/logs';
+
 const dashboardNavigation: readonly WorkspaceNavigationItem[] = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: 'dashboard' },
   { id: 'connectors', label: 'Connectors', href: '/connectors', icon: 'connectors' },
   { id: 'files', label: 'Files', href: '/files', icon: 'files' },
+  { id: 'insights', label: 'Insights', href: personalInsightsHref, icon: 'analytics' },
   { id: 'gettingStarted', label: 'Getting started', href: '/getting-started', icon: 'gettingStarted' }
 ];
 
@@ -57,7 +61,7 @@ export const administrationPresentation = {
 };
 
 export function usesWorkspaceShell(pathname: string): boolean {
-  return ['/admin', '/dashboard', '/connectors', '/files', '/getting-started'].some((root: string): boolean => pathname === root || pathname.startsWith(`${root}/`));
+  return ['/admin', '/dashboard', '/connectors', '/files', '/insights', '/getting-started'].some((root: string): boolean => pathname === root || pathname.startsWith(`${root}/`));
 }
 
 export function workspaceNavigation(adminAllowed: boolean): readonly WorkspaceNavigationItem[] {

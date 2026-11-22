@@ -29,8 +29,8 @@ describe('contextual sidebar rendering', (): void => {
     await tick();
     const links = Array.from(document.querySelectorAll('nav a'));
     expect(links.map((link): string => link.textContent.trim())).toEqual(allowed
-      ? ['Dashboard', 'Connectors', 'Files', 'Getting started', 'Administration']
-      : ['Dashboard', 'Connectors', 'Files', 'Getting started']);
+      ? ['Dashboard', 'Connectors', 'Files', 'Insights', 'Getting started', 'Administration']
+      : ['Dashboard', 'Connectors', 'Files', 'Insights', 'Getting started']);
     for (const link of links) {
       expect(link.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
       expect(link.querySelector('svg')?.getAttribute('focusable')).toBe('false');

@@ -7,7 +7,7 @@ import pytest
 from pydantic import JsonValue
 
 from umbod.core.telemetry import TelemetrySignal
-from umbod.core.telemetry.analytics import LogDimension
+from umbod.core.telemetry.analytics import LogDimension, UnownedLog
 from umbod.core.telemetry.analytics.projection import project_analytics_log
 from umbod.core.telemetry.normalization import NormalizedLogRecord
 from umbod.core.telemetry.normalization.mapping import normalize_log
@@ -32,7 +32,7 @@ def _append(payload: dict[str, JsonValue], key: str, value: dict[str, JsonValue]
 
 
 def _normalize(payload: dict[str, JsonValue]) -> NormalizedLogRecord:
-    return cast(NormalizedLogRecord, normalize_analytics_logs(payload, _RECEIVED).records[0].normalization)
+    return cast(NormalizedLogRecord, normalize_analytics_logs(payload, _RECEIVED, UnownedLog(kind="unowned")).records[0].normalization)
 
 
 @pytest.mark.parametrize("fixture,kind", [
@@ -49,7 +49,7 @@ def test_documented_request_usage_contracts_have_identical_json_and_protobuf_nor
     assert record.schema_version == record.evidence.schema_version == record.mapping.mapping_version == 2
     assert record.activity.kind == kind
     assert normalize_log(record.source, record.timestamps, record.evidence) == record
-    projected = project_analytics_log(record)
+    projected = project_analytics_log(record, UnownedLog(kind="unowned"))
     assert projected.owner.kind == "unowned"
     assert LogDimension.ACTIVITY_KIND not in {group.dimension for group in projected.dimensions}
     assert LogDimension.OUTCOME not in {group.dimension for group in projected.dimensions}
@@ -141,4 +141,4 @@ def test_model_request_semantic_identity_prevents_conflicting_raw_tool_execution
     record = _normalize(payload)
     assert record.activity.kind == "model_request"
     assert record.mapping.event_identity_conflict is True
-    assert LogDimension.ACTIVITY_KIND not in {group.dimension for group in project_analytics_log(record).dimensions}
+    assert LogDimension.ACTIVITY_KIND not in {group.dimension for group in project_analytics_log(record, UnownedLog(kind="unowned")).dimensions}

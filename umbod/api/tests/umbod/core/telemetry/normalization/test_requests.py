@@ -6,6 +6,7 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from umbod.core.telemetry.analytics.models import LogDimension
+from umbod.core.telemetry.analytics import UnownedLog
 from umbod.core.telemetry.analytics.projection import project_analytics_log
 from umbod.core.telemetry.normalization import (
     LegacyNormalizedLogRecord, NormalizationEvidence, NormalizedLogRecord, ProducerEvidence,
@@ -199,7 +200,7 @@ def test_codex_completion_preserves_reported_total_and_does_not_add_cache_or_rea
     assert usage.input_accounting == "includes_cache"
     assert normalized.activity.model != normalized.activity.slug
     assert normalized.activity.model_completion == "not_asserted"
-    dimensions = {group.dimension for group in project_analytics_log(normalized).dimensions}
+    dimensions = {group.dimension for group in project_analytics_log(normalized, UnownedLog(kind="unowned")).dimensions}
     assert LogDimension.ACTIVITY_KIND not in dimensions
     assert LogDimension.OUTCOME not in dimensions
     assert normalized.evidence.duration.kind == "missing"
@@ -368,7 +369,7 @@ def test_frozen_v1_json_reads_and_replays_exact_old_shape_without_inventing_usag
     assert replayed == restored
     assert replayed.model_dump(mode="json") == json.loads(raw)
     assert replayed.activity.kind == "unmapped"
-    assert project_analytics_log(restored).normalization == restored
+    assert project_analytics_log(restored, UnownedLog(kind="unowned")).normalization == restored
     upgraded = ProducerEvidence.model_validate({**restored.evidence.model_dump(), "schema_version": 2, "fields": ()})
     current = normalize_log(restored.source, restored.timestamps, upgraded)
     assert isinstance(current.activity, StreamDiagnostic)

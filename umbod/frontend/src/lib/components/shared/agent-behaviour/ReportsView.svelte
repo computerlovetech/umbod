@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, type Snippet } from 'svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
   import Select from '#lib/components/admin/shared/Select.svelte';
   import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
@@ -7,7 +7,11 @@
   import QueryPanel from '#lib/components/shared/workspace/QueryPanel.svelte';
   import type { ReportsState } from '#lib/agent-behaviour/state/reports-state.svelte.js';
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
-  let { state }: { state: ReportsState } = $props();
+  let { state, detailActions, detailCloseDisabled = false }: {
+    state: ReportsState;
+    detailActions?: Snippet;
+    detailCloseDisabled?: boolean;
+  } = $props();
   const statuses = { observed: 'Observed', not_observed: 'Not observed', not_assessed: 'Not assessed' };
   onMount((): void => state.start());
   onDestroy((): void => state.stop());
@@ -35,7 +39,7 @@
 {/if}
 {#if state.detailBusy}<p role="status">Loading…</p>{/if}
 {#if state.detail}
-  <ModalShell title={state.detail.instructions.playbook.name} titleId="entry-detail-title" close={state.close} closeDisabled={state.detailBusy || state.deleteConfirmation} --modal-overflow="auto">
+  <ModalShell title={state.detail.instructions.playbook.name} titleId="entry-detail-title" close={state.close} closeDisabled={state.detailBusy || detailCloseDisabled} --modal-overflow="auto">
   <section class="detail" aria-label="Entry detail">
     <p>Agent self-reported · Not independently verified</p>
     {#each state.assessments as assessment (assessment.pattern_id)}
@@ -69,20 +73,12 @@
     <h3>Original collection instructions</h3><p class="prose">{state.detail.instructions.playbook.collection_instructions}</p>
     <h3>Original reporting guidance</h3><p class="prose">{state.detail.instructions.reporting_guidance}</p>
     </details>
-    <Button variant="danger" disabled={state.detailBusy} onclick={state.confirmDelete}>Delete entry</Button>
+    {@render detailActions?.()}
   </section>
-  </ModalShell>
-{/if}
-{#if state.deleteConfirmation && state.detail}
-  <ModalShell title="Delete this entry?" titleId="delete-report-title" close={state.cancelDelete} closeDisabled={state.detailBusy} role="alertdialog">
-    <p>{state.detail.report_id} · <DateTimeView value={state.detail.received_at} /></p>
-    <p>Evidence and instructions are deleted immediately. This cannot be undone. An opaque retry receipt remains until 60 days after reporting.</p>
-    <div class="actions"><Button variant="secondary" data-dialog-cancel disabled={state.detailBusy} onclick={state.cancelDelete}>Cancel</Button><Button variant="danger" disabled={state.detailBusy} onclick={state.remove}>Delete permanently</Button></div>
   </ModalShell>
 {/if}
 
 <style>
-  .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
   :global(.report-row) { width: 100%; text-align: left; display: flex; gap: 1rem; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; padding: 18px; }
   .detail, article { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 1rem; margin: 1rem 0; overflow-wrap: anywhere; }
   .prose { white-space: pre-wrap; overflow-wrap: anywhere; }

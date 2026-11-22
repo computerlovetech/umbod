@@ -3,7 +3,7 @@ import { load } from './+page';
 import { usesWorkspaceShell } from '#lib/workspace/navigation.js';
 
 describe('workspace entry', () => {
-  test.each(['/admin', '/admin/connectors', '/dashboard', '/connectors', '/connectors/detail', '/files', '/getting-started', '/getting-started/telemetry'])('recognizes the workspace shell for %s', (pathname: string): void => {
+  test.each(['/admin', '/admin/connectors', '/dashboard', '/connectors', '/connectors/detail', '/files', '/insights', '/insights/logs', '/getting-started', '/getting-started/telemetry'])('recognizes the workspace shell for %s', (pathname: string): void => {
     expect(usesWorkspaceShell(pathname)).toBe(true);
   });
 

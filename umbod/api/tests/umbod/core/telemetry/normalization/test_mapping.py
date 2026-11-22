@@ -8,6 +8,7 @@ from umbod.core.telemetry.normalization.mapping import normalize_log
 from umbod.core.telemetry.normalization.models import (
     MissingValue, SourceEvidence, TextValue, TimestampEvidence, ToolActivity,
 )
+from umbod.core.telemetry.analytics import UnownedLog
 from umbod.core.telemetry.analytics.projection import project_analytics_log
 
 
@@ -34,7 +35,7 @@ def test_public_source_evidence_mapper_replays_without_transport_or_analytics_in
     normalized = normalize_log(_source("codex.tool_result", "metadata"), _timestamps(), evidence)
     restored = NormalizedLogRecord.model_validate_json(normalized.model_dump_json())
     assert normalize_log(restored.source, restored.timestamps, restored.evidence) == normalized
-    assert project_analytics_log(restored).normalization == normalized
+    assert project_analytics_log(restored, UnownedLog(kind="unowned")).normalization == normalized
     assert isinstance(normalized.activity, ToolActivity)
     assert normalized.activity.activity_kind == "file_edit"
     assert normalized.activity.outcome == "failure"

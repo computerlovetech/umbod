@@ -6,7 +6,7 @@ description: Review reported tool calls, file-tool calls and skill activations b
 
 # Log analytics
 
-Administrators can open **Log analytics** in workspace navigation or visit `/admin/analytics`. Queries cover the whole instance, including unowned exports; ordinary users cannot access this page or its API.
+Administrators can open **Log analytics** in workspace navigation or visit `/admin/analytics`. This view and its API cover the whole instance, including unowned exports. Signed-in users can query their own log counts through `POST /api/me/telemetry/log-counts`.
 
 This explorer counts accepted OTLP log records, not application stdout, metrics, traces, tokens or costs. Historical stdout is not imported. The analytics backend and authenticated private collector must both be enabled before new client exports can appear. The API host shares one analytics runtime between collector writes and administrator queries; an external `umbod telemetry serve` deployment owns separate storage whose history is not automatically visible here. See [telemetry ingestion](../operations/telemetry-ingestion.md).
 

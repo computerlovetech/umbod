@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import AnalyticsWorkspace from './AnalyticsWorkspace.svelte';
+import AnalyticsWorkspace from '#lib/components/shared/analytics/AnalyticsWorkspace.svelte';
 import { AnalyticsState } from '#lib/admin/analytics/analytics-state.svelte.js';
 import { InMemoryLogCounts } from '#lib/admin/analytics/in-memory.test-support.js';
 import type { LogCountResponse } from '#lib/admin/analytics/domain/schemas.js';

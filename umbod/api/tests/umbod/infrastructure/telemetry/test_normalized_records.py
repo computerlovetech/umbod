@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue
 
-from umbod.core.telemetry.analytics import LogWriteBatch, TelemetryAnalyticsUnavailable
+from umbod.core.telemetry.analytics import LogWriteBatch, TelemetryAnalyticsUnavailable, UnownedLog
 from umbod.core.telemetry.normalization import NormalizedLogRecord
 from umbod.infrastructure.telemetry.sqlite.database import SqliteAnalyticsRuntime
 from umbod.rest.telemetry.normalization import normalize_analytics_logs
@@ -66,7 +66,7 @@ def normalized_batch() -> LogWriteBatch:
             },
         ],
     }
-    return normalize_analytics_logs(payload, datetime(2026, 1, 1, tzinfo=timezone.utc))
+    return normalize_analytics_logs(payload, datetime(2026, 1, 1, tzinfo=timezone.utc), UnownedLog(kind="unowned"))
 
 
 @pytest.mark.asyncio

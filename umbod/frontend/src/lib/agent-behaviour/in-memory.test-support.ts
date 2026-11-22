@@ -26,6 +26,32 @@ export class InMemoryAgentBehaviourApi implements AgentBehaviourPort {
     remove: async (id: string): Promise<void> => { this.rows = this.rows.filter((item): boolean => item.report_id !== id); }
   };
 }
+export function storedReport(): DiagnosticReport {
+  const patterns: DiagnosticReport['instructions']['patterns'] = [
+    { id: 'fallback', name: 'Fallback observed', description: 'Look for fallback', assessment_prompt: 'Assess fallback', inclusion_criteria: '', exclusion_criteria: '', categories: [], polarity: 'neutral', enabled: true },
+    { id: 'missing-context', name: 'Missing context', description: 'Look for missing context', assessment_prompt: 'Assess context', inclusion_criteria: '', exclusion_criteria: '', categories: [], polarity: 'neutral', enabled: true }
+  ];
+  return {
+    report_id: '00000000-0000-4000-8000-000000000001',
+    received_at: '2026-06-01T00:00:00Z',
+    expires_at: '2026-07-01T00:00:00Z',
+    caller: { authentication: 'upstream_verified', subject: { issuer: { value: 'issuer' }, subject: 'owner' } },
+    submission: {
+      idempotency_key: '00000000-0000-4000-8000-000000000002', configuration_revision: 1, playbook_id: 'review',
+      trigger: 'user_requested',
+      assessments: [
+        { pattern_id: 'fallback', status: 'observed', summary: 'Fallback was used', evidence: ['The agent retried with a different tool'] },
+        { pattern_id: 'missing-context', status: 'not_observed', summary: '', evidence: [] }
+      ]
+    },
+    instructions: {
+      configuration_revision: 1,
+      playbook: { id: 'review', name: 'Historical review', collection_instructions: 'Collect facts', pattern_ids: ['fallback', 'missing-context'], enabled: true, allow_proactive: false },
+      patterns, reporting_guidance: 'Report facts only', resource_uri: 'umbod://agent-behaviour/playbooks/review'
+    }
+  };
+}
+
 export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((accept): void => { resolve = accept; });

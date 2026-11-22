@@ -1,6 +1,7 @@
 import os
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -155,6 +156,49 @@ def test_running_personal_token_allows_only_telemetry_ingestion(
             json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
         )
         assert mcp.status_code == 401
+
+
+@verified_user_stage
+def test_running_personal_log_counts_exclude_foreign_and_shared_exports(
+    runtime_endpoints: RuntimeEndpoints,
+    personal_token: tuple[PersonalAccessTokenMetadata, SecretStr],
+    otlp_bearer_token: str,
+) -> None:
+    _, token = personal_token
+    source = f"personal-log-counts-{uuid4().hex}"
+    payload = {"resourceLogs": [{
+        "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": source}}]},
+        "scopeLogs": [{"logRecords": [{"eventName": "personal.analytics.runtime"}]}],
+    }]}
+    query = {
+        "time_range": {"start": "2020-01-01T00:00:00Z", "end": "2100-01-01T00:00:00Z"},
+        "filters": [{"dimension": "source", "values": [source]}],
+        "group_by": [],
+        "bucketing": {"kind": "none"},
+        "pagination": {"limit": 10, "offset": 0},
+    }
+    with httpx.Client(timeout=30) as client:
+        for credential in (token.get_secret_value(), otlp_bearer_token):
+            exported = client.post(
+                runtime_endpoints.otlp_base_url + "/v1/logs",
+                json=payload,
+                headers={"Authorization": "Bearer " + credential},
+            )
+            assert exported.status_code == 200
+        for credential, expected_count in (
+            (runtime_endpoints.bearer_token, 1),
+            (os.environ["UMBOD_TEST_MEMBER_BEARER_TOKEN"], 0),
+        ):
+            counted = client.post(
+                runtime_endpoints.api_base_url + "/api/me/telemetry/log-counts",
+                json=query,
+                headers={"Authorization": "Bearer " + credential},
+            )
+            assert counted.status_code == 200
+            assert counted.json() == {
+                "has_more": False,
+                "rows": [{"groups": [], "count": expected_count, "bucket": {"kind": "none"}}],
+            }
 
 
 @verified_user_stage

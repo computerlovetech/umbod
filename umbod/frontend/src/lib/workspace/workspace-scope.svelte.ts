@@ -4,8 +4,36 @@ import type { WorkspaceAccessState } from './workspace-access-state.svelte';
 
 export class WorkspaceScope {
   private readonly disposals = new Set<() => void>();
+  private disposed = $state(false);
+  private personalSuspended = $state(false);
+  private personalRevision = 0;
 
   constructor(readonly access: WorkspaceAccessState) {}
+
+  get personalIdentity(): HeaderAccountIdentityState {
+    return this.disposed || this.personalSuspended ? { kind: 'hidden' } : this.access.effectiveAccountIdentity;
+  }
+
+  get personalChecking(): boolean {
+    return !this.disposed && (this.personalSuspended || this.access.adminAccess === 'checking');
+  }
+
+  get personalUnavailable(): boolean {
+    return !this.disposed && this.access.adminAccess === 'unavailable';
+  }
+
+  suspendPersonal = (): void => {
+    this.personalRevision++;
+    this.personalSuspended = true;
+  };
+
+  refreshPersonal = async (): Promise<void> => {
+    if (this.disposed) return;
+    this.suspendPersonal();
+    const revision = this.personalRevision;
+    await this.access.load();
+    if (revision === this.personalRevision) this.personalSuspended = false;
+  };
 
   registerDisposal = (dispose: () => void): (() => void) => {
     this.disposals.add(dispose);
@@ -13,6 +41,7 @@ export class WorkspaceScope {
   };
 
   dispose = (): void => {
+    this.disposed = true;
     for (const dispose of this.disposals) dispose();
     this.disposals.clear();
     this.access.dispose();

@@ -4,9 +4,9 @@
   import { dimensions } from '#lib/admin/analytics/domain/schemas.js';
   import { bucketOptions, dimensionLabels, dimensionOptions, rangeOptions } from '#lib/admin/analytics/query-draft.svelte.js';
   import { reportOptions } from '#lib/admin/analytics/reports.js';
-  import Button from '../shared/Button.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import QueryPanel from '#lib/components/shared/workspace/QueryPanel.svelte';
-  import Select from '../shared/Select.svelte';
+  import Select from '#lib/components/admin/shared/Select.svelte';
   import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
 
   let { state }: { state: AnalyticsState } = $props();

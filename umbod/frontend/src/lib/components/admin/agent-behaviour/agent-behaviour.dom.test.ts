@@ -4,7 +4,7 @@ import { InMemoryAgentBehaviourApi } from '#lib/agent-behaviour/in-memory.test-s
 import { ConfigurationState } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
 import { ReportsState } from '#lib/agent-behaviour/state/reports-state.svelte.js';
 import ConfigurationEditor from './ConfigurationEditor.svelte';
-import ReportsView from './ReportsView.svelte';
+import ReportsView from '#lib/components/shared/agent-behaviour/ReportsView.svelte';
 
 function button(target: HTMLElement, label: string): HTMLButtonElement {
   const match = Array.from(target.querySelectorAll('button')).find((item): boolean => (item.getAttribute('aria-label') ?? item.textContent?.trim()) === label);

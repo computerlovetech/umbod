@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack, type Snippet } from 'svelte';
   import '#lib/styles/insights.css';
-  import SubpageContainer from '#lib/components/shared/workspace/SubpageContainer.svelte';
-  import SubpageNavigation from '#lib/components/shared/workspace/SubpageNavigation.svelte';
+  import InsightsFrame from '#lib/components/shared/workspace/InsightsFrame.svelte';
   import { setInsightsState } from './insights-context';
   import { createInsightsState } from './insights-factory';
   import { InsightsNavigation, insightsLinks } from './insights-navigation';
@@ -25,10 +24,7 @@
 {:else if route.diagnostics}
   {@render children()}
 {:else}
-  <SubpageContainer title="Insights">
-    {#snippet navigation()}
-      <SubpageNavigation links={insightsLinks} activeId={route.activeId} label="Insights views" />
-    {/snippet}
+  <InsightsFrame links={insightsLinks} activeId={route.activeId}>
     {@render children()}
-  </SubpageContainer>
+  </InsightsFrame>
 {/if}

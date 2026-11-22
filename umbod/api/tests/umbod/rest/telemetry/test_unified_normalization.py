@@ -7,7 +7,7 @@ import pytest
 from pydantic import JsonValue
 
 from umbod.core.telemetry import TelemetrySignal
-from umbod.core.telemetry.analytics import LogDimension
+from umbod.core.telemetry.analytics import LogDimension, UnownedLog
 from umbod.core.telemetry.normalization import NormalizedLogRecord
 from umbod.core.telemetry.normalization.mapping import normalize_log
 from umbod.core.telemetry.normalization.models import PermissionDecision, SkillActivation, ToolActivity
@@ -28,7 +28,7 @@ def _attribute(key: str, value: str) -> dict[str, JsonValue]:
 
 
 def _normalized(payload: dict[str, JsonValue]) -> NormalizedLogRecord:
-    return cast(NormalizedLogRecord, normalize_analytics_logs(payload, _RECEIVED).records[0].normalization)
+    return cast(NormalizedLogRecord, normalize_analytics_logs(payload, _RECEIVED, UnownedLog(kind="unowned")).records[0].normalization)
 
 
 def test_pinned_codex_fixture_json_and_protobuf_have_identical_normalization() -> None:
@@ -60,8 +60,8 @@ def test_documented_claude_skill_fixture_has_identical_json_and_protobuf_trigger
     binary = parse_message(TelemetrySignal.LOGS, payload).SerializeToString()
     json_export = parse_export(TelemetrySignal.LOGS, json.dumps(payload).encode())
     protobuf_export = parse_protobuf_export(TelemetrySignal.LOGS, binary)
-    normalized = normalize_analytics_logs(json_export.payload, _RECEIVED)
-    assert normalize_analytics_logs(protobuf_export.payload, _RECEIVED) == normalized
+    normalized = normalize_analytics_logs(json_export.payload, _RECEIVED, UnownedLog(kind="unowned"))
+    assert normalize_analytics_logs(protobuf_export.payload, _RECEIVED, UnownedLog(kind="unowned")) == normalized
     records = [cast(NormalizedLogRecord, record.normalization) for record in normalized.records]
     assert [record.activity.trigger for record in records] == ["explicit", "implicit", "nested"]
     assert [record.evidence.skill_trigger for record in records] == ["user-slash", "claude-proactive", "nested-skill"]
@@ -73,7 +73,7 @@ def test_source_evidence_replay_and_projection_are_deterministic() -> None:
     restored = NormalizedLogRecord.model_validate_json(record.model_dump_json())
     replayed = normalize_log(restored.source, restored.timestamps, restored.evidence)
     assert replayed == restored
-    assert project_analytics_log(replayed) == project_analytics_log(record)
+    assert project_analytics_log(replayed, UnownedLog(kind="unowned")) == project_analytics_log(record, UnownedLog(kind="unowned"))
 
 
 @pytest.mark.parametrize("source,semantic,producer,conflict", [
@@ -104,7 +104,7 @@ def test_permission_decisions_do_not_assert_execution_or_add_activity_dimensions
     source: str, event: str, decision: str, expected: str,
 ) -> None:
     payload = _payload(source, event, [_attribute("decision", decision), _attribute("tool_name", "apply_patch")])
-    batch = normalize_analytics_logs(payload, _RECEIVED)
+    batch = normalize_analytics_logs(payload, _RECEIVED, UnownedLog(kind="unowned"))
     record = cast(NormalizedLogRecord, batch.records[0].normalization)
     if expected == "unmapped":
         assert record.activity.kind == "unmapped"
@@ -120,7 +120,7 @@ def test_correlations_remain_distinct_while_legacy_session_precedence_is_unchang
     payload = _payload("codex", "codex.tool_result", [_attribute(key, f"correlation-{index}") for index, key in enumerate(keys)])
     record = _normalized(payload)
     assert {item.key: item.value.value for item in record.evidence.correlations} == {key: f"correlation-{index}" for index, key in enumerate(keys)}
-    dimensions = {item.dimension: item.value.value for item in project_analytics_log(record).dimensions}
+    dimensions = {item.dimension: item.value.value for item in project_analytics_log(record, UnownedLog(kind="unowned")).dimensions}
     assert dimensions[LogDimension.SESSION_ID] == "correlation-0"
 
 
@@ -280,7 +280,7 @@ def test_oversized_source_metadata_is_omitted_without_failing_ingestion() -> Non
 def test_legacy_dimension_strings_keep_their_original_acceptance_and_alias_behavior() -> None:
     value = "legacy" * 200
     record = _normalized(_payload(value, value, [_attribute("session.id", value), _attribute("tool.name", value)]))
-    assert {item.dimension: item.value.value for item in project_analytics_log(record).dimensions} == {
+    assert {item.dimension: item.value.value for item in project_analytics_log(record, UnownedLog(kind="unowned")).dimensions} == {
         LogDimension.SOURCE: value, LogDimension.EVENT_NAME: value,
         LogDimension.SESSION_ID: value, LogDimension.TOOL_NAME: value,
     }

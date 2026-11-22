@@ -53,6 +53,9 @@ tags:
 - [PageContainer](src/lib/components/shared/workspace/PageContainer.svelte) — Shared heading, optional actions and content slots for Files and Connectors; pair with the split workspace for sidebar/detail pages.
 - [SubpageContainer](src/lib/components/shared/workspace/SubpageContainer.svelte) — Shared page heading, optional introduction, action slot and content frame; use with feature-owned navigation and selected subpage content.
 - [SubpageNavigation](src/lib/components/shared/workspace/SubpageNavigation.svelte) — Horizontal links with current-page or parent-location semantics; parents supply routes, selection and eligibility.
+- [InsightsFrame](src/lib/components/shared/workspace/InsightsFrame.svelte) — Shared Insights heading and subpage layout; personal and admin callers supply links and content.
+- [AnalyticsWorkspace](src/lib/components/shared/analytics/AnalyticsWorkspace.svelte) — Log queries, aggregate results, and session drill-down; callers inject state with the correct data scope.
+- [ReportsView](src/lib/components/shared/agent-behaviour/ReportsView.svelte) — Diagnostic report filters, results, and evidence; callers supply read state and any permitted detail actions.
 
 - [AdminSplitWorkspace](src/lib/components/admin/shared/AdminSplitWorkspace.svelte) — Responsive master/detail surface with optional mobile sidebar drawer and flush detail padding.
 - [AdminRecordList](src/lib/components/admin/shared/AdminRecordList.svelte) — Responsive record list with identity, detail, and action slots; use for administration inventories with feature-owned actions.
@@ -142,7 +145,6 @@ tags:
 
 - [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned platform installers, harness onboarding and personal-token workflows; reuse its neutral controls, not the complete page.
 
-- [Log analytics composition](src/lib/components/admin/analytics/README.md) — Feature-owned queries, results and session inspection; excluded because it owns administrator analytics workflows.
 
 - [Files compositions](src/lib/components/files/README.md) — Feature-owned Locations navigation, details, sharing and mutation workflows; reuse neutral layouts and controls, not these compositions.
 

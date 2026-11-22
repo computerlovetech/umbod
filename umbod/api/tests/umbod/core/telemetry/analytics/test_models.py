@@ -188,7 +188,7 @@ def test_public_exports_are_exact() -> None:
         "LogDimension", "MissingDimensionValue", "NoTimeBuckets", "OwnersScope",
         "PresentDimensionValue", "TelemetryAnalyticsReader", "TelemetryAnalyticsUnavailable",
         "TimeBucket", "TimeRange", "Unbucketed",
-        "AnalyticsLogRecord", "LogWriteBatch", "OwnedLog", "UnownedLog",
+        "AnalyticsLogRecord", "LogOwnership", "LogWriteBatch", "OwnedLog", "UnownedLog", "analytics_owner_id",
         "TelemetryAnalyticsRuntime", "TelemetryAnalyticsWriter",
     }
     assert set(analytics.__all__) == expected

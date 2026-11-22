@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 from pydantic import JsonValue, TypeAdapter
 
-from umbod.core.telemetry.analytics import LogWriteBatch
+from umbod.core.telemetry.analytics import LogWriteBatch, UnownedLog
 from umbod.core.telemetry.analytics.projection import project_analytics_log
 from umbod.core.telemetry.normalization.models import NormalizationEvidence
 from umbod.infrastructure.telemetry.sqlite.database import SqliteAnalyticsRuntime
@@ -32,7 +32,7 @@ async def test_version_one_evidence_is_unchanged_after_reopen_and_version_two_us
     legacy_path = Path(__file__).parents[3] / "support" / "normalized_log_v1.json"
     legacy = canonical_adapter.validate_json(legacy_path.read_text())
     assert legacy.kind == "normalized"
-    legacy_batch = LogWriteBatch(records=(project_analytics_log(legacy),))
+    legacy_batch = LogWriteBatch(records=(project_analytics_log(legacy, UnownedLog(kind="unowned")),))
     path = tmp_path / "analytics.sqlite3"
     runtime = SqliteAnalyticsRuntime(path, ())
     try:
@@ -46,7 +46,7 @@ async def test_version_one_evidence_is_unchanged_after_reopen_and_version_two_us
     _with_attribute(usage_payload, "input_token_count", {"stringValue": "9007199254741000"})
     _with_attribute(usage_payload, "cached_token_count", {"intValue": "9007199254740993"})
     _with_attribute(usage_payload, "tool_token_count", {"stringValue": "9007199254741200"})
-    usage = normalize_analytics_logs(usage_payload, datetime(2026, 1, 1, tzinfo=timezone.utc))
+    usage = normalize_analytics_logs(usage_payload, datetime(2026, 1, 1, tzinfo=timezone.utc), UnownedLog(kind="unowned"))
     reopened = SqliteAnalyticsRuntime(path, ())
     try:
         await reopened.create_writer().append_logs(usage)
@@ -68,7 +68,7 @@ async def test_reported_decimal_cost_survives_restart_without_float_rounding(tmp
     _with_attribute(payload, "cost_usd", {"stringValue": "0.123456789012345678"})
     record = cast(dict[str, JsonValue], payload["resourceLogs"][0]["scopeLogs"][0]["logRecords"][0])
     record["attributes"] = [attribute for attribute in cast(list[dict[str, JsonValue]], record["attributes"]) if attribute["key"] != "cost_usd_micros"]
-    batch = normalize_analytics_logs(payload, datetime(2026, 1, 1, tzinfo=timezone.utc))
+    batch = normalize_analytics_logs(payload, datetime(2026, 1, 1, tzinfo=timezone.utc), UnownedLog(kind="unowned"))
     path = tmp_path / "analytics.sqlite3"
     runtime = SqliteAnalyticsRuntime(path, ())
     try:
