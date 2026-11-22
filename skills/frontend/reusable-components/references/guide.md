@@ -8,7 +8,7 @@ description: Detailed rules and review guidance preserved from the skill.
 
 ## Before changing components
 
-- Read `umbod/frontend/COMPONENT_INDEX.md`, linked source, and real consumers before choosing reuse, extension, or creation.
+- Start at `umbod/frontend/COMPONENT_INDEX.md`, then read the relevant category reference, linked source, and real consumers before choosing reuse, extension, or creation.
 - Read `umbod/project/architecture-records/ADR-007-actor-specific-ui-composition.md`. Shared presentation owns structure and interaction mechanics, not actor eligibility, authorization, inventory fetching, or feature controllers.
 - Load `write-module-readme` for index conventions and applicable Svelte/state skills for implementation.
 
@@ -37,15 +37,15 @@ Include stable controls, fields, feedback, surfaces, layouts, and neutral domain
 
 Exclude feature screens, actor-owned workflows, controller-bound views, internal state helpers, test harnesses, and components requiring unrelated policies or dependencies. Indexing does not authorize moving code into shared directories or bypassing ADR review.
 
-Maintain `umbod/frontend/COMPONENT_INDEX.md` in the same change:
+Keep `umbod/frontend/COMPONENT_INDEX.md` as the category entrypoint. Maintain concrete entries in the relevant reference under `umbod/frontend/component-index/` in the same change:
 
 - **Add/extract/split:** assess eligibility, check for equivalents, and index qualifying public pieces under relevant headings, not every implementation file. Reassess the original entry after a split.
 - **Modify:** revisit descriptions and eligibility when public behavior, dependencies, ownership, or reasons for change shift; narrow or remove unsuitable entries.
 - **Rename/move/delete/merge:** update affected labels and links, including supporting files; remove stale paths and empty headings. Verify any replacement serves the described purpose.
 - Preserve concept frontmatter: non-empty `type`, concise `title`, and one-sentence `description`. This is not OKF's reserved `index.md` navigation file.
-- Use headings and linked bullets with source paths relative to the index. Descriptions must say what the item is and when to use it in at most 160 characters, excluding link and separator. Keep rationale in the task response or review.
+- Use headings and linked bullets with source paths relative to the reference that contains them. Descriptions must say what the item is and when to use it in at most 160 characters, excluding link and separator. Keep rationale in the task response or review.
 - Mention material reuse limits: submission integration, required context, native/custom dialog behavior, or restricted domain semantics. Verify adoption claims against consumers.
-- Preserve the discovery link in `umbod/frontend/src/lib/components/README.md`; update it if the index moves.
+- Preserve the discovery link in the repository `AGENTS.md`; update it if the index moves.
 
 ## Verify
 
@@ -53,7 +53,7 @@ After adding, deleting, renaming, or moving components, or editing the index, ru
 
 `uv run --with-requirements <absolute-skill-directory>/requirements.txt <absolute-skill-directory>/scripts/check_component_index.py <absolute-repository-root>`
 
-Substitute actual absolute paths. The checker validates local file targets in `umbod/frontend/COMPONENT_INDEX.md` under the explicit repository argument. It does not check external URLs, anchors, catalogue completeness, or cohesion.
+Substitute actual absolute paths. The checker validates local file targets in `umbod/frontend/COMPONENT_INDEX.md` and in linked category references under `umbod/frontend/component-index/`. It does not check external URLs, anchors, catalogue completeness, or cohesion.
 
 Fix reported failures and rerun; do not create placeholders or remove valid entries to silence it. Manually compare component additions/deletions with the index and verify descriptions against source.
 

@@ -1,0 +1,31 @@
+---
+type: Component Reference
+title: Forms and controls
+description: Buttons, fields, selection controls, form containers, and their shared styling.
+---
+
+# Forms and controls
+
+- [Component index](../COMPONENT_INDEX.md) — Browse the other component categories.
+
+## Buttons, fields, and forms
+
+- [TextAreaField](../src/lib/components/shared/TextAreaField.svelte) — Controlled labelled multiline input with native attributes and events; uses the same field and focus styling as plain and configuration text inputs.
+- [TextField](../src/lib/components/shared/TextField.svelte) — Controlled labelled plain text input with native attribute and event forwarding; use for non-credential text without configuration-secret behavior.
+- [Button](../src/lib/components/admin/shared/Button.svelte) — Native action button with primary, secondary, danger, quiet, compact, and icon-only presentation; forwards native attributes, events, and attachments.
+- [ButtonLink](../src/lib/components/admin/shared/ButtonLink.svelte) — Native navigation anchor with canonical action styling; use for action-like links without replacing href semantics.
+- [LoadingButton](../src/lib/components/admin/shared/LoadingButton.svelte) — Button with delayed loading feedback, native attribute forwarding, and immediate pending protection; supports the same variants and sizes.
+- [AdminSaveAction](../src/lib/components/admin/shared/AdminSaveAction.svelte) — Save button with status feedback; use when a save action needs loading, success, or error presentation.
+- [AdminConfigurationField](../src/lib/components/admin/shared/AdminConfigurationField.svelte) — Labelled text, password, or URL field; use for configuration inputs with helper text, validation, or existing-secret handling.
+- [SegmentedRadio](../src/lib/components/shared/SegmentedRadio.svelte) — Controlled native radios with normal or compact sizing; use for a short set of visible, mutually exclusive choices and parent-owned updates.
+- [Select](../src/lib/components/admin/shared/Select.svelte) — Controlled select or searchable combobox; use for keyboard-accessible choices, with parent-owned options and filtering.
+- [Checkbox](../src/lib/components/shared/Checkbox.svelte) — Controlled labelled native checkbox; use for selections and approvals with parent-owned updates and native input attributes.
+- [AdminToggle](../src/lib/components/admin/shared/AdminToggle.svelte) — Controlled switch or submit-button switch; use for activation settings while the parent owns updates.
+- [AdminFileUpload](../src/lib/components/admin/shared/AdminFileUpload.svelte) — Single-file picker/drop field with size and type checks; use for file selection, noting its fixed JSON marker.
+- [QueryPanel](../src/lib/components/shared/workspace/QueryPanel.svelte) — Collapsed native query editor; callers own parameters, reset, submission and loading.
+- [Form](../src/lib/components/admin/shared/Form.svelte) — Scrollable fields and optional action footer; use for forms compatible with its attached administration submission integration.
+
+## Shared form and button styles
+
+- [Form field styling](../src/lib/styles/form-fields.css) — Non-shrinking field stacks, canonical text controls, validation and focus rings for TextField, TextAreaField and AdminConfigurationField.
+- [Canonical button styling](../src/lib/styles/buttons.css) — Shared visual rules for Button and ButtonLink; use the components for actions and action-like navigation, respectively.

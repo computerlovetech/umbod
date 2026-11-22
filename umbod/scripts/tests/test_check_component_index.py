@@ -48,6 +48,7 @@ def run_checker(repository: Path, working_directory: Path, script: Path = SCRIPT
         check=False,
         capture_output=True,
         text=True,
+        timeout=10,
     )
 
 
@@ -71,6 +72,46 @@ def test_cli_reports_every_dead_link(repository: Path, tmp_path: Path) -> None:
     assert result.returncode == 1
     assert "missing local target: src/Deleted.svelte" in result.stderr
     assert "missing local target: src/Old.svelte" in result.stderr
+
+
+def test_cli_checks_category_links_relative_to_the_category_page(repository: Path, tmp_path: Path) -> None:
+    index = repository / INDEX_PATH
+    category = index.parent / "component-index/controls.md"
+    category.parent.mkdir()
+    index.write_text("[Controls](component-index/controls.md)")
+    category.write_text("[Button](../Button.svelte)")
+
+    result = run_checker(repository, tmp_path)
+    assert result.returncode == 1
+    assert result.stderr.strip() == "umbod/frontend/component-index/controls.md: missing local target: ../Button.svelte"
+
+    (index.parent / "Button.svelte").write_text("")
+    result = run_checker(repository, tmp_path)
+    assert result.returncode == 0, result.stderr
+
+
+def test_cli_rejects_a_directory_as_a_category_page(repository: Path, tmp_path: Path) -> None:
+    index = repository / INDEX_PATH
+    (index.parent / "component-index/controls.md").mkdir(parents=True)
+    index.write_text("[Controls](component-index/controls.md)")
+
+    result = run_checker(repository, tmp_path)
+    assert result.returncode == 1
+    assert "category target is not a file: component-index/controls.md" in result.stderr
+
+
+def test_cli_follows_category_cycles_without_following_other_markdown(repository: Path, tmp_path: Path) -> None:
+    index = repository / INDEX_PATH
+    categories = index.parent / "component-index"
+    categories.mkdir()
+    index.write_text("[Controls](component-index/controls.md) [Module](README.md)")
+    (index.parent / "README.md").write_text("[Ignored](missing.md)")
+    (categories / "controls.md").write_text("[Surfaces](surfaces.md) [Home](../COMPONENT_INDEX.md)")
+    (categories / "surfaces.md").write_text("[Controls](./controls.md) [Card](../Card.svelte)")
+
+    result = run_checker(repository, tmp_path)
+    assert result.returncode == 1
+    assert result.stderr.strip() == "umbod/frontend/component-index/surfaces.md: missing local target: ../Card.svelte"
 
 
 def test_cli_detects_a_component_deleted_after_a_successful_check(repository: Path, tmp_path: Path) -> None:

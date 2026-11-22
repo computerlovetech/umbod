@@ -1,5 +1,6 @@
 import argparse
 import sys
+from collections import deque
 from collections.abc import Iterator
 from html.parser import HTMLParser
 from pathlib import Path
@@ -44,19 +45,39 @@ def local_destinations(content: str) -> list[str]:
 
 
 def check_index(repository: Path) -> list[str]:
+    repository = repository.resolve()
     index = repository / INDEX_PATH
-    try:
-        destinations = local_destinations(index.read_text(encoding="utf-8"))
-        if not destinations:
-            return [f"{INDEX_PATH}: no local file links found"]
-        failures: list[str] = []
-        for destination in destinations:
-            target = repository / destination.lstrip("/") if destination.startswith("/") else index.parent / destination
-            if not target.exists():
-                failures.append(f"{INDEX_PATH}: missing local target: {destination}")
-        return failures
-    except (OSError, UnicodeError, ValueError) as error:
-        return [f"{INDEX_PATH}: cannot check links: {error}"]
+    category_directory = index.parent / "component-index"
+    pending = deque([index])
+    scheduled = {index}
+    failures: list[str] = []
+    while pending:
+        page = pending.popleft()
+        page_path = page.relative_to(repository)
+        try:
+            destinations = local_destinations(page.read_text(encoding="utf-8"))
+            if page == index and not destinations:
+                failures.append(f"{page_path}: no local file links found")
+            for destination in destinations:
+                target = (
+                    repository / destination.lstrip("/")
+                    if destination.startswith("/")
+                    else page.parent / destination
+                )
+                if not target.exists():
+                    failures.append(f"{page_path}: missing local target: {destination}")
+                elif target.suffix == ".md":
+                    category = target.resolve()
+                    if not category.is_relative_to(category_directory) or category in scheduled:
+                        continue
+                    if not category.is_file():
+                        failures.append(f"{page_path}: category target is not a file: {destination}")
+                        continue
+                    pending.append(category)
+                    scheduled.add(category)
+        except (OSError, UnicodeError, ValueError) as error:
+            failures.append(f"{page_path}: cannot check links: {error}")
+    return failures
 
 
 def main() -> int:
