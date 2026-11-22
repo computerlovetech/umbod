@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
-  import { tick } from 'svelte';
   import Button from '../shared/Button.svelte';
   import SetupProgress from '../shared/SetupProgress.svelte';
   import ModalShell from '../../shared/ModalShell.svelte';
@@ -16,7 +15,6 @@
   const nativeUnavailable = $derived(entry?.nativeUnavailable() ?? false);
   const disabled = $derived(entry?.disabled() ?? true);
   const pendingSetup = $derived(page.state.openConnectorSetup);
-  let handingOff = $state(false);
 
   const toast = useToast();
   const id = $props.id();
@@ -28,17 +26,22 @@
   const selected = $derived(choices.find((choice) => choice.kind === picker.kind));
   const steps = $derived(selected ? connectorSetupSteps(selected.kind, true) : [connectorSetupTypeStep]);
 
+  function clearPendingSetup(pending: ConnectorSetupKind): void {
+    const { openConnectorSetup: _, ...remaining } = page.state;
+    const url = new URL((page.shallow?.url ?? page.url).href);
+    if (pending === 'native') url.searchParams.delete('setup');
+    replaceState(url, remaining);
+  }
+
   function resumeSetup(pending: ConnectorSetupKind | undefined, ready: boolean): (trigger: HTMLButtonElement) => void {
     return (trigger: HTMLButtonElement): void => {
       if (!pending || !ready) return;
       queueMicrotask(() => {
         const target = picker.entry;
-        if (!trigger.isConnected || target?.kind !== pending || target.disabled() || page.state.openConnectorSetup !== pending) return;
-        const { openConnectorSetup: _, ...remaining } = page.state;
-        const url = new URL((page.shallow?.url ?? page.url).href);
-        if (pending === 'native') url.searchParams.delete('setup');
-        replaceState(url, remaining);
+        if (!trigger.isConnected || target?.kind !== pending || target.disabled() || page.state.openConnectorSetup !== pending || (pending === 'native' && !target.nativeAvailable())) return;
+        clearPendingSetup(pending);
         target.create(trigger);
+        picker.close();
       });
     };
   }
@@ -46,35 +49,34 @@
   async function next(): Promise<void> {
     const selectedKind = picker.kind;
     const trigger = picker.trigger;
-    if (!selectedKind || !trigger || handingOff || disabled || (selectedKind === 'native' && !nativeAvailable)) return;
-    picker.close();
-    await tick();
     const target = picker.entry;
-    if (!target || target.disabled()) return;
+    if (!selectedKind || !trigger || !target || picker.handingOff || disabled || (selectedKind === 'native' && !nativeAvailable)) return;
     if (selectedKind === target.kind) {
       target.create(trigger);
+      picker.close();
       return;
     }
-    handingOff = true;
+    picker.beginHandoff();
     try {
       const destination = new URL(connectorWorkspacePaths[selectedKind], page.url.href);
       if (selectedKind === 'native') destination.searchParams.set('setup', 'native');
       const capability = (page.shallow?.url ?? page.url).searchParams.get('capability');
       if (capability) destination.searchParams.set('capability', capability);
       await goto(destination, { state: { openConnectorSetup: selectedKind }, reset: false });
+      if (picker.open && page.state.openConnectorSetup === selectedKind) clearPendingSetup(selectedKind);
+      if (picker.open) toast.error('Connector setup could not be opened. Try again.');
     } catch {
-      picker.reopen(selectedKind);
       toast.error('Connector setup could not be opened. Try again.');
     } finally {
-      handingOff = false;
+      picker.endHandoff();
     }
   }
 </script>
 
-<Button aria-label="Add connector" disabled={disabled || handingOff} onclick={picker.show} {@attach picker.register} {@attach resumeSetup(pendingSetup, !disabled && pendingSetup === entry?.kind && (pendingSetup !== 'native' || nativeAvailable))}><span aria-hidden="true">+</span> Add connector</Button>
+<Button aria-label="Add connector" disabled={disabled || picker.handingOff} onclick={picker.show} {@attach picker.register} {@attach resumeSetup(pendingSetup, !disabled && pendingSetup === entry?.kind && (pendingSetup !== 'native' || nativeAvailable))}><span aria-hidden="true">+</span> Add connector</Button>
 
 {#if picker.open}
-  <ModalShell title="Add connector" titleId={`${id}-title`} close={picker.close} initialFocus="[data-dialog-title]"
+  <ModalShell title="Add connector" titleId={`${id}-title`} close={picker.close} closeDisabled={picker.handingOff} initialFocus="[data-dialog-title]"
     --modal-title-focus-outline="none" --modal-overflow="auto" --modal-width="40rem"
     --modal-background="linear-gradient(135deg, var(--admin-accent-soft), var(--admin-panel) 17rem)" --admin-radius-panel="24px">
     {#if selected}
@@ -97,7 +99,7 @@
     <div class="tiles" role="group" aria-labelledby={`${id}-choose`}>
       {#each choices as choice (choice.kind)}
         {@const unavailable = choice.kind === 'native' && !nativeAvailable}
-        <Button variant="secondary" class="connector-type-tile" disabled={unavailable} aria-pressed={picker.kind === choice.kind} onclick={() => picker.select(choice.kind)}>
+        <Button variant="secondary" class="connector-type-tile" disabled={unavailable || picker.handingOff} aria-pressed={picker.kind === choice.kind} onclick={() => picker.select(choice.kind)}>
           <span class="icon" aria-hidden="true">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
               {#if choice.icon === 'catalog'}<path d="M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z" />
@@ -110,7 +112,7 @@
         </Button>
       {/each}
     </div>
-    <footer><Button disabled={!selected || (selected.kind === 'native' && !nativeAvailable)} onclick={next}>Next</Button></footer>
+    <footer><Button disabled={!selected || (selected.kind === 'native' && !nativeAvailable)} aria-disabled={picker.handingOff || undefined} onclick={next}>Next</Button></footer>
   </ModalShell>
 {/if}
 

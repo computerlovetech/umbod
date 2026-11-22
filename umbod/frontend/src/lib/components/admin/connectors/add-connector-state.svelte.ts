@@ -17,10 +17,12 @@ export const [getAddConnector, provideAddConnector] = createContext<AddConnector
 export class AddConnectorState {
   #entry = $state.raw<ConnectorSetupEntry>();
   #open = $state(false);
+  #handingOff = $state(false);
   #kind = $state<ConnectorSetupKind>();
   #trigger: HTMLButtonElement | undefined;
 
   get open(): boolean { return this.#open; }
+  get handingOff(): boolean { return this.#handingOff; }
   get kind(): ConnectorSetupKind | undefined { return this.#kind; }
   get trigger(): HTMLButtonElement | undefined { return this.#trigger; }
 
@@ -49,6 +51,14 @@ export class AddConnectorState {
     this.select(kind);
     this.#open = true;
   };
+
+  beginHandoff(): void {
+    this.#handingOff = true;
+  }
+
+  endHandoff(): void {
+    this.#handingOff = false;
+  }
 
   close = (): void => {
     this.#open = false;
