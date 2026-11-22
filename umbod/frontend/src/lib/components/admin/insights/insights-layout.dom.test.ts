@@ -7,7 +7,7 @@ import InsightsHarness from './InsightsHarness.test-support.svelte';
 import { InsightsHarnessState, configuration } from './insights.test-support.svelte';
 import { InsightsState } from './insights-state.svelte';
 
-vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));
+vi.mock('$app/state', () => ({ navigating: { to: null, from: null }, page: { url: new URL('http://localhost/admin/agent-diagnostics') } }));
 let component: ReturnType<typeof mount> | undefined;
 afterEach(async (): Promise<void> => {
   if (component) await unmount(component);
@@ -44,7 +44,10 @@ test('preserves configuration drafts across separate findings and analytics rout
   expect(required('h1').textContent).toBe('Agent diagnostics');
   expect(required(activeAdminLink).getAttribute('href')).toBe('/admin/agent-diagnostics');
   expect(document.querySelector('nav[aria-label="Insights views"]')).toBeNull();
-  expect(required('.subpage-container header button').textContent).toBe('Add pattern');
+  const diagnosticsTabs = required('nav[aria-label="Agent diagnostics subpages"]');
+  expect(diagnosticsTabs.querySelector('[aria-current="page"]')?.textContent).toBe('Patterns');
+  expect(diagnosticsTabs.querySelector('a[href$="?tab=reporting"]')?.textContent).toBe('Reporting settings');
+  expect(required('section[aria-labelledby="diagnostic-patterns-title"] header button').textContent).toBe('Add pattern');
   expect(required(findingsLink).textContent).toContain('View findings');
   required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').click(); flushSync();
   expect(document.body.textContent).toContain('Unsaved changes');

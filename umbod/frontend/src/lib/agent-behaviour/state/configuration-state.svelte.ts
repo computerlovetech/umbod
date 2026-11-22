@@ -1,15 +1,23 @@
 import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { ConfigurationPort } from '../api';
 import { configurationFeedback } from '../domain/editing';
-import { conflictSchema, identifierSchema, publishSchema, type Configuration, type BehaviourPattern, type DiagnosticPlaybook } from '../domain/schemas';
+import { conflictSchema, identifierSchema, patternCategoryLimit, publishSchema, type Configuration, type BehaviourPattern, type DiagnosticPlaybook } from '../domain/schemas';
 
 type ReadonlyPattern = Readonly<Omit<BehaviourPattern, 'categories'>> & { readonly categories: readonly string[] };
 type ReadonlySettings = Readonly<Omit<DiagnosticPlaybook, 'pattern_ids'>> & { readonly pattern_ids: readonly string[] };
 type CollectionStatus = 'unavailable' | 'unconfigured' | 'off' | 'configured';
+type ReportingMode = 'Off' | 'Automatic reports allowed' | 'When requested';
+export type ReportingPolicy = 'off' | 'requested' | 'proactive';
 
 function activeReportingSettings(settings: readonly ReadonlySettings[], patterns: readonly ReadonlyPattern[]): readonly ReadonlySettings[] {
   const enabledPatternIds = new Set(patterns.filter((pattern): boolean => pattern.enabled).map((pattern): string => pattern.id));
   return settings.filter((setting): boolean => setting.enabled && setting.pattern_ids.some((id): boolean => enabledPatternIds.has(id)));
+}
+
+function reportingMode(settings: readonly ReadonlySettings[], patterns: readonly ReadonlyPattern[]): ReportingMode {
+  const enabled = activeReportingSettings(settings, patterns);
+  if (!enabled.length) return 'Off';
+  return enabled.some((setting): boolean => setting.allow_proactive) ? 'Automatic reports allowed' : 'When requested';
 }
 
 export class ConfigurationState {
@@ -18,7 +26,7 @@ export class ConfigurationState {
   private pending = $state(false);
   private notice = $state('');
   private collision = $state<Configuration | null>(null);
-  private selection = $state<string | null>(null);
+  private selection = $state<{ id: string; baseline: string; pendingCategory: string } | null>(null);
   private request: AbortController | null = null;
   private disposed = false;
 
@@ -30,7 +38,13 @@ export class ConfigurationState {
   get settings(): readonly ReadonlySettings[] { return this.value.playbooks; }
   get publishedPatterns(): readonly ReadonlyPattern[] { return this.saved?.patterns ?? []; }
   get publishedPlaybooks(): readonly ReadonlySettings[] { return this.saved?.playbooks ?? []; }
-  get selected(): ReadonlyPattern | undefined { return this.patterns.find((pattern): boolean => pattern.id === this.selection); }
+  get enabledPatternCount(): number { return this.patterns.filter((pattern): boolean => pattern.enabled).length; }
+  get selected(): ReadonlyPattern | undefined { return this.patterns.find((pattern): boolean => pattern.id === this.selection?.id); }
+  get pendingCategory(): string { return this.selection?.pendingCategory ?? ''; }
+  get editorDirty(): boolean {
+    const selected = this.selected;
+    return !!selected && !!this.selection && (this.pendingCategory.trim().length > 0 || JSON.stringify(selected) !== this.selection.baseline);
+  }
   get loaded(): boolean { return this.saved !== null; }
   get busy(): boolean { return this.pending; }
   get message(): string { return this.notice; }
@@ -41,10 +55,10 @@ export class ConfigurationState {
     if (!this.publishedPlaybooks.length) return 'unconfigured';
     return activeReportingSettings(this.publishedPlaybooks, this.publishedPatterns).length ? 'configured' : 'off';
   }
-  get reportingMode(): string {
-    const enabled = activeReportingSettings(this.playbooks, this.patterns);
-    if (!enabled.length) return 'Off';
-    return enabled.some((setting): boolean => setting.allow_proactive) ? 'Automatic reports allowed' : 'When requested';
+  get reportingMode(): ReportingMode { return reportingMode(this.playbooks, this.patterns); }
+  get savedReportingMode(): ReportingMode {
+    const latest = this.collision ?? this.saved;
+    return reportingMode(latest?.playbooks ?? [], latest?.patterns ?? []);
   }
   private get editable(): boolean { return !this.disposed && !this.pending && this.loaded; }
 
@@ -116,7 +130,16 @@ export class ConfigurationState {
     this.notice = '';
   };
 
-  editPattern = (id: string): void => { if (this.editable) this.selection = id; };
+  editPattern = (id: string): void => {
+    if (!this.editable) return;
+    const pattern = this.patterns.find((item): boolean => item.id === id);
+    if (pattern) this.selection = { id, baseline: JSON.stringify(pattern), pendingCategory: '' };
+  };
+
+  setPendingCategory = (value: string): void => {
+    if (this.selection) this.selection.pendingCategory = value;
+  };
+
   closeEditor = (): void => { this.selection = null; };
 
   private firstSettingIsFull = (): boolean => (this.value.playbooks[0]?.pattern_ids.filter((id): boolean => this.patterns.some((pattern): boolean => pattern.id === id)).length ?? 0) >= 20;
@@ -163,7 +186,7 @@ export class ConfigurationState {
     if (this.disposed) return;
     this.value.patterns.push({ id, name: '', description: '', assessment_prompt: '', inclusion_criteria: '', exclusion_criteria: '', categories: [], polarity: 'neutral', enabled: true });
     this.attachPattern(id);
-    this.selection = id;
+    this.editPattern(id);
   };
 
   updatePattern = <K extends Exclude<keyof BehaviourPattern, 'id'>>(id: string, key: K, value: BehaviourPattern[K]): void => {
@@ -175,10 +198,33 @@ export class ConfigurationState {
     });
   };
 
+  addCategory = (id: string, input: string): string => {
+    const pattern = this.patterns.find((item): boolean => item.id === id);
+    if (!this.editable || !pattern) return 'The pattern cannot be edited right now.';
+    const tag = input.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!identifierSchema.safeParse(tag).success) return 'Start with a letter and use up to 64 letters, numbers, or hyphens.';
+    if (pattern.categories.includes(tag)) return 'This category is already added.';
+    if (pattern.categories.length >= patternCategoryLimit) return `You can add up to ${patternCategoryLimit} categories.`;
+    this.updatePattern(id, 'categories', [...pattern.categories, tag]);
+    return '';
+  };
+
+  removeCategory = (id: string, category: string): void => {
+    const pattern = this.patterns.find((item): boolean => item.id === id);
+    if (pattern) this.updatePattern(id, 'categories', pattern.categories.filter((tag): boolean => tag !== category));
+  };
+
   removePattern = (id: string): void => {
     if (!this.editable) return;
     this.value.patterns = this.value.patterns.filter((pattern): boolean => pattern.id !== id);
-    if (this.selection === id) this.selection = null;
+    if (this.selection?.id === id) this.selection = null;
+  };
+
+  setReportingPolicy = (id: string, policy: ReportingPolicy): void => {
+    if (!this.editable) return;
+    this.value.playbooks = this.value.playbooks.map((setting): DiagnosticPlaybook => setting.id === id ? {
+      ...setting, enabled: policy !== 'off', allow_proactive: policy === 'off' ? setting.allow_proactive : policy === 'proactive'
+    } : setting);
   };
 
   updateSettings = <K extends 'collection_instructions' | 'allow_proactive' | 'enabled'>(id: string, key: K, value: DiagnosticPlaybook[K]): void => {

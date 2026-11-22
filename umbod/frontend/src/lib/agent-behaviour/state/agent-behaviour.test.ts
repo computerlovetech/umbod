@@ -143,9 +143,14 @@ describe('pattern editing', (): void => {
   });
   test('preserves edits on conflict until explicit discard', async (): Promise<void> => {
     const { api, state } = setup(); await state.load();
-    state.updatePattern('fallback', 'name', 'Local edit'); api.current = { ...configuration, revision: 2 }; await state.save();
+    state.updatePattern('fallback', 'name', 'Local edit');
+    api.current = { ...configuration, revision: 2, playbooks: [{ ...configuration.playbooks[0], allow_proactive: true }] };
+    await state.save();
     expect(state.patterns[0].name).toBe('Local edit'); expect(state.conflict).toBe(true);
+    expect(state.reportingMode).toBe('When requested');
+    expect(state.savedReportingMode).toBe('Automatic reports allowed');
     state.discard(); expect(state.revision).toBe(2); expect(state.patterns[0].name).toBe('Fallback');
+    expect(state.reportingMode).toBe(state.savedReportingMode);
   });
   test('discard resets the draft without a request', async (): Promise<void> => {
     const { state } = setup(); await state.load(); state.removePattern('fallback'); state.discard();
