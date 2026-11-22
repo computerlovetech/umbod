@@ -61,7 +61,7 @@ test('root retains sidebar and account DOM across child routes and reloads only 
   expect(logout).not.toBeNull();
   let heading = document.querySelector('h1');
 
-  for (const path of ['/connectors', '/files', '/getting-started', '/getting-started/telemetry', '/dashboard']) {
+  for (const path of ['/connectors', '/files', '/getting-started', '/settings', '/settings/tokens', '/dashboard']) {
     route.navigate(path);
     await tick();
     navigation.after!({ shallow: false });
@@ -71,7 +71,7 @@ test('root retains sidebar and account DOM across child routes and reloads only 
     expect(document.querySelector('[aria-label="Workspace sidebar"]')).toBe(sidebar);
     expect(document.querySelector('.account-details')).toBe(account);
     expect(document.querySelector('.logout-action button')).toBe(logout);
-    expect(document.querySelector('nav a[aria-current="page"]')?.getAttribute('href')).toBe(path.startsWith('/getting-started') ? '/getting-started' : path);
+    expect(document.querySelector('nav a[aria-current="page"]')?.getAttribute('href')).toBe(path === '/settings/tokens' ? '/settings' : path);
     expect(get).toHaveBeenCalledTimes(1);
   }
 

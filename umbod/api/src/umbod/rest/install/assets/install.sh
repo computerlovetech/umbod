@@ -3,9 +3,21 @@ umbod_install() (
     set -eu
     printf '%s\n' 'Preparing Umbod installer prerequisites...'
     command -v python3 >/dev/null 2>&1 || { printf '%s\n' 'Python 3 is required. Install Python 3 and retry.' >&2; exit 1; }
+    if [ "${umbod_telemetry_payload+x}" ]; then
+        set +x
+        if [ "${#umbod_telemetry_payload}" -gt 8192 ]; then
+            printf '%s\n' 'Umbod installation stopped: Invalid Claude Code telemetry payload.' >&2
+            exit 1
+        fi
+        exec 3<<<"$umbod_telemetry_payload"
+        unset umbod_telemetry_payload
+    else
+        exec 3</dev/null
+    fi
     python3 - "$@" <<'PY'
 import argparse
 import atexit
+import base64
 import hashlib
 import ipaddress
 import json
@@ -99,6 +111,259 @@ def ensure_owned_directory(path: Path, boundary: Path) -> None:
         fail("Installation directory must be user-owned and not writable by others")
 
 
+def distinct_object(pairs: list) -> dict:
+    keys = {key.casefold() for key, _ in pairs}
+    if len(keys) != len(pairs):
+        fail("Ambiguous JSON object")
+    return dict(pairs)
+
+
+def parse_json(text: str) -> object:
+    return json.loads(text, object_pairs_hook=distinct_object, parse_constant=fail)
+
+
+def telemetry_settings(harness: str) -> dict:
+    with os.fdopen(3, "rb") as source:
+        encoded = source.read(8194)
+    if not encoded:
+        return {}
+    if harness != "claude-code":
+        fail("The telemetry installer hook is supported only for Claude Code")
+    try:
+        if not encoded.endswith(b"\n"):
+            fail("Invalid encoding")
+        encoded = encoded[:-1]
+        if not 0 < len(encoded) <= 8192:
+            fail("Invalid size")
+        decoded = base64.b64decode(encoded, validate=True)
+        if base64.b64encode(decoded) != encoded:
+            fail("Noncanonical encoding")
+        payload = parse_json(decoded.decode("utf-8"))
+        if not isinstance(payload, dict) or set(payload) != {"endpoint", "token"}:
+            fail("Unexpected keys")
+        endpoint, token = payload["endpoint"], payload["token"]
+        if not isinstance(token, str) or not re.fullmatch(r"umbod_pat_v1_[0-9a-f]{32}_[A-Za-z0-9_-]{43}", token):
+            fail("Invalid token")
+        if not isinstance(endpoint, str) or len(endpoint) > 2048 or not re.fullmatch(r"[A-Za-z0-9:/._~!&'()*+,;=@%\[\]-]+", endpoint):
+            fail("Invalid endpoint")
+        if re.search(r"%(?:[01][0-9a-f]|7f)|%(?![0-9a-f]{2})", endpoint, re.IGNORECASE):
+            fail("Invalid URI encoding")
+        parsed = urlsplit(validate_url(endpoint))
+        if not re.fullmatch(r"(?:\[[A-Fa-f0-9:.]+\]|[A-Za-z0-9.-]+)(?::[0-9]+)?", parsed.netloc) or not parsed.path.endswith("/v1/logs"):
+            fail("Invalid logs URL")
+    except (ValueError, OverflowError, RecursionError):
+        fail("Invalid Claude Code telemetry payload")
+    return {
+        "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+        "OTEL_LOGS_EXPORTER": "otlp",
+        "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL": "http/json",
+        "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": endpoint,
+        "OTEL_EXPORTER_OTLP_LOGS_HEADERS": "Authorization=Bearer " + token,
+        "OTEL_METRICS_EXPORTER": "none",
+        "OTEL_TRACES_EXPORTER": "none",
+        "OTEL_LOG_USER_PROMPTS": "0",
+        "OTEL_LOG_ASSISTANT_RESPONSES": "0",
+        "OTEL_LOG_TOOL_DETAILS": "0",
+        "OTEL_LOG_TOOL_CONTENT": "0",
+        "OTEL_LOG_RAW_API_BODIES": "0",
+    }
+
+
+def telemetry_key(key: str) -> bool:
+    return key.upper().startswith(("OTEL_", "CLAUDE_CODE_OTEL_")) or key.upper() == "CLAUDE_CODE_ENABLE_TELEMETRY"
+
+
+def read_settings(directory: int) -> tuple:
+    try:
+        descriptor = os.open("settings.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+    except FileNotFoundError:
+        return b"{}", None
+    with os.fdopen(descriptor, "rb") as source:
+        info = os.fstat(source.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1 or info.st_mode & 0o022:
+            fail("Unsafe settings file")
+        data = source.read(1048577)
+        if len(data) > 1048576:
+            fail("Oversized settings file")
+        return data, (info.st_dev, info.st_ino, info.st_mode, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def json_object_positions(text: str, opening: int) -> dict:
+    whitespace = re.compile(r"[ \r\n\t]*")
+    decoder = json.JSONDecoder()
+    positions = {}
+    cursor = whitespace.match(text, opening + 1).end()
+    while text[cursor] != "}":
+        key, after_key = decoder.raw_decode(text, cursor)
+        separator = whitespace.match(text, after_key).end()
+        value_start = whitespace.match(text, separator + 1).end()
+        positions[key] = value_start
+        _, value_end = decoder.raw_decode(text, value_start)
+        cursor = whitespace.match(text, value_end).end()
+        if text[cursor] == ",":
+            cursor = whitespace.match(text, cursor + 1).end()
+    return positions
+
+
+def insert_settings(text: str, opening: int, fields: dict, has_members: bool) -> str:
+    addition = json.dumps(fields, ensure_ascii=True)[1:-1]
+    return text[:opening + 1] + "\n  " + addition + ("," if has_members else "\n") + text[opening + 1:]
+
+
+def merge_settings(text: str, desired: dict) -> str:
+    settings = parse_json(text)
+    if not isinstance(settings, dict) or any(
+        key.casefold() == "otelheadershelper" or (key.casefold() == "env" and key != "env") for key in settings
+    ):
+        fail("Expected a settings object")
+    env = settings.get("env", {})
+    if not isinstance(env, dict):
+        fail("Conflicting telemetry settings")
+    header = "OTEL_EXPORTER_OTLP_LOGS_HEADERS"
+    previous = env.get(header)
+    rotate = (
+        isinstance(previous, str)
+        and previous != desired[header]
+        and re.fullmatch(r"Authorization=Bearer umbod_pat_v1_[0-9a-f]{32}_[A-Za-z0-9_-]{43}", previous) is not None
+        and all(env.get(key) == value for key, value in desired.items() if key != header)
+    )
+    if any(telemetry_key(key) and desired.get(key, object()) != value and not (rotate and key == header) for key, value in env.items()):
+        fail("Conflicting telemetry settings")
+    opening = len(text) - len(text.lstrip(" \r\n\t"))
+    if rotate:
+        env_opening = json_object_positions(text, opening)["env"]
+        start = json_object_positions(text, env_opening)[header]
+        _, end = json.JSONDecoder().raw_decode(text, start)
+        return text[:start] + json.dumps(desired[header]) + text[end:]
+    missing = {key: value for key, value in desired.items() if key not in env}
+    if not missing:
+        return text
+    if "env" not in settings:
+        return insert_settings(text, opening, {"env": missing}, bool(settings))
+    return insert_settings(text, json_object_positions(text, opening)["env"], missing, bool(env))
+
+
+def require_no_macos_acl_grants(descriptor: int) -> None:
+    if sys.platform != "darwin":
+        return
+    import ctypes
+    import errno
+
+    library = ctypes.CDLL(None, use_errno=True)
+    library.acl_get_fd.restype = ctypes.c_void_p
+    library.acl_to_text.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
+    library.acl_to_text.restype = ctypes.c_void_p
+    library.acl_free.argtypes = (ctypes.c_void_p,)
+    acl = library.acl_get_fd(descriptor)
+    if not acl:
+        if ctypes.get_errno() != errno.ENOENT:
+            fail("Could not inspect directory ACL")
+        return
+    try:
+        text = library.acl_to_text(acl, None)
+        if not text:
+            fail("Could not inspect directory ACL")
+        try:
+            if re.search(rb":allow(?:,|:)", ctypes.string_at(text)):
+                fail("Unexpected directory ACL grants")
+        finally:
+            library.acl_free(text)
+    finally:
+        library.acl_free(acl)
+
+
+def open_configuration_directory(home: Path, create: bool) -> int:
+    if not home.is_absolute() or home.anchor != "/" or len(home.parts) < 2 or ".." in home.parts:
+        fail("Unsafe home directory")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    directory = os.open("/", flags)
+    try:
+        for part in home.parts[1:]:
+            info = os.fstat(directory)
+            if info.st_uid not in {0, os.getuid()} or (info.st_mode & 0o022 and not (info.st_uid == 0 and info.st_mode & stat.S_ISVTX)):
+                fail("Unsafe home directory ancestor")
+            require_no_macos_acl_grants(directory)
+            child = os.open(part, flags, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        require_owned_configuration(directory)
+        try:
+            config = os.open(".claude", flags, dir_fd=directory)
+        except FileNotFoundError:
+            if not create:
+                return -1
+            os.mkdir(".claude", 0o700, dir_fd=directory)
+            config = os.open(".claude", flags, dir_fd=directory)
+        try:
+            require_owned_configuration(config)
+        except BaseException:
+            os.close(config)
+            raise
+        return config
+    finally:
+        os.close(directory)
+
+
+def require_owned_configuration(descriptor: int) -> None:
+    info = os.fstat(descriptor)
+    if info.st_uid != os.getuid() or info.st_mode & 0o022:
+        fail("Unsafe configuration directory")
+    require_no_macos_acl_grants(descriptor)
+
+
+def apply_claude_settings(desired: dict, write: bool) -> None:
+    if "CLAUDE_CONFIG_DIR" in os.environ:
+        fail("Claude Code telemetry requires manual setup when CLAUDE_CONFIG_DIR is set")
+    try:
+        home = Path.home()
+        directory = open_configuration_directory(home, create=write)
+        if directory == -1:
+            return
+        try:
+            if not write:
+                merge_settings(read_settings(directory)[0].decode("utf-8"), desired)
+                return
+            lock = ".umbod-telemetry.lock"
+            os.mkdir(lock, 0o700, dir_fd=directory)
+            try:
+                original = read_settings(directory)
+                updated = merge_settings(original[0].decode("utf-8"), desired)
+                save_settings(home / ".claude", directory, original, updated)
+            finally:
+                os.rmdir(lock, dir_fd=directory)
+        finally:
+            os.close(directory)
+    except (ValueError, OSError, OverflowError, RecursionError, subprocess.CalledProcessError):
+        if write:
+            fail("Plugin registration verified, but Claude Code telemetry was not applied. Review your settings manually before retrying.")
+        fail("Claude Code telemetry settings could not be safely updated. Review your settings manually before retrying.")
+
+
+def save_settings(directory_path: Path, directory: int, original: tuple, updated: str) -> None:
+    name = ".umbod-settings-" + os.urandom(16).hex()
+    descriptor = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
+    try:
+        with os.fdopen(descriptor, "wb") as target:
+            if sys.platform == "darwin":
+                subprocess.run(["/bin/chmod", "-N", str(directory_path / name)], stdin=subprocess.DEVNULL,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            os.fchmod(target.fileno(), 0o600)
+            target.write(updated.encode("utf-8"))
+            target.flush()
+            os.fsync(target.fileno())
+        if read_settings(directory) != original:
+            fail("Settings changed during installation")
+        if original[1] is None:
+            os.link(name, "settings.json", src_dir_fd=directory, dst_dir_fd=directory, follow_symlinks=False)
+        else:
+            os.replace(name, "settings.json", src_dir_fd=directory, dst_dir_fd=directory)
+    finally:
+        try:
+            os.unlink(name, dir_fd=directory)
+        except FileNotFoundError:
+            pass
+
+
 def main() -> None:
     if sys.version_info < (3, 8):
         fail("Python 3.8 or newer is required")
@@ -108,6 +373,9 @@ def main() -> None:
     parser.add_argument("--expected-endpoint", required=True)
     parser.add_argument("--platform", choices=["macos", "linux"])
     args = parser.parse_args()
+    telemetry = telemetry_settings(args.harness)
+    if telemetry:
+        apply_claude_settings(telemetry, write=False)
     detected = {"Darwin": "macos", "Linux": "linux"}.get(platform.system())
     if detected is None or args.platform not in {None, detected}:
         fail("Unsupported platform. Use install.ps1 on native Windows; use linux inside WSL.")
@@ -293,6 +561,9 @@ def main() -> None:
         plugin_source = verified[0].get("source", {}).get("path") if cli == "codex" else verified[0].get("readFromFolder")
         if not isinstance(plugin_source, str) or Path(plugin_source).resolve() != destination / "plugins/umbod":
             fail("The installed Umbod plugin source could not be verified; review your harness plugin settings")
+    if telemetry:
+        apply_claude_settings(telemetry, write=True)
+        print("Claude Code logs-only telemetry settings applied. Delivery has not been verified.", flush=True)
     harness_name = "Codex" if args.harness == "codex" else "Claude Code"
     print("\n"
           "      |\n"

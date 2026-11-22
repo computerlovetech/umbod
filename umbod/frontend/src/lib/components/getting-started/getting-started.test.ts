@@ -20,16 +20,16 @@ describe('unified Getting started page', () => {
     expect(items.some((item) => item.href.includes('mcp-setup'))).toBe(false);
   });
 
-  test.each(['connect', 'telemetry'] as const)('renders only the %s subpage within one workspace and heading', (activePage): void => {
-    const body = renderWorkspace(GettingStarted, { props: { activePage, installerBaseUrl: 'https://site.test/api/install/v1' } }, '/getting-started').body;
+  test('renders the installer wizard without token management in the workspace', (): void => {
+    const body = renderWorkspace(GettingStarted, { props: { installerBaseUrl: 'https://site.test/api/install/v1' } }, '/getting-started').body;
     expect(body.match(/<h1[\s>]/g)).toHaveLength(1);
     expect(body).toContain('Getting started</h1>');
     expect(body.match(/aria-label="Workspace sidebar"/g)).toHaveLength(1);
     expect(body).toContain('href="/getting-started"');
-    expect(body).toContain('href="/getting-started/telemetry"');
-    expect(body.includes('aria-label="Harness setup guides"')).toBe(activePage === 'connect');
-    expect(body.includes('aria-label="Telemetry setup"')).toBe(activePage === 'telemetry');
-    expect(body.includes('https://site.test/api/install/v1/codex/install.sh')).toBe(activePage === 'connect');
+    expect(body).not.toContain('href="/getting-started/telemetry"');
+    expect(body).toContain('aria-label="Installer steps"');
+    expect(body).toContain('Choose your platform');
+    expect(body).not.toContain('Telemetry tokens');
     expect(body).toContain('aria-current="page"');
     expect(body).not.toContain('href="/admin"');
   });

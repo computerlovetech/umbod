@@ -11,7 +11,8 @@ description: "Reusable and actor-owned Svelte presentation and interaction modul
 - [dashboard](./dashboard/README.md) — User catalogue workspace.
 - [feedback/](./feedback/) — Toast presentation and state.
 - [files](./files/README.md) — User filesystem workspace.
-- [Getting started](./getting-started/README.md) — Unified harness connections and personal telemetry onboarding.
+- [Getting started](./getting-started/README.md) — Harness installation and connection guidance.
+- [Settings](./settings/README.md) — Personal token management and one-time telemetry configuration.
 - [Identity observation](./identity-directory/README.md) — Root-mounted browser observation lifecycle.
 - [header/](./header/) — Header and account presentation.
 - [personal-connections](./personal-connections/README.md) — Owner-scoped connection controls.

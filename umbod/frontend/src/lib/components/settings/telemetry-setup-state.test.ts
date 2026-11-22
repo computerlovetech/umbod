@@ -98,16 +98,30 @@ describe('instance-owned telemetry setup', (): void => {
     expect(state.canGenerate).toBe(true);
   });
 
-  it.each([new AuthenticationRequiredError(), new HttpError(403, 'Forbidden', null)])('clears management when setup access is lost', async (error: Error): Promise<void> => {
+  it.each([new AuthenticationRequiredError(), new HttpError(403, 'Private setup details', null)])('keeps authorized tokens visible while setup is pending and after setup rejects', async (error: Error): Promise<void> => {
     const source = new InMemoryTelemetrySetup();
     const state = new TelemetrySetupState(new InMemoryPersonalAccessTokens(), source, { writeText: async (): Promise<void> => {} });
+    await state.load();
+    state.openCreate();
     state.setTokenName('Logs');
-    await state.load();
     await state.create();
+    const issued = state.tokens;
+    expect(issued).toHaveLength(1);
+    let complete: () => void = (): void => {};
+    source.beforeGet = (): Promise<void> => new Promise<void>((resolve): void => { complete = resolve; });
     source.failure = error;
-    await state.load();
-    expect(['signin', 'forbidden']).toContain(state.status);
-    expect(state.tokens).toEqual([]);
+    const loading = state.load();
+    await vi.waitFor(() => expect(state.status).toBe('ready'));
+    expect(state.tokens).toEqual(issued);
+    expect(state.canGenerate).toBe(false);
+    expect(state.availabilityMessage).toBe('Checking telemetry availability…');
+    complete();
+    await loading;
+    expect(state.status).toBe('ready');
+    expect(state.tokens).toEqual(issued);
+    expect(state.canGenerate).toBe(false);
+    expect(state.availabilityMessage).toBe('Could not load telemetry setup. Contact your operator if the problem persists.');
+    expect(state.createDialogOpen).toBe(false);
     expect(state.configuration).toBe('');
   });
 });
@@ -312,6 +326,20 @@ describe('telemetry setup', (): void => {
     expect(state.copySucceeded).toBe(false);
     expect(state.error).toContain('Could not copy');
     expect(state.error).not.toContain('private secret');
+  });
+  it('retains authorized token metadata when only deletion is forbidden', async (): Promise<void> => {
+    const api = new InMemoryPersonalAccessTokens();
+    const state = configured(api);
+    await state.load();
+    await state.create();
+    vi.spyOn(api, 'revoke').mockRejectedValueOnce(new HttpError(403, 'Private deletion detail', null));
+    const tokenId = state.tokens[0].token_id;
+    await state.revoke(tokenId);
+    expect(state.status).toBe('ready');
+    expect(state.configuration).toBe('');
+    expect(state.tokens.map((token): string => token.token_id)).toEqual([tokenId]);
+    expect(state.error).toContain('Deletion was not confirmed');
+    expect(state.error).not.toContain('Private deletion detail');
   });
   it('clears secrets and actions when management access is lost', async (): Promise<void> => {
     const api = new InMemoryPersonalAccessTokens();

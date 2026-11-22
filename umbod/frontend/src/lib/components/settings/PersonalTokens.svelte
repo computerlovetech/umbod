@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
+  import Select from '#lib/components/admin/shared/Select.svelte';
   import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
   import TelemetryTokenDialog from './TelemetryTokenDialog.svelte';
   import type { PersonalAccessTokensApi } from '#lib/personal-access-tokens/api.js';
@@ -26,14 +27,15 @@
   onMount(() => { void state.load(); return state.dispose; });
 </script>
 
-<section class="admin-panel telemetry-setup" aria-label="Telemetry setup">
+<section id="telemetry-tokens" class="admin-panel personal-tokens" aria-label="Personal access tokens">
   <header>
-    <h2>Telemetry tokens</h2>
-    {#if state.canGenerate}<Button disabled={state.pending} onclick={state.openCreate}>Create token</Button>{/if}
+    <h2>Personal access tokens</h2>
+    {#if state.canGenerate}<Button disabled={state.pending} onclick={state.openCreate}>Create telemetry token</Button>{/if}
   </header>
-  <p>Manage tokens for sending agent logs to Umbod. Deleting a token immediately stops its use.</p>
+  <p>Review the scopes granted to your tokens. Deleting a token immediately stops its use.</p>
+  {#if state.canGenerate}<p>New tokens are limited to <code>telemetry:write</code> for sending agent logs. Select <strong>Codex</strong> when creating one to generate copyable TOML.</p>{/if}
   {#if state.status === 'loading'}
-    <p role="status">Loading telemetry setup and personal access tokens…</p>
+    <p role="status">Loading personal access tokens…</p>
   {:else if state.status === 'signin'}
     <p>Sign in to manage personal access tokens.</p>
     <Button onclick={signIn}>Sign in</Button>
@@ -44,10 +46,16 @@
       <p role="status">{state.availabilityMessage}</p>
     {/if}
     {#if state.error && !state.createDialogOpen}<p class="admin-message admin-message--error" role="alert">{state.error}</p>{/if}
+    {#if state.scopeOptions.length}
+      <Select label="Scope" options={state.scopeOptions} value={state.selectedScope} onchange={state.selectScope} compact />
+    {/if}
     <ul aria-label="Personal access tokens">
-      {#each state.tokens as token (token.token_id)}
+      {#each state.visibleTokens as token (token.token_id)}
         <li>
-          <div><strong>{token.name}</strong> — {token.status}</div>
+          <div>
+            <strong>{token.name}</strong> — {token.status}
+            <div class="hint">Scopes: <code>{token.scopes.join(', ')}</code></div>
+          </div>
           <div class="hint">Expires <DateTimeView value={token.expires_at} /></div>
           <Button variant="danger" size="compact" iconOnly disabled={state.pending || state.status !== 'ready'} onclick={(): Promise<void> => state.revoke(token.token_id)} aria-label={`Delete ${token.name}`} title={`Delete ${token.name}`}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" /></svg>
@@ -62,7 +70,7 @@
 </section>
 
 <style>
-  .telemetry-setup { padding: 1.5rem; }
+  .personal-tokens { padding: 1.5rem; }
   h2 { color: var(--admin-ink); font-size: 20px; letter-spacing: -0.025em; margin: 0; }
   header { align-items: center; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
   p { color: var(--admin-muted); font-size: 14px; line-height: 1.6; }

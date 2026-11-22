@@ -1,14 +1,14 @@
 import { normalizeInstallationUrl } from './installation-url';
 
 export const installationPlatforms = [
-  { id: 'macos', label: 'macOS', shell: 'Terminal' },
-  { id: 'linux', label: 'Linux', shell: 'Bash · includes WSL' },
-  { id: 'windows', label: 'Windows', shell: 'PowerShell' }
+  { id: 'macos', label: 'macOS', shell: 'Terminal', icon: '/icons/apple.svg' },
+  { id: 'linux', label: 'Linux', shell: 'Bash · includes WSL', icon: '/icons/linux.svg' },
+  { id: 'windows', label: 'Windows', shell: 'PowerShell', icon: '/icons/windows.svg' }
 ] as const;
 
 export const installationHarnesses = [
-  { value: 'codex', label: 'Codex' },
-  { value: 'claude-code', label: 'Claude Code' }
+  { value: 'codex', label: 'Codex', icon: '/icons/codex.png' },
+  { value: 'claude-code', label: 'Claude Code', icon: '/icons/claude-code.svg' }
 ] as const;
 
 export type InstallationPlatform = typeof installationPlatforms[number]['id'];
@@ -37,20 +37,6 @@ export class PluginInstallationState {
     if (selected) this.harness = selected.value;
   };
 
-  movePlatform = (key: string): boolean => {
-    const current = installationPlatforms.findIndex((platform) => platform.id === this.platform);
-    const positions: Record<string, number> = {
-      ArrowRight: (current + 1) % installationPlatforms.length,
-      ArrowLeft: (current + installationPlatforms.length - 1) % installationPlatforms.length,
-      Home: 0,
-      End: installationPlatforms.length - 1
-    };
-    const next = positions[key];
-    if (next === undefined) return false;
-    this.selectPlatform(installationPlatforms[next].id);
-    return true;
-  };
-
   get scriptUrl(): string {
     const extension = this.platform === 'windows' ? 'ps1' : 'sh';
     return `${normalizeInstallationUrl(this.installerBaseUrl())}/${this.harness}/install.${extension}`;
@@ -63,8 +49,18 @@ export class PluginInstallationState {
     return `curl -fsSL --proto-redir '=https' ${quoteBash(this.scriptUrl)} | bash`;
   }
 
+  get selectedPlatform(): typeof installationPlatforms[number] {
+    return installationPlatforms.find((platform) => platform.id === this.platform)!;
+  }
+
   get shell(): string {
-    return installationPlatforms.find((platform) => platform.id === this.platform)!.shell;
+    return this.selectedPlatform.shell;
+  }
+
+  get requirements(): string {
+    return this.platform === 'windows'
+      ? `Requires ${this.harnessLabel} and PowerShell 5.1+. No administrator access required.`
+      : `Requires ${this.harnessLabel}, Python 3.8+ and curl. No administrator access required.`;
   }
 
   get harnessLabel(): string {

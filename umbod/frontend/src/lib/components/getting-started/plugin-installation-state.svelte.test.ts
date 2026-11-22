@@ -37,19 +37,6 @@ describe('plugin installation choices', (): void => {
     expect(state.documentationUrl).toContain('code.claude.com');
   });
 
-  test('supports keyboard tab movement, wrapping, Home and End', (): void => {
-    const state = new PluginInstallationState(() => installerBaseUrl);
-    expect(state.movePlatform('ArrowLeft')).toBe(true);
-    expect(state.platform).toBe('windows');
-    state.movePlatform('ArrowRight');
-    expect(state.platform).toBe('macos');
-    state.movePlatform('End');
-    expect(state.platform).toBe('windows');
-    state.movePlatform('Home');
-    expect(state.platform).toBe('macos');
-    expect(state.movePlatform('Tab')).toBe(false);
-  });
-
   test('reads the latest deployment URL and quotes it for each shell', (): void => {
     let current = installerBaseUrl;
     const state = new PluginInstallationState(() => current);

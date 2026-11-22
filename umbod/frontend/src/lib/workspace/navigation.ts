@@ -2,6 +2,7 @@ export type WorkspaceNavigationIcon =
   | 'dashboard'
   | 'files'
   | 'gettingStarted'
+  | 'settings'
   | 'administration'
   | 'connectors'
   | 'groups'
@@ -26,13 +27,16 @@ export const workspacePresentation = {
 
 export const personalInsightsHref = '/insights/agent-behaviour';
 export const personalInsightsLogsHref = '/insights/logs';
+export const workspaceSettingsHref = '/settings';
+export const workspaceTokensHref = `${workspaceSettingsHref}/tokens`;
 
 const dashboardNavigation: readonly WorkspaceNavigationItem[] = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: 'dashboard' },
   { id: 'connectors', label: 'Connectors', href: '/connectors', icon: 'connectors' },
   { id: 'files', label: 'Files', href: '/files', icon: 'files' },
   { id: 'insights', label: 'Insights', href: personalInsightsHref, icon: 'analytics' },
-  { id: 'gettingStarted', label: 'Getting started', href: '/getting-started', icon: 'gettingStarted' }
+  { id: 'gettingStarted', label: 'Getting started', href: '/getting-started', icon: 'gettingStarted' },
+  { id: 'settings', label: 'Settings', href: workspaceSettingsHref, icon: 'settings' }
 ];
 
 const administratorWorkspaceNavigation: readonly WorkspaceNavigationItem[] = [
@@ -61,7 +65,7 @@ export const administrationPresentation = {
 };
 
 export function usesWorkspaceShell(pathname: string): boolean {
-  return ['/admin', '/dashboard', '/connectors', '/files', '/insights', '/getting-started'].some((root: string): boolean => pathname === root || pathname.startsWith(`${root}/`));
+  return ['/admin', '/dashboard', '/connectors', '/files', '/insights', '/getting-started', workspaceSettingsHref].some((root: string): boolean => pathname === root || pathname.startsWith(`${root}/`));
 }
 
 export function workspaceNavigation(adminAllowed: boolean): readonly WorkspaceNavigationItem[] {

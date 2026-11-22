@@ -3,7 +3,7 @@ import { flushSync, mount, tick, unmount } from 'svelte';
 import { InMemoryPersonalAccessTokens } from '#lib/personal-access-tokens/in-memory-api.test-support.js';
 import { InMemoryTelemetrySetup } from '#lib/telemetry-setup/in-memory-api.test-support.js';
 import type { ClipboardWriter } from '#lib/admin/clipboard.js';
-import TelemetrySetup from './TelemetrySetup.svelte';
+import PersonalTokens from './PersonalTokens.svelte';
 import { HttpError } from '#lib/admin/infrastructure/transport.js';
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -15,7 +15,7 @@ afterEach(async (): Promise<void> => {
 function render(api: InMemoryPersonalAccessTokens = new InMemoryPersonalAccessTokens(), setup: InMemoryTelemetrySetup = new InMemoryTelemetrySetup(), clipboard: ClipboardWriter = { writeText: async (): Promise<void> => {} }): HTMLDivElement {
   const target = document.createElement('div');
   document.body.append(target);
-  const component = mount(TelemetrySetup, { target, props: { apiFactory: () => api, setupApiFactory: () => setup, clipboardFactory: () => clipboard } });
+  const component = mount(PersonalTokens, { target, props: { apiFactory: () => api, setupApiFactory: () => setup, clipboardFactory: () => clipboard } });
   cleanups.push(async (): Promise<void> => { await unmount(component); target.remove(); });
   flushSync();
   return target;
@@ -46,8 +46,8 @@ function combobox(target: ParentNode, name: string): HTMLButtonElement {
 }
 
 async function openCreate(target: ParentNode): Promise<HTMLDialogElement> {
-  await vi.waitFor(() => expect(button(target, 'Create token').disabled).toBe(false));
-  button(target, 'Create token').click();
+  await vi.waitFor(() => expect(button(target, 'Create telemetry token').disabled).toBe(false));
+  button(target, 'Create telemetry token').click();
   await tick();
   return element<HTMLDialogElement>(target, 'dialog');
 }
@@ -69,7 +69,7 @@ it.each(['disabled', 'not_configured'] as const)('keeps the list and revocation 
   const target = render(api, setup);
   await vi.waitFor(() => expect(target.textContent).toContain('Contact your operator'));
   expect(target.querySelector('form, dialog, input, details')).toBeNull();
-  expect(target.textContent).not.toContain('Create token');
+  expect(target.textContent).not.toContain('Create telemetry token');
   expect(target.textContent).not.toContain('Refresh');
   expect(element<HTMLTimeElement>(target, 'time').dateTime).toBe('2099-01-01T00:00:00.000Z');
   button(target, 'Delete Existing').click();
@@ -136,6 +136,37 @@ it('opens the form on demand, selects options and updates the list after issuanc
   expect(target.textContent).not.toContain('test-only-secret');
 });
 
+it('lists every token by default and matches a selected scope within a combined-scope token', async (): Promise<void> => {
+  const api = new InMemoryPersonalAccessTokens();
+  const first = await api.create({ name: 'Combined token', expires_at: '2099-01-01T00:00:00Z', permissions: { telemetry: 'write' } });
+  const second = await api.create({ name: 'Other token', expires_at: '2099-01-01T00:00:00Z', permissions: { telemetry: 'write' } });
+  api.rows = [
+    { ...first.metadata, scopes: ['files:read', 'telemetry:write'] },
+    { ...second.metadata, scopes: ['tools:read'] }
+  ];
+  const target = render(api);
+  const rows = (): string[] => [...target.querySelectorAll('ul[aria-label="Personal access tokens"] > li')].map((row): string => row.textContent ?? '');
+  await vi.waitFor(() => expect(rows()).toHaveLength(2));
+  expect(rows()[0]).toContain('files:read, telemetry:write');
+  expect(rows()[1]).toContain('tools:read');
+  const filter = combobox(target, 'Scope');
+  expect(filter.textContent).toContain('All scopes');
+  filter.click();
+  await tick();
+  const scopeOptions = (): HTMLElement[] => [...document.querySelectorAll<HTMLElement>('[role="listbox"][aria-label="Scope"] [role="option"]')];
+  const options = scopeOptions();
+  expect(options.map((option): string | undefined => option.querySelector('span')?.textContent)).toEqual(['All scopes', 'files:read', 'telemetry:write', 'tools:read']);
+  options[2].click();
+  await vi.waitFor(() => expect(filter.textContent).toContain('telemetry:write'));
+  expect(rows()).toEqual([expect.stringContaining('Combined token')]);
+  filter.click();
+  await tick();
+  expect(scopeOptions()[0]?.textContent).toContain('All scopes');
+  scopeOptions()[0].click();
+  await tick();
+  expect(rows()).toEqual([expect.stringContaining('Combined token'), expect.stringContaining('Other token')]);
+});
+
 it('offers an icon-only delete action for already revoked tokens without changing other rows', async (): Promise<void> => {
   const api = new InMemoryPersonalAccessTokens();
   const issued = await api.create({ name: 'Old token', expires_at: '2099-01-01T00:00:00Z', permissions: { telemetry: 'write' } });
@@ -178,6 +209,23 @@ it('blocks duplicate submission and dismissal while issuing', async (): Promise<
   const reopened = await openCreate(target);
   expect(element<HTMLInputElement>(reopened, 'input').value).toBe('');
   expect(reopened.querySelector('textarea')).toBeNull();
+});
+
+it('copies generated Codex TOML and explains how to merge it into an existing config', async (): Promise<void> => {
+  const copied: string[] = [];
+  const target = render(new InMemoryPersonalAccessTokens(), new InMemoryTelemetrySetup(), {
+    writeText: async (value: string): Promise<void> => { copied.push(value); }
+  });
+  const dialog = await openCreate(target);
+  fillName(dialog, 'Codex logs');
+  button(dialog, 'Create token').click();
+  await vi.waitFor(() => expect(dialog.textContent).toContain('without adding a second section'));
+  button(dialog, 'Copy configuration').click();
+  await vi.waitFor(() => expect(copied).toHaveLength(1));
+  expect(copied[0]).toBe(element<HTMLTextAreaElement>(dialog, 'textarea').value);
+  expect(copied[0]).toContain('[otel.exporter.otlp-http]');
+  expect(copied[0]).toContain('/v1/logs');
+  expect(copied[0]).toContain('Authorization = "Bearer test-only-secret"');
 });
 
 it('allows dismissal while copying and fences the late result', async (): Promise<void> => {

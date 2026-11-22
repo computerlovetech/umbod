@@ -145,7 +145,8 @@ tags:
 
 - [Dashboard composition](src/lib/components/dashboard/README.md) — Separate feature-owned usage and connector pages; reuse indexed controls, not either page workflow.
 
-- [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned platform installers, harness onboarding and personal-token workflows; reuse its neutral controls, not the complete page.
+- [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned harness installer wizard and optional private script preparation.
+- [Settings composition](src/lib/components/settings/README.md) — Feature-owned personal token management and telemetry token creation.
 
 
 - [Files compositions](src/lib/components/files/README.md) — Feature-owned Locations navigation, details, sharing and mutation workflows; reuse neutral layouts and controls, not these compositions.

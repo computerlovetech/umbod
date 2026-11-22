@@ -18,7 +18,7 @@ These routes exist only on the collector listener, default port 4318. Public RES
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| UMBOD_OTLP_ENABLED | false | Enable ingestion |
+| UMBOD_OTLP_ENABLED | false (true in development Compose) | Enable ingestion |
 | UMBOD_OTLP_PUBLIC_BASE_URL | Empty | Advertised public collector base URL for authenticated setup discovery |
 | UMBOD_OTLP_HOST | 0.0.0.0 | Collector listener interface |
 | UMBOD_OTLP_PORT | 4318 | Collector listener port |

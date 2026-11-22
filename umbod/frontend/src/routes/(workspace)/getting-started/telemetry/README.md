@@ -1,11 +1,10 @@
 ---
 type: Software Module
-title: Telemetry onboarding route
-description: Dedicated Getting started subpage for personal telemetry tokens.
+title: Legacy telemetry route
+description: Compatibility redirect for existing Getting started telemetry bookmarks.
 ---
 
 # Files
 
-- [+page.svelte](./+page.svelte) — Render only telemetry token management within the shared Getting started container.
-- [Getting started layout](../+layout.ts) — Shared public MCP configuration loader.
-- [Token components](../../../../lib/components/getting-started/README.md) — Token list, modal form and configuration lifecycle.
+- [+page.ts](./+page.ts) — Redirect to personal Settings while preserving the query string and fragment.
+- [Tokens page](../../settings/tokens/+page.svelte) — Current home of personal access tokens.

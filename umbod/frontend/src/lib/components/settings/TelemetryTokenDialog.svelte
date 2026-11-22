@@ -14,7 +14,12 @@
   {#if state.configuration}
     <div class="configuration">
       <h3>{state.agent === 'codex' ? '~/.codex/config.toml' : '~/.claude/settings.json'}</h3>
-      <p>This configuration contains a secret shown only once. Settings store it in plaintext: store them securely and do not commit them. Merge these entries while preserving existing settings. Logs can still include metadata and, with Codex, tool output.</p>
+      {#if state.agent === 'codex'}
+        <p>Copy the TOML below and merge the keys into <code>~/.codex/config.toml</code>. If a section already exists, update its keys without adding a second section. In <code>headers</code>, add or update <code>Authorization</code> without removing other headers. Keep unrelated settings, then restart Codex.</p>
+      {:else}
+        <p>Merge these entries while preserving existing settings, then restart Claude Code.</p>
+      {/if}
+      <p>This configuration contains a secret shown only once. The config file stores it in plaintext: keep it private and don’t commit it. Logs can still include metadata and, with Codex, tool output.</p>
       <p><a href={state.agent === 'codex' ? 'https://developers.openai.com/codex/config-advanced#observability-and-telemetry' : 'https://code.claude.com/docs/en/monitoring-usage'} target="_blank" rel="noreferrer">Agent telemetry documentation</a></p>
       <textarea aria-label="Generated telemetry configuration" readonly value={state.configuration} rows="12" {@attach (element: HTMLTextAreaElement): void => element.focus()}></textarea>
       <div class="actions">
@@ -25,6 +30,7 @@
     </div>
   {:else}
     <form aria-label="Create telemetry token" onsubmit={(event: SubmitEvent): void => { event.preventDefault(); void state.create(); }}>
+      <p>Scope: <code>telemetry:write</code></p>
       <fieldset disabled={state.creating}>
         <Select label="Agent" options={state.agentOptions} value={state.agent} onchange={state.setAgent} disabled={state.creating} />
         <AdminConfigurationField id={`${id}-name`} name="token-name" label="Token name" required maxlength={256} value={state.tokenName} oninput={(event: Event): void => state.setTokenName((event.currentTarget as HTMLInputElement).value)} />

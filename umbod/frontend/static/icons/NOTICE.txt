@@ -1,0 +1,9 @@
+Apple and Windows logo artwork:
+https://commons.wikimedia.org/wiki/File:Apple_logo_black.svg
+https://commons.wikimedia.org/wiki/File:Windows_logo_-_2021.svg
+
+Tux is based on Larry Ewing’s Linux mascot (lewing@isc.tamu.edu), created with GIMP.
+SVG source and contributor credits: https://commons.wikimedia.org/wiki/File:Tux.svg
+
+Codex product icon: https://openai.com/codex/
+Claude Code product mark: https://code.claude.com/docs/en/overview

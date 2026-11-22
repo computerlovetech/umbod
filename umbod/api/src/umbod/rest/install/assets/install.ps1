@@ -26,6 +26,302 @@ param(
         return $Value
     }
 
+
+    function Initialize-TelemetrySupport {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.RegularExpressions;
+
+public static class UmbodTelemetrySettings {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool MoveFileEx(string source, string destination, int flags);
+
+    public static void Publish(string source, string destination, bool replace) {
+        const int writeThrough = 8;
+        const int replaceExisting = 1;
+        if (!MoveFileEx(source, destination, writeThrough | (replace ? replaceExisting : 0)))
+            throw new InvalidOperationException("Could not publish settings");
+    }
+
+    public sealed class Value {
+        public Dictionary<string, Value> Fields;
+        public string Text;
+        public int Opening;
+        public int End;
+    }
+
+    private static readonly Regex Token = new Regex(
+        @"\G[ \t\r\n]*(?:""(?<text>(?:[^""\\\x00-\x1f]|\\(?:[""\\/bfnrt]|u[0-9a-fA-F]{4}))*)""|[{}\[\]:,]|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|true|false|null)",
+        RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
+
+    private static readonly Regex Escape = new Regex(@"\\(u[0-9a-fA-F]{4}|[""\\/bfnrt])");
+    private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false, true);
+
+    private static Exception Invalid() { return new FormatException("Invalid or ambiguous JSON"); }
+
+    private static string Decode(Match token) {
+        string decoded = Escape.Replace(token.Groups["text"].Value, match => {
+            string code = match.Groups[1].Value;
+            if (code.Length == 5) return ((char)Int32.Parse(code.Substring(1), NumberStyles.HexNumber)).ToString();
+            int escaped = "bfnrt".IndexOf(code[0]);
+            return escaped < 0 ? code : "\b\f\n\r\t"[escaped].ToString();
+        });
+        Utf8.GetByteCount(decoded);
+        return decoded;
+    }
+
+    private sealed class Reader {
+        private readonly string source;
+        private int cursor;
+        private Match token;
+
+        internal Reader(string source) { this.source = source; Next(); }
+
+        private void Next() {
+            while (cursor < source.Length && " \t\r\n".IndexOf(source[cursor]) >= 0) cursor++;
+            token = Token.Match(source, cursor);
+            if (cursor < source.Length && !token.Success) throw Invalid();
+        }
+
+        private bool Is(string raw) { return token.Success && token.Value == raw; }
+
+        private void Skip() { cursor += token.Length; Next(); }
+
+        private void Require(string raw) {
+            if (!Is(raw)) throw Invalid();
+            Skip();
+        }
+
+        internal Value Read(int depth) {
+            if (depth > 64 || !token.Success) throw Invalid();
+            Value value = new Value();
+            if (Is("{")) {
+                value.Opening = cursor;
+                value.Fields = new Dictionary<string, Value>(StringComparer.Ordinal);
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                Skip();
+                if (!Is("}")) {
+                    do {
+                        if (!token.Success || !token.Groups["text"].Success) throw Invalid();
+                        string key = Decode(token);
+                        if (!seen.Add(key)) throw Invalid();
+                        Skip();
+                        Require(":");
+                        value.Fields.Add(key, Read(depth + 1));
+                        if (!Is(",")) break;
+                        Skip();
+                    } while (true);
+                }
+                Require("}");
+            } else if (Is("[")) {
+                Skip();
+                if (!Is("]")) {
+                    do {
+                        Read(depth + 1);
+                        if (!Is(",")) break;
+                        Skip();
+                    } while (true);
+                }
+                Require("]");
+            } else {
+                if (Is("}") || Is("]") || Is(":") || Is(",")) throw Invalid();
+                if (token.Groups["text"].Success) {
+                    value.Text = Decode(token);
+                    value.Opening = cursor;
+                    value.End = cursor + token.Length;
+                }
+                Skip();
+            }
+            if (depth == 0 && cursor != source.Length) throw Invalid();
+            return value;
+        }
+    }
+
+    public static Dictionary<string, Value> Object(string source) {
+        Value root = new Reader(source).Read(0);
+        if (root.Fields == null) throw Invalid();
+        return root.Fields;
+    }
+
+    public static string Merge(string source, IDictionary<string, string> desired) {
+        Value root = new Reader(source).Read(0);
+        if (root.Fields == null) throw Invalid();
+        Value env;
+        foreach (string key in root.Fields.Keys)
+            if (key.Equals("otelHeadersHelper", StringComparison.OrdinalIgnoreCase)
+                || (key != "env" && key.Equals("env", StringComparison.OrdinalIgnoreCase))) throw Invalid();
+        bool hasEnv = root.Fields.TryGetValue("env", out env);
+        Value section = hasEnv ? env : root;
+        if (section.Fields == null) throw Invalid();
+
+        const string header = "OTEL_EXPORTER_OTLP_LOGS_HEADERS";
+        Value previous = null;
+        bool rotate = hasEnv && env.Fields.TryGetValue(header, out previous) && previous.Text != null
+            && previous.Text != desired[header]
+            && Regex.IsMatch(previous.Text, @"\AAuthorization=Bearer umbod_pat_v1_[0-9a-f]{32}_[A-Za-z0-9_-]{43}\z");
+        if (rotate) {
+            foreach (var pair in desired) {
+                Value actual;
+                if (pair.Key != header && (!env.Fields.TryGetValue(pair.Key, out actual) || actual.Text != pair.Value)) {
+                    rotate = false;
+                    break;
+                }
+            }
+        }
+        if (hasEnv) {
+            foreach (var pair in env.Fields) {
+                string key = pair.Key;
+                bool telemetry = key.StartsWith("OTEL_", StringComparison.OrdinalIgnoreCase)
+                    || key.StartsWith("CLAUDE_CODE_OTEL_", StringComparison.OrdinalIgnoreCase)
+                    || key.Equals("CLAUDE_CODE_ENABLE_TELEMETRY", StringComparison.OrdinalIgnoreCase);
+                string expected;
+                if (telemetry && (!desired.TryGetValue(key, out expected) || pair.Value.Text != expected) && !(rotate && key == header))
+                    throw new InvalidOperationException("Conflicting telemetry");
+            }
+        }
+        if (rotate) return source.Substring(0, previous.Opening) + "\"" + desired[header] + "\"" + source.Substring(previous.End);
+        var fields = new List<string>();
+        foreach (var pair in desired)
+            if (!hasEnv || !env.Fields.ContainsKey(pair.Key))
+                fields.Add("\"" + pair.Key + "\": \"" + pair.Value + "\"");
+        if (fields.Count == 0) return source;
+        string added = String.Join(", ", fields);
+        if (!hasEnv) added = "\"env\": {" + added + "}";
+        return source.Insert(section.Opening + 1, "\n  " + added + (section.Fields.Count > 0 ? "," : "\n"));
+    }
+}
+'@
+    }
+
+    function Read-TelemetryPayload([string]$Encoded) {
+        try {
+            if ($Encoded.Length -gt 8192 -or $Encoded -cnotmatch '\A[A-Za-z0-9+/]+={0,2}\z') { throw 'Invalid encoding' }
+            $Bytes = [Convert]::FromBase64String($Encoded)
+            if ([Convert]::ToBase64String($Bytes) -cne $Encoded) { throw 'Noncanonical encoding' }
+            Initialize-TelemetrySupport
+            $Payload = [UmbodTelemetrySettings]::Object([Text.UTF8Encoding]::new($false, $true).GetString($Bytes))
+            if ($Payload.Count -ne 2 -or -not $Payload.ContainsKey('endpoint') -or -not $Payload.ContainsKey('token')) { throw 'Unexpected keys' }
+            $Endpoint = $Payload['endpoint'].Text
+            $Token = $Payload['token'].Text
+            if (-not $Endpoint -or $Endpoint.Length -gt 2048 -or $Endpoint -cnotmatch '\A[A-Za-z0-9:/._~!&''()*+,;=@%\[\]-]+\z' -or
+                $Endpoint -match '%(?:[01][0-9a-f]|7f)|%(?![0-9a-f]{2})' -or
+                $Endpoint -notmatch '\Ahttps?://(?:\[[a-f0-9:.]+\]|[a-z0-9.-]+)(?::[0-9]+)?/') { throw 'Invalid endpoint' }
+            $null = Assert-SafeUrl $Endpoint
+            if (-not $Endpoint.EndsWith('/v1/logs', [StringComparison]::Ordinal) -or -not ([Uri]$Endpoint).AbsolutePath.EndsWith('/v1/logs', [StringComparison]::Ordinal)) { throw 'Invalid logs path' }
+            if ($Token -cnotmatch '\Aumbod_pat_v1_[0-9a-f]{32}_[A-Za-z0-9_-]{43}\z') { throw 'Invalid token' }
+            $Values = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+            $Values['CLAUDE_CODE_ENABLE_TELEMETRY'] = '1'
+            $Values['OTEL_LOGS_EXPORTER'] = 'otlp'
+            $Values['OTEL_EXPORTER_OTLP_LOGS_PROTOCOL'] = 'http/json'
+            $Values['OTEL_EXPORTER_OTLP_LOGS_ENDPOINT'] = $Endpoint
+            $Values['OTEL_EXPORTER_OTLP_LOGS_HEADERS'] = 'Authorization=Bearer ' + $Token
+            $Values['OTEL_METRICS_EXPORTER'] = 'none'
+            $Values['OTEL_TRACES_EXPORTER'] = 'none'
+            $Values['OTEL_LOG_USER_PROMPTS'] = '0'
+            $Values['OTEL_LOG_ASSISTANT_RESPONSES'] = '0'
+            $Values['OTEL_LOG_TOOL_DETAILS'] = '0'
+            $Values['OTEL_LOG_TOOL_CONTENT'] = '0'
+            $Values['OTEL_LOG_RAW_API_BODIES'] = '0'
+            return ,$Values
+        } catch { throw 'Invalid Claude Code telemetry payload' }
+    }
+
+    function Get-TelemetryFileAttributes([string]$Path) {
+        try { return [IO.File]::GetAttributes($Path) } catch [IO.FileNotFoundException], [IO.DirectoryNotFoundException] { return $null }
+    }
+
+    function Assert-TelemetryPath([string]$Path, [Security.Principal.SecurityIdentifier]$Owner, [bool]$Directory) {
+        $Attributes = Get-TelemetryFileAttributes $Path
+        if ($null -eq $Attributes) { return $false }
+        if (($Attributes -band [IO.FileAttributes]::ReparsePoint) -or [bool]($Attributes -band [IO.FileAttributes]::Directory) -ne $Directory) { throw 'Unsafe settings path' }
+        $Security = Get-Acl -LiteralPath $Path
+        if (-not $Owner.Equals($Security.GetOwner([Security.Principal.SecurityIdentifier]))) { throw 'Settings must be user-owned' }
+        foreach ($Rule in $Security.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])) {
+            $InheritableOwner = $Rule.IdentityReference.Value -eq 'S-1-3-0' -and ($Rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly)
+            if ($Rule.AccessControlType -eq 'Allow' -and ($Rule.FileSystemRights -band 0xD0156) -and -not $InheritableOwner -and
+                $Rule.IdentityReference.Value -notin @($Owner.Value, 'S-1-5-18', 'S-1-5-32-544')) { throw 'Settings cannot be writable by others' }
+        }
+        return $true
+    }
+
+    function Read-ClaudeSettings([string]$Path, [Security.Principal.SecurityIdentifier]$Owner) {
+        if (-not (Assert-TelemetryPath $Path $Owner $false)) { return $null }
+        $Stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+        try {
+            if ($Stream.Length -gt 1048576) { throw 'Oversized Claude Code settings' }
+            $Reader = [IO.BinaryReader]::new($Stream)
+            try { return [Text.UTF8Encoding]::new($false, $true).GetString($Reader.ReadBytes([int]$Stream.Length)) }
+            finally { $Reader.Dispose() }
+        } finally { $Stream.Dispose() }
+    }
+
+    function Save-ClaudeSettings([string]$Path, [string]$Updated, $Original, [Security.Principal.SecurityIdentifier]$Owner) {
+        $TemporarySettings = Join-Path ([IO.Path]::GetDirectoryName($Path)) ('.umbod-settings-' + [Guid]::NewGuid().ToString('N'))
+        $Stream = [IO.File]::Open($TemporarySettings, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try {
+            $Stream.Dispose()
+            $Security = [Security.AccessControl.FileSecurity]::new()
+            $Security.SetOwner($Owner)
+            $Security.SetAccessRuleProtection($true, $false)
+            $Security.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($Owner, 'FullControl', 'Allow'))
+            Set-Acl -LiteralPath $TemporarySettings -AclObject $Security
+            $Applied = Get-Acl -LiteralPath $TemporarySettings
+            $Rules = @($Applied.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+            if (-not $Applied.AreAccessRulesProtected -or -not $Owner.Equals($Applied.GetOwner([Security.Principal.SecurityIdentifier])) -or
+                $Rules.Count -ne 1 -or -not $Owner.Equals($Rules[0].IdentityReference) -or $Rules[0].AccessControlType -ne 'Allow') { throw 'Could not restrict settings access' }
+            $Stream = [IO.File]::Open($TemporarySettings, [IO.FileMode]::Open, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            $Bytes = [Text.UTF8Encoding]::new($false, $true).GetBytes($Updated)
+            $Stream.Write($Bytes, 0, $Bytes.Length)
+            $Stream.Flush($true)
+            $Stream.Dispose()
+            if ((Read-ClaudeSettings $Path $Owner) -cne $Original) { throw 'Settings changed during installation' }
+            [UmbodTelemetrySettings]::Publish($TemporarySettings, $Path, ($null -ne $Original))
+        } finally {
+            $Stream.Dispose()
+            [IO.File]::Delete($TemporarySettings)
+        }
+    }
+
+    function Update-ClaudeTelemetry($Desired, [bool]$Write) {
+        if (Test-Path Env:CLAUDE_CONFIG_DIR) { throw 'Claude Code telemetry requires manual setup when CLAUDE_CONFIG_DIR is set' }
+        $TelemetryLock = $null
+        try {
+            $ProfilePath = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+            if ($ProfilePath -notmatch '\A[A-Za-z]:\\' -or ($env:USERPROFILE -and $env:USERPROFILE -ne $ProfilePath)) { throw 'Expected the default local profile' }
+            $Directory = Join-Path $ProfilePath '.claude'
+            $Owner = [Security.Principal.WindowsIdentity]::GetCurrent().User
+            $Ancestor = $Directory
+            while ($Ancestor) {
+                if ((Get-TelemetryFileAttributes $Ancestor) -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing linked settings directories' }
+                $Ancestor = [IO.Path]::GetDirectoryName($Ancestor)
+            }
+            if (-not (Assert-TelemetryPath $ProfilePath $Owner $true)) { throw 'Missing user profile' }
+            if (-not (Assert-TelemetryPath $Directory $Owner $true)) {
+                if (-not $Write) { return }
+                $null = [IO.Directory]::CreateDirectory($Directory)
+                if (-not (Assert-TelemetryPath $Directory $Owner $true)) { throw 'Unsafe configuration directory' }
+            }
+            if ($Write) {
+                $TelemetryLock = [IO.FileStream]::new((Join-Path $Directory '.umbod-telemetry.lock'), [IO.FileMode]::CreateNew,
+                    [IO.FileAccess]::Write, [IO.FileShare]::None, 4096, [IO.FileOptions]::DeleteOnClose)
+            }
+            $Path = Join-Path $Directory 'settings.json'
+            $Original = Read-ClaudeSettings $Path $Owner
+            $Source = if ($null -eq $Original) { '{}' } else { $Original }
+            $Updated = [UmbodTelemetrySettings]::Merge($Source, $Desired)
+            if ($Write) { Save-ClaudeSettings $Path $Updated $Original $Owner }
+        } catch {
+            if ($Write) { throw 'Plugin registration verified, but Claude Code telemetry was not applied. Review your settings manually before retrying.' }
+            throw 'Claude Code telemetry settings could not be safely updated. Review your settings manually before retrying.'
+        } finally {
+            if ($null -ne $TelemetryLock) { $TelemetryLock.Dispose() }
+        }
+    }
+
     function Invoke-Harness([string[]]$Arguments) {
         $Stage = if ($Arguments -contains '--help') { 'Checking plugin command support' } elseif ($Arguments[0] -eq 'mcp') { 'Inspecting standalone MCP connections' } elseif ($Arguments[1] -eq 'list') { 'Inspecting local plugins' } elseif ($Arguments -contains 'list') { 'Inspecting configured marketplaces' } else { 'Registering Umbod plugin' }
         Write-Host "$Stage for $Cli..."
@@ -137,6 +433,12 @@ param(
     $LockPath = $null
     try {
         if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Unsupported platform. Use install.sh on macOS or Linux.' }
+        $Telemetry = $null
+        if (Get-Variable UmbodTelemetryPayload -Scope Script -ErrorAction SilentlyContinue) {
+            if ($Harness -ne 'claude-code') { throw 'The telemetry installer hook is supported only for Claude Code' }
+            $Telemetry = Read-TelemetryPayload $UmbodTelemetryPayload
+            Update-ClaudeTelemetry $Telemetry $false
+        }
         $Expected = Assert-SafeUrl $ExpectedEndpoint
         if (-not $Expected.EndsWith('/mcp')) { throw 'Expected endpoint must be a normalized MCP URL' }
         $Base = Assert-SafeUrl $BaseUrl.TrimEnd('/')
@@ -301,6 +603,10 @@ param(
         if ($Verified.Count -ne 1) { throw 'The intended Umbod plugin is not enabled; review your harness plugin settings' }
         $PluginSource = if ($Cli -eq 'codex') { $Verified[0].source.path } else { $Verified[0].readFromFolder }
         if (-not $PluginSource -or [IO.Path]::GetFullPath($PluginSource) -ne [IO.Path]::GetFullPath((Join-Path $Destination 'plugins/umbod'))) { throw 'The installed Umbod plugin source could not be verified; review your harness plugin settings' }
+        if ($null -ne $Telemetry) {
+            Update-ClaudeTelemetry $Telemetry $true
+            Write-Host 'Claude Code logs-only telemetry settings applied. Delivery has not been verified.'
+        }
         $HarnessName = if ($Harness -eq 'codex') { 'Codex' } else { 'Claude Code' }
         Write-Host ''
         Write-Host '      |'
