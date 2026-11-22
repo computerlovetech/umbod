@@ -131,7 +131,14 @@
       </Button>
     </div>
     <div class="sidebar-top">
-      <a class="brand" href={homeHref} title="Umbod"><img src="/umbod-logo.svg" alt="" width="40" height="40" /><span class="sidebar-detail sidebar-label">Umbod</span></a>
+      <div class="sidebar-header">
+        <div class="desktop-sidebar-control">
+          <Button variant="quiet" iconOnly aria-label={sidebarToggleLabel} title={sidebarToggleLabel} aria-expanded={sidebarPreference.expanded} aria-controls={sidebarId} onclick={sidebarPreference.toggle}>
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg>
+          </Button>
+        </div>
+        <a class="brand" href={homeHref} title="Umbod"><img src="/umbod-logo.svg" alt="" width="40" height="40" /><span class="sidebar-detail sidebar-label">Umbod</span></a>
+      </div>
       <div class={["sidebar-navigation", state.sidebarTransition === 'forward' && "enter-forward", state.sidebarTransition === 'backward' && "enter-backward"]}>
         {#if backLink}
           <a class="workspace-back" href={backLink.href} title={backLink.label}><span class="back-arrow" aria-hidden="true">←</span><svg class="back-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4m7-7-7 7 7 7" /></svg><span class="sidebar-detail sidebar-label">{backLink.label}</span></a>
@@ -160,11 +167,6 @@
   </aside>
 
   <section class="content-shell" aria-busy={contentLoading || state.navigationPending}>
-    <div class="desktop-sidebar-control">
-      <Button variant="quiet" iconOnly aria-label={sidebarToggleLabel} title={sidebarToggleLabel} aria-expanded={sidebarPreference.expanded} aria-controls={sidebarId} onclick={sidebarPreference.toggle}>
-        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg>
-      </Button>
-    </div>
     <div class={["content-loading", (contentLoading || state.navigationPending) && "active"]}>
       <DelayedSpinner active={contentLoading || state.navigationPending} label="Loading page" />
     </div>
@@ -454,33 +456,25 @@
   }
 
   @media (width > 720px) {
-    .workspace-shell {
-      --content-gutter: clamp(24px, 4vw, 56px);
-      --sidebar-control-height: 48px;
-    }
-
     .workspace-shell.sidebar-collapsed {
       grid-template-columns: 64px minmax(0, 1fr);
     }
 
-    .content-shell {
-      scroll-padding-top: var(--sidebar-control-height);
+    .sidebar-header {
+      align-items: center;
+      display: grid;
+      gap: 4px;
+      grid-template-columns: 44px minmax(0, 1fr);
     }
 
     .desktop-sidebar-control {
-      background: var(--admin-canvas);
-      box-sizing: border-box;
-      display: block;
-      height: var(--sidebar-control-height);
-      padding: 6px var(--content-gutter) 0;
-      position: sticky;
-      top: 0;
-      z-index: 3;
+      display: grid;
+      min-height: 40px;
+      place-items: center;
     }
 
-    .content-width {
-      padding-top: 0;
-      padding-inline: var(--content-gutter);
+    .sidebar-collapsed .sidebar-header {
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .sidebar-top {

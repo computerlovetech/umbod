@@ -32,7 +32,7 @@ describe('contextual sidebar rendering', (): void => {
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     const sidebar = document.getElementById(toggle.getAttribute('aria-controls')!);
     expect(sidebar?.tagName).toBe('ASIDE');
-    expect(sidebar?.contains(toggle)).toBe(false);
+    expect(sidebar?.contains(toggle)).toBe(true);
     toggle.focus();
     toggle.click();
     await tick();
