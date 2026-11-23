@@ -21,7 +21,7 @@ test('inspects a pattern inline and keeps its labelled actions independent of th
     expect(target.textContent).toContain('Missing context');
     const reporting = target.querySelector('aside[aria-labelledby="reporting-summary-title"]');
     expect(reporting?.textContent).toContain('Saved mode: When requested');
-    expect(reporting?.textContent).toContain('Agents can submit findings only when asked to report.');
+    expect(reporting?.textContent).toContain('Umbod accepts reports only when the user asks for them.');
     expect(reporting?.textContent).not.toContain('After saving:');
     expect(target.textContent).not.toContain('internal-pattern'); expect(target.textContent).not.toContain('internal-settings');
     expect(target.textContent).not.toMatch(/revision|playbook/i);
@@ -89,7 +89,7 @@ test('shows reporting controls directly and previews the selected policy until i
     expect(target.querySelector<HTMLElement>('section[aria-labelledby="diagnostic-patterns-title"]')?.hidden).toBe(true);
     expect(settings.querySelector('textarea')?.value).toBe('Collect facts');
     const groups = settings.querySelectorAll('fieldset');
-    expect(Array.from(groups, (group): string | undefined => group.querySelector('legend')?.textContent ?? undefined)).toEqual(['When agents can report · Behaviour review', 'When agents can report · Secondary review']);
+    expect(Array.from(groups, (group): string | undefined => group.querySelector('legend')?.textContent ?? undefined)).toEqual(['Which reports Umbod accepts · Behaviour review', 'Which reports Umbod accepts · Secondary review']);
     const radios = groups[0].querySelectorAll<HTMLInputElement>('input[type="radio"]');
     expect(radios).toHaveLength(3);
     expect(radios[0].checked).toBe(true);

@@ -11,15 +11,15 @@
   import { agentDiagnosticsHref } from '#lib/workspace/navigation.js';
   import type { ConfigurationState, ReportingPolicy } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
   const reportingDescriptions: Record<ConfigurationState['reportingMode'], string> = {
-    'When requested': 'Agents can submit findings only when asked to report.',
-    'Automatic reports allowed': 'Agents can submit findings without being asked where reporting settings allow it, and only if both the user and client agree.',
-    Off: 'Agents cannot submit new findings. Reporting needs at least one enabled setting that includes an enabled pattern.'
+    'When requested': 'Umbod accepts reports only when the user asks for them.',
+    'Automatic reports allowed': 'Umbod also accepts proactive reports where allowed by the reporting settings, the user, and the client.',
+    Off: 'Umbod does not accept new reports. Reporting requires at least one enabled reporting setting with an enabled pattern.'
   };
 
   const policies: readonly { id: ReportingPolicy; label: string; description: string }[] = [
-    { id: 'requested', label: 'When requested', description: 'Agents report only when asked.' },
-    { id: 'proactive', label: 'Allow proactive reports', description: 'Agents can report without being asked if the user and client allow it.' },
-    { id: 'off', label: 'Off', description: 'Agents cannot submit new findings under this setting.' }
+    { id: 'requested', label: 'When requested', description: 'Accept reports only when the user asks for them.' },
+    { id: 'proactive', label: 'Allow proactive reports', description: 'Also accept reports without a request if both the user and client allow it.' },
+    { id: 'off', label: 'Off', description: 'Reject all new reports under this setting, even when requested.' }
   ];
   let { state, section = 'patterns' }: { state: ConfigurationState; section?: 'patterns' | 'reporting' } = $props();
 
@@ -83,7 +83,7 @@
     <header class="section-heading">
       <div>
         <h2 id="reporting-settings-title">Reporting settings</h2>
-        <p>Choose when agents can submit findings and what they should include.</p>
+        <p>Choose which diagnostic reports to accept and what they should include. These settings do not hide the MCP reporting tool.</p>
       </div>
     </header>
     <div class="reporting-layout">
@@ -91,7 +91,7 @@
         {#each state.settings as setting (setting.id)}
           {#if state.settings.length > 1}<h3>{setting.name}</h3>{/if}
           <fieldset class="reporting-options" disabled={state.busy}>
-            <legend>When agents can report{state.settings.length > 1 ? ` · ${setting.name}` : ''}</legend>
+            <legend>Which reports Umbod accepts{state.settings.length > 1 ? ` · ${setting.name}` : ''}</legend>
             {#each policies as policy (policy.id)}
               <label class="reporting-option">
                 <input type="radio" name={`reporting-policy-${setting.id}`} checked={policy.id === (!setting.enabled ? 'off' : setting.allow_proactive ? 'proactive' : 'requested')} onchange={(): void => state.setReportingPolicy(setting.id, policy.id)} />
