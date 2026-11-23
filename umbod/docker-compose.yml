@@ -14,7 +14,7 @@ services:
       - "8001"
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.umbod-browser-api.rule=Host(`umbod-admin.computerlove.tech`) && PathPrefix(`/api/`)"
+      - "traefik.http.routers.umbod-browser-api.rule=Host(`umbod-admin.computerlove.tech`) && PathPrefix(`/api/`) && !PathRegexp(`^/api/install/v1/(codex|claude-code)/telemetry/redeem/?$$`)"
       - traefik.http.routers.umbod-browser-api.entryPoints=http
       - traefik.http.routers.umbod-browser-api.priority=50
       - traefik.http.routers.umbod-browser-api.middlewares=umbod-browser-response@docker,umbod-auth@docker
@@ -218,7 +218,7 @@ services:
       - "3010:3000"
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.umbod-frontend.rule=Host(`umbod-admin.computerlove.tech`) && !Path(`/system/health`)"
+      - "traefik.http.routers.umbod-frontend.rule=Host(`umbod-admin.computerlove.tech`) && !Path(`/system/health`) && !PathRegexp(`^/api/install/v1/(codex|claude-code)/telemetry/redeem/?$$`)"
       - traefik.http.routers.umbod-frontend.entryPoints=http
       - traefik.http.routers.umbod-frontend.priority=10
       - traefik.http.routers.umbod-frontend.service=umbod-oauth
@@ -243,7 +243,7 @@ services:
       - traefik.http.routers.umbod-install.priority=60
       - traefik.http.routers.umbod-install.service=umbod-frontend
       - traefik.http.routers.umbod-install.middlewares=umbod-browser-response@docker
-      - "traefik.http.routers.umbod-install-secure.rule=Host(`umbod-admin.computerlove.tech`) && (Method(`GET`) || Method(`HEAD`)) && PathRegexp(`^/api/install/v1/(codex|claude-code)/(package[.]zip|package[.]sha256|marketplace[.]txt|endpoint[.]txt|install[.](sh|ps1))$$`)"
+      - "traefik.http.routers.umbod-install-secure.rule=Host(`umbod-admin.computerlove.tech`) && (((Method(`GET`) || Method(`HEAD`)) && PathRegexp(`^/api/install/v1/(codex|claude-code)/(package[.]zip|package[.]sha256|marketplace[.]txt|endpoint[.]txt|install[.](sh|ps1))$$`)) || (Method(`POST`) && PathRegexp(`^/api/install/v1/(codex|claude-code)/telemetry/redeem$$`)))"
       - traefik.http.routers.umbod-install-secure.entryPoints=https
       - traefik.http.routers.umbod-install-secure.priority=60
       - traefik.http.routers.umbod-install-secure.service=umbod-frontend

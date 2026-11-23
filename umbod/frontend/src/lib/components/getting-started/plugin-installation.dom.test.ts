@@ -2,7 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import type { ToastApi } from '#lib/components/feedback/toast-state.svelte.js';
 import McpSetupGuide from './McpSetupGuide.svelte';
-import type { TelemetryInstaller } from './telemetry-installer';
+import { InMemoryTelemetryInstallClaims } from '#lib/telemetry-setup/in-memory-api.test-support.js';
 
 vi.mock('#lib/components/feedback/index.js', () => ({
   useToast: (): ToastApi => ({
@@ -19,12 +19,12 @@ afterEach(async (): Promise<void> => {
   vi.restoreAllMocks();
 });
 
-function render(telemetryInstaller?: TelemetryInstaller, logsEndpoint?: string): HTMLDivElement {
+function render(installClaims?: InMemoryTelemetryInstallClaims): HTMLDivElement {
   const target = document.createElement('div');
   document.body.append(target);
   const component = mount(McpSetupGuide, {
     target,
-    props: { installerBaseUrl: 'https://site.test/api/install/v1', telemetryInstaller, logsEndpoint }
+    props: { installerBaseUrl: 'https://site.test/api/install/v1', installClaims }
   });
   cleanups.push(async (): Promise<void> => { await unmount(component); target.remove(); });
   flushSync();
@@ -59,9 +59,9 @@ function select(target: ParentNode, value: string): void {
   expect(radio.checked).toBe(true);
 }
 
-function chooseLogs(target: ParentNode): void {
+function chooseLogs(target: ParentNode, harness: string): void {
   visit(target, 'Harness');
-  select(target, 'claude-code');
+  select(target, harness);
   visit(target, 'Telemetry');
   select(target, 'logs');
 }
@@ -103,7 +103,7 @@ test.each([
   expect(requiredElement(target, '[aria-current="step"]').textContent).toContain('Review and install');
   expect(requiredElement(target, '[aria-label="Installer steps"]').textContent).not.toContain('Telemetry');
   expect(target.textContent).toContain('Step 3 of 3');
-  expect(target.textContent).not.toContain('Skip telemetry');
+  expect(target.textContent).not.toContain('Without telemetry');
   press(target, 'Back');
   expect(requiredElement(target, '[aria-current="step"]').textContent).toContain('Harness');
   press(target, 'Continue');
@@ -123,102 +123,77 @@ test.each([
   await vi.waitFor((): void => expect(clipboard).toHaveBeenCalledWith(command));
 });
 
-test('never prepares a package for Codex or on skip, even when a telemetry installer is available', (): void => {
-  const prepare = vi.fn<TelemetryInstaller['prepare']>();
-  const logsEndpoint = 'https://collector.test/v1/logs';
-  const target = render({ prepare }, logsEndpoint);
-  visit(target, 'Telemetry');
-  expect(target.querySelector('input[value="logs"]')).toBeNull();
-  const tokensLink = 'a[href="/settings/tokens"]';
-  expect(requiredElement(target, 'details > summary').textContent).toBe('Set up Codex logs manually');
-  const manualSetup = requiredElement(target, 'details');
-  expect(requiredElement(manualSetup, tokensLink).textContent).toContain('Create an access token for sending agent logs');
-  expect(manualSetup.textContent).toContain(logsEndpoint);
-  expect(manualSetup.textContent).toContain('Authorization');
-  expect(manualSetup.textContent).toContain('log_user_prompt');
-  expect(target.textContent).toContain('Step 3 of 4');
-  visit(target, 'Review and install');
-  expect(prepare).not.toHaveBeenCalled();
-  visit(target, 'Harness');
-  select(target, 'claude-code');
+test.each([
+  ['macos', 'codex', 'sh'],
+  ['linux', 'claude-code', 'sh'],
+  ['windows', 'claude-code', 'ps1']
+])('copies a single telemetry install command on demand for %s and %s', async (platform, harness, extension): Promise<void> => {
+  const claims = new InMemoryTelemetryInstallClaims();
+  const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+  const target = render(claims);
+  select(target, platform);
   visit(target, 'Telemetry');
   expect(requiredElement<HTMLInputElement>(target, 'input[value="skip"]').checked).toBe(true);
-  expect(target.querySelector(tokensLink)).toBeNull();
-  visit(target, 'Review and install');
-  expect(prepare).not.toHaveBeenCalled();
-});
-
-test('prepares once on Review and downloads the Blob only on click without displaying the private script', async (): Promise<void> => {
-  const blob = new Blob(['private script body']);
-  const prepare = vi.fn<TelemetryInstaller['prepare']>().mockResolvedValue(blob);
-  const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:private');
-  const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation((): void => {});
-  const download = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement): void {
-    expect(this.download).toBe('umbod-installer.zip');
-    expect(this.href).toBe('blob:private');
-  });
-  const target = render({ prepare });
-  select(target, 'windows');
-  chooseLogs(target);
-  expect(prepare).not.toHaveBeenCalled();
   press(target, 'Continue');
-  expect(prepare).toHaveBeenCalledWith('windows', 'claude-code', expect.any(AbortSignal));
+  expect(requiredElement(target, 'code').textContent).not.toContain(claims.code);
+  chooseLogs(target, harness);
+  expect(target.textContent).not.toContain('Copy install command');
+  expect(target.innerHTML).not.toContain(claims.code);
+  press(target, 'Continue');
+  expect(target.querySelector('code')).toBeNull();
+  expect(claims.requests).toEqual([]);
+  expect(clipboard).not.toHaveBeenCalled();
+  press(target, 'Copy install command');
   expect(requiredElement(target, '[role="status"]').textContent).toContain('Preparing');
-  visit(target, 'Review and install');
-  await vi.waitFor((): void => expect(target.textContent).toContain('Keep the ZIP and extracted files private. Delete them after use.'));
-  press(target, 'Back');
-  visit(target, 'Review and install');
-  expect(prepare).toHaveBeenCalledTimes(1);
-  expect(target.textContent).not.toContain('private script body');
-  expect(requiredElement(target, 'code').textContent).toBe('.\\umbod-install.ps1');
-  expect(target.querySelector('a[download]')).toBeNull();
-  expect(create).not.toHaveBeenCalled();
-  vi.useFakeTimers();
-  press(target, 'Download installer');
-  expect(create).toHaveBeenCalledWith(blob);
-  expect(download).toHaveBeenCalledTimes(1);
-  await vi.runAllTimersAsync();
-  expect(revoke).toHaveBeenCalledWith('blob:private');
+  await vi.waitFor((): void => expect(target.textContent).toContain('Copied.'));
+  expect(claims.requests.map(({ request }) => request)).toEqual([{ harness }]);
+  const command = clipboard.mock.calls[0]?.[0];
+  expect(command).toContain(`https://site.test/api/install/v1/${harness}/install.${extension}`);
+  expect(command).toContain(claims.code);
+  expect(command?.split('\n')).toHaveLength(1);
+  expect(clipboard).toHaveBeenCalledExactlyOnceWith(command);
+  expect(target.innerHTML).not.toContain(claims.code);
+  press(target, 'Copy install command');
+  await tick();
+  expect(claims.requests).toHaveLength(1);
+  expect(clipboard).toHaveBeenCalledTimes(2);
 });
 
-test('reports a generic package failure and retries only after an explicit click', async (): Promise<void> => {
-  const prepare = vi.fn<TelemetryInstaller['prepare']>()
-    .mockRejectedValueOnce(new Error('sensitive response detail'))
-    .mockResolvedValueOnce(new Blob(['private script']));
-  const target = render({ prepare });
-  chooseLogs(target);
+test('shows a selectable command after clipboard failure and reports preparation errors without leaking details', async (): Promise<void> => {
+  const claims = new InMemoryTelemetryInstallClaims();
+  claims.beforeCreate = async (): Promise<void> => { throw new Error('sensitive response detail'); };
+  vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('clipboard denied'));
+  const target = render(claims);
+  chooseLogs(target, 'codex');
   press(target, 'Continue');
-  await vi.waitFor((): void => expect(requiredElement(target, '[role="alert"]').textContent).toBe('Could not prepare your installer.'));
+  press(target, 'Copy install command');
+  await vi.waitFor((): void => expect(requiredElement(target, '[role="alert"]').textContent).toBe('Could not prepare your install command.'));
   expect(target.textContent).not.toContain('sensitive response detail');
-  press(target, 'Back');
-  press(target, 'Continue');
-  expect(prepare).toHaveBeenCalledTimes(1);
-  press(target, 'Retry');
-  await vi.waitFor((): void => expect(target.textContent).toContain('Download installer'));
-  expect(prepare).toHaveBeenCalledTimes(2);
+  expect(target.querySelector('code')).toBeNull();
+  claims.beforeCreate = async (): Promise<void> => {};
+  press(target, 'Copy install command');
+  await vi.waitFor((): void => expect(target.textContent).toContain('Could not copy automatically.'));
+  expect(requiredElement(target, 'code').textContent).toContain(claims.code);
 });
 
-test('switching to Codex aborts an outstanding package and clears the telemetry choice', async (): Promise<void> => {
-  let resolvePackage: (blob: Blob) => void = (): void => {};
-  const pending = new Promise<Blob>((resolve): void => { resolvePackage = resolve; });
-  const prepare = vi.fn<TelemetryInstaller['prepare']>().mockReturnValue(pending);
-  const target = render({ prepare });
-  chooseLogs(target);
+test('discards an outstanding claim when the user leaves Review', async (): Promise<void> => {
+  const claims = new InMemoryTelemetryInstallClaims();
+  const pending = Promise.withResolvers<void>();
+  claims.beforeCreate = () => pending.promise;
+  const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+  const target = render(claims);
+  chooseLogs(target, 'claude-code');
   press(target, 'Continue');
-  const signal = prepare.mock.calls[0]?.[2];
-  expect(signal?.aborted).toBe(false);
-  visit(target, 'Harness');
-  select(target, 'codex');
-  expect(signal?.aborted).toBe(true);
-  resolvePackage(new Blob(['obsolete package']));
-  await pending;
-  visit(target, 'Review and install');
-  expect(target.textContent).not.toContain('Download installer');
-  expect(requiredElement(target, 'code').textContent).toContain('/codex/install.sh');
-  visit(target, 'Harness');
-  select(target, 'claude-code');
-  visit(target, 'Telemetry');
-  expect(requiredElement<HTMLInputElement>(target, 'input[value="skip"]').checked).toBe(true);
-  visit(target, 'Review and install');
-  expect(prepare).toHaveBeenCalledTimes(1);
+  press(target, 'Copy install command');
+  press(target, 'Copy install command');
+  expect(claims.requests).toHaveLength(1);
+  press(target, 'Back');
+  expect(claims.requests[0]?.signal.aborted).toBe(true);
+  pending.resolve();
+  await pending.promise;
+  await tick();
+  press(target, 'Continue');
+  expect(claims.requests).toHaveLength(1);
+  expect(clipboard).not.toHaveBeenCalled();
+  expect(target.querySelector('code')).toBeNull();
 });

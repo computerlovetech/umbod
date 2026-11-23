@@ -17,6 +17,7 @@ from .models import (
     PersonalAccessTokenPolicy,
     PersonalAccessTokenStatus,
     StoredPersonalAccessToken,
+    TokenOwner,
     ValidatePersonalAccessToken,
 )
 from .ownership import VerifiedPersonalAccessTokenOwnerResolver
@@ -39,30 +40,18 @@ def checked_now(clock: PersonalAccessTokenClock) -> datetime:
     return now
 
 
-class PersonalAccessTokenService:
+class PersonalAccessTokenIssuer:
     def __init__(
         self,
-        store: PersonalAccessTokenStore,
-        clock: PersonalAccessTokenClock,
         generator: PersonalAccessTokenGenerator,
         policy: PersonalAccessTokenPolicy,
-        **options: Unpack[PersonalAccessTokenOwnerOptions],
     ) -> None:
-        self._store = store
-        self._clock = clock
         self._generator = generator
         self._policy = policy
-        self._owner_resolver = options.get(
-            "owner_resolver", VerifiedPersonalAccessTokenOwnerResolver()
-        )
 
-    async def issue(
-        self,
-        caller: CallerContext,
-        request: IssuePersonalAccessToken,
-    ) -> IssuedPersonalAccessToken:
-        owner = self._owner_resolver.resolve(caller)
-        now = checked_now(self._clock)
+    def build(
+        self, owner: TokenOwner, request: IssuePersonalAccessToken, now: datetime,
+    ) -> tuple[StoredPersonalAccessToken, IssuedPersonalAccessToken]:
         if request.expires_at <= now:
             raise ValueError("Expiry must be in the future")
         if not set(request.scopes).issubset(self._policy.allowed_scopes):
@@ -86,9 +75,36 @@ class PersonalAccessTokenService:
             metadata=metadata,
             digest=hashlib.sha256(bearer.encode("ascii")).hexdigest(),
         )
+        return stored, IssuedPersonalAccessToken(token=generated.token, metadata=metadata)
+
+
+class PersonalAccessTokenService:
+    def __init__(
+        self,
+        store: PersonalAccessTokenStore,
+        clock: PersonalAccessTokenClock,
+        generator: PersonalAccessTokenGenerator,
+        policy: PersonalAccessTokenPolicy,
+        **options: Unpack[PersonalAccessTokenOwnerOptions],
+    ) -> None:
+        self._store = store
+        self._clock = clock
+        self._issuer = PersonalAccessTokenIssuer(generator, policy)
+        self._owner_resolver = options.get(
+            "owner_resolver", VerifiedPersonalAccessTokenOwnerResolver()
+        )
+
+    async def issue(
+        self,
+        caller: CallerContext,
+        request: IssuePersonalAccessToken,
+    ) -> IssuedPersonalAccessToken:
+        stored, issued = self._issuer.build(
+            self._owner_resolver.resolve(caller), request, checked_now(self._clock),
+        )
         if not await self._store.insert(stored):
             raise PersonalAccessTokenCollision()
-        return IssuedPersonalAccessToken(token=generated.token, metadata=metadata)
+        return issued
 
     async def list_tokens(
         self, caller: CallerContext

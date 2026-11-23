@@ -43,6 +43,36 @@ def test_running_setup_advertises_configured_collector_not_forwarded_origin(
             assert denied.headers["cache-control"] == "no-store"
 
 
+@pytest.mark.parametrize("harness", ["codex", "claude-code"])
+def test_running_claim_redeems_once_and_authorizes_collector_ingestion(
+    runtime_endpoints: RuntimeEndpoints, harness: str,
+) -> None:
+    bearer = os.environ.get("UMBOD_TEST_MEMBER_BEARER_TOKEN", runtime_endpoints.bearer_token)
+    personal_headers = {"Authorization": "Bearer " + bearer}
+    with httpx.Client(base_url=runtime_endpoints.api_base_url, timeout=10, trust_env=False) as client:
+        prepared = client.post("/api/me/telemetry/install-claims", json={"harness": harness}, headers=personal_headers)
+        assert prepared.status_code == 201
+        assert prepared.headers["cache-control"] == "no-store"
+        claim_headers = {"Authorization": "Bearer " + prepared.json()["code"]}
+        exchange = f"/api/install/v1/{harness}/telemetry/redeem"
+        redeemed = client.post(exchange, headers=claim_headers)
+        assert redeemed.status_code == 200
+        token = SecretStr(redeemed.json()["token"])
+        token_id = token.get_secret_value().split("_")[3]
+        try:
+            assert redeemed.headers["cache-control"] == "no-store"
+            assert redeemed.json()["logs_endpoint"] == "https://collector.runtime.invalid/otlp/v1/logs"
+            assert client.post(exchange, headers=claim_headers).status_code == 401
+            logs = client.post(
+                runtime_endpoints.otlp_base_url + "/v1/logs", json={},
+                headers={"Authorization": "Bearer " + token.get_secret_value()},
+            )
+            assert logs.status_code == 200
+        finally:
+            revoked = client.delete(TOKEN_API_PATH + "/" + token_id, headers=personal_headers)
+            assert revoked.status_code == 204
+
+
 @pytest.mark.skipif(
     "UMBOD_TEST_MEMBER_BEARER_TOKEN" in os.environ,
     reason="Requires the local development runtime stage",

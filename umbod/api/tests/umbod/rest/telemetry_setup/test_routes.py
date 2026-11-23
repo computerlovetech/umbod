@@ -1,6 +1,4 @@
 import json
-from collections.abc import Iterator
-from dataclasses import dataclass
 from pathlib import Path
 from time import time
 from unittest.mock import AsyncMock
@@ -13,41 +11,14 @@ from pydantic import SecretStr
 from tests.persistence_runtime import create_inmemory_runtime
 
 from umbod.config import AppConfig
-from umbod.core.persistence import PersistenceRuntime
 from umbod.rest.authentication.verifiers import ProductionJwksJwtVerifier
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.main import create_app_with_dependency_factories
 
+from .conftest import SetupApi
+
 URL = "/api/me/telemetry/setup"
 ISSUER = "https://identity.example.test/"
-
-
-@dataclass(frozen=True)
-class SetupApi:
-    client: TestClient
-    runtime: PersistenceRuntime
-
-
-@pytest.fixture
-def settings() -> AppConfig:
-    return AppConfig(
-        rest={"metrics_enabled": False},
-        endpoints={"collector_base_url": "https://collector.example.test/otlp/"},
-        otlp_receiver={"enabled": True, "bearer_token": "private-ingestion-secret"},
-    )
-
-
-@pytest.fixture
-def api(
-    settings: AppConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Iterator[SetupApi]:
-    deployment = tmp_path / "connectors.json"
-    deployment.write_text('{"connectors":[]}', encoding="utf-8")
-    monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
-    runtime = create_inmemory_runtime()
-    factories = ConnectorApiDependencyFactories.from_settings(settings, runtime, ())
-    with TestClient(create_app_with_dependency_factories(factories)) as client:
-        yield SetupApi(client=client, runtime=runtime)
 
 
 def test_local_setup_uses_only_configured_public_url_without_database_read(
@@ -156,8 +127,23 @@ def test_setup_accepts_verified_nonadministrator_and_denies_missing_or_forged_lo
             "logs_endpoint": "https://collector.example.test/otlp/v1/logs",
         }
         assert client.get("/api/me/profile", headers=headers).json()["capabilities"]["administration"] is False
+        prepare_url = "/api/me/telemetry/install-claims"
+        public_url = "/api/install/v1/claude-code/telemetry/redeem"
+        prepared = client.post(prepare_url, json={"harness": "claude-code"}, headers=headers)
+        assert prepared.status_code == 201
+        authorization = {"Authorization": "Bearer " + prepared.json()["code"]}
+        redeemed = client.post(public_url, headers=authorization)
+        assert redeemed.status_code == 200
+        [token] = client.get("/api/me/personal-access-tokens", headers=headers).json()
+        assert token["owner"] == {"issuer": ISSUER, "subject": "member"}
+        assert client.get(public_url, headers=authorization).status_code == 401
+        assert client.post(public_url + "/", headers=authorization).status_code == 401
+        assert client.post(public_url.replace("claude-code", "unknown"), headers=authorization).status_code == 401
         for denied_headers in ({}, {"Authorization": "Bearer forged"}):
             denied = client.get(URL, headers=denied_headers)
             assert denied.status_code == 401
             assert denied.headers["cache-control"] == "no-store"
             assert "collector" not in denied.text
+            prepare = client.post(prepare_url, json={"harness": "codex"}, headers=denied_headers)
+            assert prepare.status_code == 401
+            assert prepare.headers["cache-control"] == "no-store"

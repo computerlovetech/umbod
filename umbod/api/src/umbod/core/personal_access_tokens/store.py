@@ -4,6 +4,7 @@ from umbod.core.persistence import (
     AllFields,
     AllOf,
     Database,
+    DatabaseSession,
     DeleteQuery,
     Equals,
     InsertCommand,
@@ -26,23 +27,29 @@ from .schema import (
 )
 
 
+async def insert_token_record(
+    session: DatabaseSession, record: StoredPersonalAccessToken,
+) -> bool:
+    metadata = record.metadata
+    row = PersonalAccessTokenRecord(
+        token_id=metadata.token_id,
+        issuer=metadata.owner.issuer,
+        subject=metadata.owner.subject,
+        metadata=metadata,
+        digest=record.digest,
+    )
+    return await session.insert(TOKEN_TABLE, InsertCommand(row=row))
+
+
 class DatabasePersonalAccessTokenStore:
     def __init__(self, database: Database) -> None:
         self._database = database
 
     async def insert(self, record: StoredPersonalAccessToken) -> bool:
-        metadata = record.metadata
-        row = PersonalAccessTokenRecord(
-            token_id=metadata.token_id,
-            issuer=metadata.owner.issuer,
-            subject=metadata.owner.subject,
-            metadata=metadata,
-            digest=record.digest,
-        )
         async with self._database.session(
             mode=TransactionMode.SERIALIZED_WRITE
         ) as session:
-            return await session.insert(TOKEN_TABLE, InsertCommand(row=row))
+            return await insert_token_record(session, record)
 
     async def find(self, token_id: str) -> Optional[StoredPersonalAccessToken]:
         async with self._database.read_session() as session:

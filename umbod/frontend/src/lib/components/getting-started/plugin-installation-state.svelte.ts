@@ -49,6 +49,13 @@ export class PluginInstallationState {
     return `curl -fsSL --proto-redir '=https' ${quoteBash(this.scriptUrl)} | bash`;
   }
 
+  telemetryCommand(code: string): string {
+    if (this.platform === 'windows') {
+      return `& { $ErrorActionPreference = 'Stop'; $umbodInstallClaim = ${quotePowerShell(code)}; & ([scriptblock]::Create((Invoke-RestMethod -MaximumRedirection 0 ${quotePowerShell(this.scriptUrl)}))) }`;
+    }
+    return `(umbodScript=$(curl -q -fsS --location --max-redirs 0 --globoff -- ${quoteBash(this.scriptUrl)}) && UMBOD_INSTALL_CLAIM=${quoteBash(code)} bash -c "$umbodScript")`;
+  }
+
   get selectedPlatform(): typeof installationPlatforms[number] {
     return installationPlatforms.find((platform) => platform.id === this.platform)!;
   }

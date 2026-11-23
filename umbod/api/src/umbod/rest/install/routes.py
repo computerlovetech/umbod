@@ -7,17 +7,20 @@ from umbod.core.harness_plugins.installers import HarnessInstallerService
 from umbod.core.harness_plugins.ports import ScriptKind
 from umbod.core.harness_plugins.service import HarnessPackageService
 from umbod.rest.install.deps import get_installer_service, get_package_service, installer_unavailable
+from umbod.rest.telemetry_setup.deps import get_telemetry_setup_configuration
+from umbod.rest.telemetry_setup.models import TelemetrySetup
 
 router = APIRouter(prefix="/v1", tags=["install"])
 PackageService = Annotated[HarnessPackageService, Depends(get_package_service)]
 InstallerService = Annotated[HarnessInstallerService, Depends(get_installer_service)]
+InstallerTelemetry = Annotated[TelemetrySetup, Depends(get_telemetry_setup_configuration)]
 
 
 def installer_download(
-    request: Request, harness: Harness, service: HarnessInstallerService, kind: ScriptKind,
+    request: Request, harness: Harness, service: HarnessInstallerService, kind: ScriptKind, telemetry: TelemetrySetup,
 ) -> Response:
     try:
-        content = service.render(harness, kind)
+        content = service.render(harness, kind, telemetry.logs_endpoint if telemetry.status == "available" else "")
     except (OSError, ValueError, LookupError):
         raise installer_unavailable() from None
     response = download(request, content, harness, "install." + kind, "text/plain")
@@ -26,13 +29,13 @@ def installer_download(
 
 
 @router.api_route("/{harness}/install.sh", methods=["GET", "HEAD"])
-def bash_installer(request: Request, harness: Harness, service: InstallerService) -> Response:
-    return installer_download(request, harness, service, "sh")
+def bash_installer(request: Request, harness: Harness, service: InstallerService, telemetry: InstallerTelemetry) -> Response:
+    return installer_download(request, harness, service, "sh", telemetry)
 
 
 @router.api_route("/{harness}/install.ps1", methods=["GET", "HEAD"])
-def powershell_installer(request: Request, harness: Harness, service: InstallerService) -> Response:
-    return installer_download(request, harness, service, "ps1")
+def powershell_installer(request: Request, harness: Harness, service: InstallerService, telemetry: InstallerTelemetry) -> Response:
+    return installer_download(request, harness, service, "ps1", telemetry)
 
 
 def download(

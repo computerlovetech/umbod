@@ -4,38 +4,25 @@
   import Button from '#lib/components/admin/shared/Button.svelte';
   import { InstallationWizardState } from './installation-wizard-state.svelte';
   import { installationPlatforms, installationHarnesses } from './plugin-installation-state.svelte';
-  import { workspaceTokensHref } from '#lib/workspace/navigation.js';
-  import type { TelemetryInstaller } from './telemetry-installer';
+  import { BrowserNavigatorClipboardWriter } from '#lib/admin/clipboard.js';
+  import type { TelemetryInstallClaims } from '#lib/telemetry-setup/api.js';
 
-  let { installerBaseUrl, logsEndpoint, telemetryInstaller }: {
+  let { installerBaseUrl, installClaims }: {
     installerBaseUrl: string;
-    logsEndpoint?: string;
-    telemetryInstaller?: TelemetryInstaller;
+    installClaims?: TelemetryInstallClaims;
   } = $props();
 
-  const wizard = new InstallationWizardState(() => installerBaseUrl, () => telemetryInstaller);
+  const wizard = new InstallationWizardState(() => installerBaseUrl, () => installClaims, new BrowserNavigatorClipboardWriter());
   const installation = wizard.installation;
   const identifier = $props.id();
   const headingId = `${identifier}-step-title`;
 
-  onDestroy(() => wizard.invalidatePackage());
+  onDestroy(() => wizard.clearClaim());
 
   async function navigate(transition: () => void): Promise<void> {
     transition();
     await tick();
     document.getElementById(headingId)?.focus();
-  }
-
-  function downloadPackage(blob: Blob, filename: string): void {
-    const objectUrl = URL.createObjectURL(blob);
-    try {
-      const download = document.createElement('a');
-      download.href = objectUrl;
-      download.download = filename;
-      download.click();
-    } finally {
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-    }
   }
 </script>
 
@@ -71,24 +58,9 @@
     {:else if wizard.step.id === 'telemetry'}
       <fieldset class="choices">
         <legend class="visually-hidden">Telemetry</legend>
-        {@render choice('telemetry', 'skip', 'Skip telemetry', 'Leave telemetry settings unchanged.', !wizard.includesLogs, () => wizard.selectTelemetry('skip'))}
-        {#if wizard.canIncludeLogs}
-          {@render choice('telemetry', 'logs', 'Include logs', 'Configure log export with trace, metric, and content export disabled in user settings.', wizard.includesLogs, () => wizard.selectTelemetry('logs'))}
-        {/if}
+        {@render choice('telemetry', 'skip', 'Without telemetry', 'Leave telemetry settings unchanged.', !wizard.includesLogs, () => wizard.selectTelemetry('skip'))}
+        {@render choice('telemetry', 'logs', 'With telemetry', installation.harness === 'codex' ? 'Review and optionally save Umbod as the default logs destination in Codex.' : 'Configure Claude Code to send logs to Umbod after restart.', wizard.includesLogs, () => wizard.selectTelemetry('logs'))}
       </fieldset>
-      {#if installation.harness === 'codex'}
-        <details class="manual-telemetry">
-          <summary>Set up Codex logs manually</summary>
-          <ol>
-            <li><a href={workspaceTokensHref} target="_blank" rel="noreferrer">Create an access token for sending agent logs</a> and copy it.</li>
-            <li>In <code>~/.codex/config.toml</code>, update <code>otel.exporter.otlp-http</code> to use JSON and set the <code>Authorization</code> header to <code>Bearer</code> followed by your token. Keep existing headers and settings.</li>
-            {#if logsEndpoint}<li>Set the exporter endpoint to <code>{logsEndpoint}</code>.</li>{/if}
-            <li>Disable <code>analytics.enabled</code>. Under <code>otel</code>, disable <code>log_user_prompt</code>, <code>log_agent_responses</code> and <code>log_guardian_assessments</code>. Set <code>trace_exporter</code> and <code>metrics_exporter</code> to <code>none</code>.</li>
-            <li>Keep the config private and restart Codex.</li>
-          </ol>
-          <a href="https://developers.openai.com/codex/config-advanced#observability-and-telemetry" target="_blank" rel="noreferrer">Codex telemetry documentation</a>
-        </details>
-      {/if}
     {:else}
       <dl class="summary">
         {#each wizard.steps as step (step.id)}
@@ -98,24 +70,33 @@
         {/each}
       </dl>
       <div class="install-card">
+        <div class="command-heading"><h3>Install command</h3><span>{wizard.includesLogs && installation.platform === 'macos' ? 'Terminal · Bash or zsh' : installation.shell}</span></div>
         {#if wizard.includesLogs}
-          {#if wizard.packageStatus === 'pending'}
-            <p role="status">Preparing your installer…</p>
-          {:else if wizard.packageStatus === 'error'}
-            <p class="error" role="alert">Could not prepare your installer.</p>
-            <Button variant="secondary" onclick={() => navigate(() => { void wizard.preparePackage(); })}>Retry</Button>
-          {:else if wizard.packageStatus === 'ready'}
-            <p role="status">Installer ready. Keep the ZIP and extracted files private. Delete them after use.</p>
-            <Button onclick={() => wizard.download(downloadPackage)}>Download installer</Button>
-            <p>Close Claude Code, then extract the ZIP. From the extracted folder, run <code>{installation.platform === 'windows' ? `.\\${wizard.scriptName}` : `bash ${wizard.scriptName}`}</code> in {installation.shell}.</p>
+          {@const claim = wizard.claim}
+          <p>{installation.harness === 'codex' ? "The setup code is single-use and expires after 10 minutes. Run the command on a trusted machine. If you save the Codex settings, don't sync or share the configuration file containing the token." : 'The setup code is single-use and expires after 10 minutes. Run the command on a trusted machine.'}</p>
+          {#if claim.status === 'ready'}
+            <p role="status">{claim.copy === 'copied' ? 'Copied. ' : claim.copy === 'failed' ? 'Could not copy automatically. ' : ''}Run this single-use command promptly on a trusted machine. Keep it private.</p>
+            {#if claim.copy === 'failed'}<code class="claim-command">{claim.command}</code>{/if}
+            <div class="install-links">
+              <Button variant="secondary" disabled={claim.copy === 'pending'} onclick={() => wizard.copyPreparedCommand()}>Copy install command</Button>
+              <Button variant="secondary" disabled={claim.copy === 'pending'} onclick={() => wizard.prepareAndCopy()}>Generate new command</Button>
+            </div>
           {:else}
-            <Button onclick={() => navigate(() => { void wizard.preparePackage(); })}>Prepare installer</Button>
+            {#if claim.status === 'pending'}
+              <p role="status">Preparing your install command…</p>
+            {:else if claim.status === 'error'}
+              <p class="error" role="alert">Could not prepare your install command.</p>
+            {:else if claim.status === 'expired'}
+              <p role="status">Your install command has expired.</p>
+            {/if}
+            <Button disabled={claim.status === 'pending'} onclick={() => wizard.prepareAndCopy()}>
+              {claim.status === 'expired' ? 'Generate new command' : 'Copy install command'}
+            </Button>
           {/if}
         {:else}
-          <div class="command-heading"><h3>Install command</h3><span>{installation.shell}</span></div>
           <CopyableValue value={installation.command} />
         {/if}
-        <p class="requirement">{installation.requirements}</p>
+        <p class="requirement">{installation.requirements}{wizard.includesLogs && installation.harness === 'codex' && installation.platform !== 'windows' ? ' Saving Codex telemetry requires Python 3.11 or later.' : ''}</p>
         <div class="install-links">
           <a href={installation.scriptUrl} target="_blank" rel="noreferrer">Inspect installer</a>
           <a href={installation.documentationUrl} target="_blank" rel="noreferrer">{installation.harnessLabel} documentation</a>
@@ -170,8 +151,7 @@
   .choice input { flex: none; margin: 4px 0 0 auto; accent-color: var(--admin-accent); }
   .choice img, .choice svg { flex: none; width: 24px; height: 24px; object-fit: contain; }
   .choice svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-  .manual-telemetry { margin-top: 12px; overflow-wrap: anywhere; }
-  .manual-telemetry summary { cursor: pointer; }
+  .claim-command { max-width: 100%; overflow-wrap: anywhere; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 0.6rem 0.7rem; font-family: var(--admin-mono); font-size: 0.8rem; user-select: all; }
   .choice:has(:focus-visible), h2:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
   .summary { --columns: 3; }
   .summary div { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 9px 12px; }

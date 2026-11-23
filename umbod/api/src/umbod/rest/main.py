@@ -76,6 +76,8 @@ from umbod.rest.telemetry_analytics import personal_router as personal_telemetry
 from umbod.rest.telemetry_analytics import router as telemetry_analytics_router
 from umbod.rest.personal_access_tokens import router as personal_access_tokens_router
 from umbod.rest.telemetry_setup import router as telemetry_setup_router
+from umbod.rest.telemetry_setup.claim_redaction import InstallClaimQueryRedactionMiddleware
+from umbod.rest.telemetry_setup.install_claims import personal_router as personal_install_claim_router, public_router as public_install_claim_router
 from umbod.rest.telemetry.composition import install_analytics_dependencies
 from umbod.rest.users import create_user_profile_router
 from umbod.rest.users.jwks import (
@@ -237,6 +239,7 @@ def _mount_personal_app(
     user_router.include_router(identity_directory_personal_router)
     user_router.include_router(personal_access_tokens_router)
     user_router.include_router(telemetry_setup_router)
+    user_router.include_router(personal_install_claim_router)
     user_router.include_router(filesystem_router)
     if settings.personal_connections.enabled:
         user_router.include_router(personal_connections_router)
@@ -476,7 +479,10 @@ def _assemble_application(
     app.mount("/api/filesystem", transfer_app)
     _mount_personal_oauth_callback_app(app, app_settings, dependency_factories, application_failures)
     _mount_system_app(app, dependency_factories)
-    install_app = SubApiAppFactory(title="umbod-install-api", router=install_router).create()
+    public_install_router = APIRouter()
+    public_install_router.include_router(install_router)
+    public_install_router.include_router(public_install_claim_router)
+    install_app = SubApiAppFactory(title="umbod-install-api", router=public_install_router).create()
     _attach_dependency_factories(install_app, dependency_factories)
     app.mount("/api/install", install_app)
     app.user_middleware.extend([
@@ -497,4 +503,5 @@ def _assemble_application(
         ),
     ])
     app.add_middleware(PersonalOAuthQueryRedactionMiddleware)
+    app.add_middleware(InstallClaimQueryRedactionMiddleware)
     return app

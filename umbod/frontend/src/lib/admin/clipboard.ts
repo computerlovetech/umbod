@@ -19,11 +19,11 @@ export class BrowserNavigatorClipboardWriter implements ClipboardWriter {
       field.style.position = "fixed";
       field.style.opacity = "0";
       document.body.appendChild(field);
-      field.select();
-      const copied = document.execCommand("copy");
-      field.remove();
-      if (!copied) {
-        throw new Error("Clipboard write failed");
+      try {
+        field.select();
+        if (!document.execCommand("copy")) throw new Error("Clipboard write failed");
+      } finally {
+        field.remove();
       }
     }
   }

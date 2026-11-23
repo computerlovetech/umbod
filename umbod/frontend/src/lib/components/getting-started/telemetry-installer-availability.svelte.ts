@@ -1,19 +1,16 @@
 import type { TelemetrySetupSource } from '#lib/telemetry-setup/api.js';
-import { validateTelemetryEndpoint } from './installer-artifact';
 
 export class TelemetryInstallerAvailability {
-  #logsEndpoint = $state('');
+  #available = $state(false);
 
-  get logsEndpoint(): string { return this.#logsEndpoint; }
+  get available(): boolean { return this.#available; }
 
   async load(source: TelemetrySetupSource, signal: AbortSignal): Promise<void> {
     try {
       const setup = await source.get();
-      if (signal.aborted || setup.status !== 'available') return;
-      validateTelemetryEndpoint(setup.logs_endpoint);
-      this.#logsEndpoint = setup.logs_endpoint;
+      if (!signal.aborted) this.#available = setup.status === 'available';
     } catch {
-      if (!signal.aborted) this.#logsEndpoint = '';
+      if (!signal.aborted) this.#available = false;
     }
   }
 }

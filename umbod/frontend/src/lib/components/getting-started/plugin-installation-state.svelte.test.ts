@@ -25,6 +25,28 @@ describe('plugin installation choices', (): void => {
     expect(state.command).not.toContain('ExecutionPolicy');
   });
 
+  test.each(['macos', 'linux'])('runs the telemetry installer on %s without replacing interactive stdin', (platform): void => {
+    const state = new PluginInstallationState(() => installerBaseUrl);
+    state.selectPlatform(platform);
+    const code = 'A'.repeat(43);
+    for (const harness of ['codex', 'claude-code']) {
+      state.selectHarness(harness);
+      expect(state.telemetryCommand(code)).toBe(
+        `(umbodScript=$(curl -q -fsS --location --max-redirs 0 --globoff -- '${state.scriptUrl}') && UMBOD_INSTALL_CLAIM='${code}' bash -c "$umbodScript")`
+      );
+    }
+  });
+
+  test.each(['codex', 'claude-code'])('runs the telemetry installer in scoped PowerShell for %s', (harness): void => {
+    const state = new PluginInstallationState(() => installerBaseUrl);
+    state.selectPlatform('windows');
+    state.selectHarness(harness);
+    const code = 'A'.repeat(43);
+    expect(state.telemetryCommand(code)).toBe(
+      `& { $ErrorActionPreference = 'Stop'; $umbodInstallClaim = '${code}'; & ([scriptblock]::Create((Invoke-RestMethod -MaximumRedirection 0 '${state.scriptUrl}'))) }`
+    );
+  });
+
   test('retains the harness across platforms and ignores unsupported choices', (): void => {
     const state = new PluginInstallationState(() => installerBaseUrl);
     state.selectHarness('claude-code');

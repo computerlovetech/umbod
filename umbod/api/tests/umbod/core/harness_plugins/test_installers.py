@@ -26,7 +26,7 @@ def test_bash_binding_executes_exact_configured_values_and_discards_caller_argum
 ) -> None:
     configuration = InstallerConfiguration(api_origin="https://api.example.test/", endpoint=f"https://mcp.example.test/{path}/")
     source = '#!/usr/bin/env bash\npython3 -c \'import json,sys; sys.stdout.write(json.dumps(sys.argv[1:]))\' "$@"\n'
-    rendered = HarnessInstallerService(configuration, InMemoryInstallerSourceReader(source)).render(harness, "sh")
+    rendered = HarnessInstallerService(configuration, InMemoryInstallerSourceReader(source)).render(harness, "sh", "")
     result = subprocess.run(
         ["bash", "-s", "--", "--base-url", "https://attacker.test", "--harness", "unknown"],
         input=rendered, text=True, capture_output=True, check=True, timeout=10,
@@ -41,7 +41,7 @@ def test_bash_binding_executes_exact_configured_values_and_discards_caller_argum
 def test_powershell_binding_wraps_entire_source_and_encodes_literal_arguments() -> None:
     configuration = InstallerConfiguration(api_origin="https://api.example.test", endpoint="https://mcp.example.test/team'one+ø;v=2/mcp")
     source = "[CmdletBinding()]\nparam([string]$BaseUrl, [string]$Harness, [string]$ExpectedEndpoint)\n$ExpectedEndpoint\n"
-    rendered = HarnessInstallerService(configuration, InMemoryInstallerSourceReader(source)).render("claude-code", "ps1")
+    rendered = HarnessInstallerService(configuration, InMemoryInstallerSourceReader(source)).render("claude-code", "ps1", "")
     assert rendered.startswith("& {\n" + source + "\n} -BaseUrl ")
     assert "team'one" not in rendered
     arguments = rendered.split("\n} -BaseUrl ", 1)[1].strip()
@@ -79,7 +79,7 @@ def test_powershell_binding_executes_exact_literal_values_without_injection(
         "[Console]::Out.Write((@{BaseUrl=$BaseUrl; Harness=$Harness; ExpectedEndpoint=$ExpectedEndpoint;"
         " Marker='safe-marker'} | ConvertTo-Json -Compress))\n"
     )
-    rendered = HarnessInstallerService(configuration, InMemoryInstallerSourceReader(source)).render("claude-code", "ps1")
+    rendered = HarnessInstallerService(configuration, InMemoryInstallerSourceReader(source)).render("claude-code", "ps1", "")
     encoded_command = base64.b64encode(rendered.encode("utf-16le")).decode("ascii")
     result = subprocess.run(
         [*powershell_command, "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded_command],
@@ -121,4 +121,4 @@ def test_installer_configuration_normalizes_loopback_configuration() -> None:
 def test_bash_binding_rejects_invalid_script_resources(source: str) -> None:
     configuration = InstallerConfiguration(api_origin="https://api.test", endpoint="https://mcp.test")
     with pytest.raises(ValueError):
-        HarnessInstallerService(configuration, InMemoryInstallerSourceReader(source)).render("codex", "sh")
+        HarnessInstallerService(configuration, InMemoryInstallerSourceReader(source)).render("codex", "sh", "")

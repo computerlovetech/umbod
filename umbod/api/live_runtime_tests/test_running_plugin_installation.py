@@ -78,10 +78,12 @@ def test_running_public_installer_scripts_use_instance_configuration(
     runtime_endpoints: RuntimeEndpoints, harness: str, filename: str,
 ) -> None:
     path = f"/api/install/v1/{harness}/{filename}"
+    expected_logs_endpoint = "https://collector.runtime.invalid/otlp/v1/logs"
     with httpx.Client(base_url=runtime_endpoints.api_base_url, timeout=10, trust_env=False) as client:
         response = client.get(path)
         spoofed = client.get(
-            path + "?base_url=https://attacker.invalid&endpoint=https://attacker.invalid/mcp&harness=unknown",
+            path + "?base_url=https://attacker.invalid&endpoint=https://attacker.invalid/mcp&harness=unknown"
+            "&logs_endpoint=https://attacker.invalid/v1/logs",
             headers={
                 "Host": "attacker.invalid", "X-Forwarded-Host": "attacker.invalid",
                 "X-Forwarded-Proto": "http", "Forwarded": "host=attacker.invalid;proto=http",
@@ -97,7 +99,8 @@ def test_running_public_installer_scripts_use_instance_configuration(
         if filename == "install.sh":
             assert response.text.startswith(
                 "#!/usr/bin/env bash\nset -- --base-url https://umbod.example.invalid/api/install/v1"
-                f" --harness {harness} --expected-endpoint https://mcp.umbod.example.invalid/mcp\n"
+                f" --harness {harness} --expected-endpoint https://mcp.umbod.example.invalid/mcp"
+                f" --logs-endpoint {expected_logs_endpoint}\n"
             )
             assert response.text.rstrip().endswith('umbod_install "$@"')
         else:
@@ -107,11 +110,12 @@ def test_running_public_installer_scripts_use_instance_configuration(
                 + base64.b64encode(value.encode("utf-8")).decode("ascii") + "')))"
                 for value in (
                     "https://umbod.example.invalid/api/install/v1", harness, "https://mcp.umbod.example.invalid/mcp",
+                    expected_logs_endpoint,
                 )
             ]
             assert response.text.endswith(
                 "} -BaseUrl " + expressions[0] + " -Harness " + expressions[1]
-                + " -ExpectedEndpoint " + expressions[2] + "\n"
+                + " -ExpectedEndpoint " + expressions[2] + " -LogsEndpoint " + expressions[3] + "\n"
             )
         assert "attacker.invalid" not in response.text
         for placeholder in ("__BASE_URL__", "__MCP_URL__", "{{"):

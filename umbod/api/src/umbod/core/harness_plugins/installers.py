@@ -65,7 +65,7 @@ class HarnessInstallerService:
         self._configuration = configuration
         self._sources = sources
 
-    def render(self, harness: Harness, kind: ScriptKind) -> str:
+    def render(self, harness: Harness, kind: ScriptKind, logs_endpoint: str) -> str:
         if harness not in {"codex", "claude-code"} or kind not in {"sh", "ps1"}:
             raise ValueError("Unsupported installer")
         source = self._sources.read(kind).text
@@ -74,13 +74,16 @@ class HarnessInstallerService:
             shebang, separator, body = source.partition("\n")
             if shebang != "#!/usr/bin/env bash" or not separator:
                 raise ValueError("Invalid Bash installer source")
-            arguments = shlex.join([
+            arguments = [
                 "--base-url", configuration.package_base_url,
                 "--harness", harness, "--expected-endpoint", configuration.endpoint,
-            ])
-            return shebang + "\nset -- " + arguments + "\n" + body
+            ]
+            if logs_endpoint:
+                arguments.extend(("--logs-endpoint", logs_endpoint))
+            return shebang + "\nset -- " + shlex.join(arguments) + "\n" + body
         return (
             "& {\n" + source + "\n} -BaseUrl " + powershell_literal(configuration.package_base_url)
             + " -Harness " + powershell_literal(harness)
-            + " -ExpectedEndpoint " + powershell_literal(configuration.endpoint) + "\n"
+            + " -ExpectedEndpoint " + powershell_literal(configuration.endpoint)
+            + (" -LogsEndpoint " + powershell_literal(logs_endpoint) if logs_endpoint else "") + "\n"
         )

@@ -16,6 +16,10 @@ description: Transport-neutral owner-scoped bearer-token issuance, validation an
 - [schema.py](./schema.py) — Backend-neutral token table and codecs storing metadata and hashes only.
 - [store.py](./store.py) — Owner-filtered database operations and serialized revocation.
 - [errors.py](./errors.py) — Credential-free authentication, ownership and collision failures.
+- [install_claims.py](./install_claims.py) — Issues short-lived installer claims bound to a harness, collector and owner.
+- [install_claim_ports.py](./install_claim_ports.py) — Installer claim and atomic exchange contracts.
+- [install_claim_schema.py](./install_claim_schema.py) — Backend-neutral schema for hash-only installer claims.
+- [install_claim_store.py](./install_claim_store.py) — Commits redemption and telemetry token issuance in one transaction.
 
 # Related links
 

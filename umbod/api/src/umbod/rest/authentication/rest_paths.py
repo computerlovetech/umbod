@@ -15,6 +15,13 @@ def delegated_upload_request(scope: Scope) -> bool:
     ) is not None
 
 
+def install_claim_redemption_request(scope: Scope) -> bool:
+    return scope["method"] == "POST" and get_route_path(scope) in (
+        "/api/install/v1/codex/telemetry/redeem",
+        "/api/install/v1/claude-code/telemetry/redeem",
+    )
+
+
 def protected_rest_request(scope: Scope) -> bool:
     path = get_route_path(scope)
     return (
@@ -31,5 +38,6 @@ def protected_rest_request(scope: Scope) -> bool:
                 path,
             ) is not None
         )
+        and not install_claim_redemption_request(scope)
         and not within_namespace(path, "/api/oauth/downstream-mcp/callback")
     )

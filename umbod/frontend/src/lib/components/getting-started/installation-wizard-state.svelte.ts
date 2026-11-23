@@ -1,5 +1,6 @@
+import type { ClipboardWriter } from '#lib/admin/clipboard.js';
+import type { TelemetryInstallClaims } from '#lib/telemetry-setup/api.js';
 import { PluginInstallationState, type InstallationHarness, type InstallationPlatform } from './plugin-installation-state.svelte';
-import type { TelemetryInstaller } from './telemetry-installer';
 
 const installationSteps = [
   { id: 'platform', label: 'Platform', heading: 'Choose your platform' },
@@ -13,28 +14,36 @@ type InstallationStep = InstallationStepDefinition['id'];
 type TelemetryChoice = 'skip' | 'logs';
 
 const stepsWithoutTelemetry = installationSteps.filter((step): boolean => step.id !== 'telemetry');
+const claimLifetimeMs = 10 * 60_000;
 
-type PackageStage =
-  | { status: 'idle' | 'pending' | 'error' }
-  | { status: 'ready'; blob: Blob };
+type ClaimStage =
+  | { status: 'idle' | 'pending' | 'error' | 'expired' }
+  | { status: 'ready'; command: string; expiresAt: number; copy: 'pending' | 'copied' | 'failed' };
+
+type ClaimOperation = {
+  controller: AbortController;
+  source: TelemetryInstallClaims;
+  baseUrl: string;
+};
 
 export class InstallationWizardState {
   readonly installation: PluginInstallationState;
   #selectedStep = $state.raw<InstallationStepDefinition>(installationSteps[0]);
   #includeLogs = $state(false);
-  #installer = $state.raw<TelemetryInstaller>();
-  #package = $state.raw<PackageStage>({ status: 'idle' });
-  #controller: AbortController | undefined;
+  #operation = $state.raw<ClaimOperation>();
+  #claim = $state.raw<ClaimStage>({ status: 'idle' });
+  #expirationTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
-    installerBaseUrl: () => string,
-    private readonly telemetryInstaller: () => TelemetryInstaller | undefined
+    private readonly installerBaseUrl: () => string,
+    private readonly installClaims: () => TelemetryInstallClaims | undefined,
+    private readonly clipboard: ClipboardWriter
   ) {
     this.installation = new PluginInstallationState(installerBaseUrl);
   }
 
   get steps(): readonly InstallationStepDefinition[] {
-    return this.telemetryInstaller() ? installationSteps : stepsWithoutTelemetry;
+    return this.canIncludeLogs ? installationSteps : stepsWithoutTelemetry;
   }
 
   get step(): InstallationStepDefinition {
@@ -46,7 +55,7 @@ export class InstallationWizardState {
   }
 
   get canIncludeLogs(): boolean {
-    return this.installation.harness === 'claude-code' && this.telemetryInstaller() !== undefined;
+    return this.installClaims() !== undefined;
   }
 
   get includesLogs(): boolean {
@@ -57,49 +66,41 @@ export class InstallationWizardState {
     return {
       platform: this.installation.selectedPlatform.label,
       harness: this.installation.harnessLabel,
-      ...(this.telemetryInstaller() ? { telemetry: this.includesLogs ? 'Logs only' : 'Skip telemetry' } : {})
+      ...(this.canIncludeLogs ? { telemetry: this.includesLogs ? 'Logs only' : 'Without telemetry' } : {})
     };
   }
 
-  get packageStatus(): PackageStage['status'] {
-    return this.#currentPackage.status;
-  }
-
-  get scriptName(): string {
-    return this.installation.platform === 'windows' ? 'umbod-install.ps1' : 'umbod-install.sh';
-  }
-
-  get #currentPackage(): PackageStage {
-    return this.includesLogs && this.#installer === this.telemetryInstaller()
-      ? this.#package
-      : { status: 'idle' };
+  get claim(): ClaimStage {
+    if (!this.#operation || !this.isCurrent(this.#operation)) return { status: 'idle' };
+    if (this.#claim.status === 'ready' && this.#claim.expiresAt <= Date.now()) return { status: 'expired' };
+    return this.#claim;
   }
 
   selectPlatform(platform: InstallationPlatform): void {
     if (platform === this.installation.platform) return;
     this.installation.selectPlatform(platform);
-    this.invalidatePackage();
+    this.clearClaim();
   }
 
   selectHarness(harness: InstallationHarness): void {
     if (harness === this.installation.harness) return;
     this.installation.selectHarness(harness);
-    if (!this.canIncludeLogs) this.#includeLogs = false;
-    this.invalidatePackage();
+    this.#includeLogs = false;
+    this.clearClaim();
   }
 
   selectTelemetry(choice: TelemetryChoice): void {
     const includeLogs = choice === 'logs' && this.canIncludeLogs;
     if (this.#includeLogs === includeLogs) return;
     this.#includeLogs = includeLogs;
-    this.invalidatePackage();
+    this.clearClaim();
   }
 
   goTo(step: InstallationStep): void {
     const next = this.steps.find((candidate): boolean => candidate.id === step);
-    if (!next) return;
+    if (!next || next === this.#selectedStep) return;
+    this.clearClaim();
     this.#selectedStep = next;
-    if (step === 'review' && this.packageStatus === 'idle') void this.preparePackage();
   }
 
   continue(): void {
@@ -112,39 +113,58 @@ export class InstallationWizardState {
     if (previous) this.goTo(previous.id);
   }
 
-  async preparePackage(): Promise<void> {
-    const installer = this.telemetryInstaller();
-    if (!installer || !this.includesLogs || this.step.id !== 'review') return;
-    if (this.packageStatus === 'pending' || this.packageStatus === 'ready') return;
+  async prepareAndCopy(): Promise<void> {
+    const source = this.installClaims();
+    if (!source || !this.includesLogs || this.step.id !== 'review' || this.claim.status === 'pending') return;
 
-    this.invalidatePackage();
-    const controller = new AbortController();
-    this.#controller = controller;
-    this.#installer = installer;
-    this.#package = { status: 'pending' };
+    this.clearClaim();
+    const operation = { controller: new AbortController(), source, baseUrl: this.installerBaseUrl() };
+    this.#operation = operation;
+    this.#claim = { status: 'pending' };
+    const expiresAt = Date.now() + claimLifetimeMs;
     try {
-      const blob = await installer.prepare(this.installation.platform, this.installation.harness, controller.signal);
-      if (this.isCurrentRequest(controller, installer)) this.#package = { status: 'ready', blob };
+      const { code } = await source.create({ harness: this.installation.harness }, operation.controller.signal);
+      if (!this.isCurrent(operation)) return;
+      if (expiresAt <= Date.now()) {
+        this.#claim = { status: 'expired' };
+        return;
+      }
+      const command = this.installation.telemetryCommand(code);
+      this.#expirationTimer = setTimeout((): void => {
+        if (this.#operation === operation) this.#claim = { status: 'expired' };
+      }, expiresAt - Date.now());
+      await this.writeCommand(operation, { status: 'ready', command, expiresAt, copy: 'pending' });
     } catch {
-      if (this.isCurrentRequest(controller, installer)) this.#package = { status: 'error' };
-    } finally {
-      if (this.#controller === controller) this.#controller = undefined;
+      if (this.isCurrent(operation)) this.#claim = { status: 'error' };
     }
   }
 
-  download(consume: (blob: Blob, filename: string) => void): void {
-    const prepared = this.#currentPackage;
-    if (this.step.id === 'review' && prepared.status === 'ready') consume(prepared.blob, 'umbod-installer.zip');
+  async copyPreparedCommand(): Promise<void> {
+    const prepared = this.claim;
+    if (this.#operation && prepared.status === 'ready' && prepared.copy !== 'pending') {
+      await this.writeCommand(this.#operation, prepared);
+    }
   }
 
-  invalidatePackage(): void {
-    this.#controller?.abort();
-    this.#controller = undefined;
-    this.#package = { status: 'idle' };
-    this.#installer = undefined;
+  clearClaim(): void {
+    this.#operation?.controller.abort();
+    this.#operation = undefined;
+    this.#claim = { status: 'idle' };
+    clearTimeout(this.#expirationTimer);
+    this.#expirationTimer = undefined;
   }
 
-  private isCurrentRequest(controller: AbortController, installer: TelemetryInstaller): boolean {
-    return !controller.signal.aborted && installer === this.telemetryInstaller();
+  private async writeCommand(operation: ClaimOperation, prepared: Extract<ClaimStage, { status: 'ready' }>): Promise<void> {
+    this.#claim = { ...prepared, copy: 'pending' };
+    const copy = await this.clipboard.writeText(prepared.command).then(
+      (): 'copied' => 'copied',
+      (): 'failed' => 'failed'
+    );
+    if (this.isCurrent(operation) && this.claim.status === 'ready') this.#claim = { ...prepared, copy };
+  }
+
+  private isCurrent(operation: ClaimOperation): boolean {
+    return this.#operation === operation && this.includesLogs && this.step.id === 'review' &&
+      this.installClaims() === operation.source && this.installerBaseUrl() === operation.baseUrl;
   }
 }
