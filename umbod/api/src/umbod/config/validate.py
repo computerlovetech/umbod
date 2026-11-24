@@ -1,6 +1,9 @@
+import jwt
+
 from umbod.config.app import UserProfileConfig
 from umbod.config.operator import OperatorSettings
 from umbod.config.personal_connection_policy import resolve_personal_connections_enabled
+from umbod.core.callers import LOCAL_DEVELOPMENT_ISSUER
 
 _VALID_PROFILES = ("local", "production")
 _VALID_AUTH_RECIPES = ("none", "dev", "auth0", "entra", "google")
@@ -122,7 +125,20 @@ def validate_operator(operator: OperatorSettings, auth_recipe: str) -> None:
     if auth_recipe in _OIDC_AUTH_RECIPES:
         _validate_oidc_recipe(operator, auth_recipe)
         return
-    if auth_recipe == "dev" and not operator.mcp_test_bearer_token.strip():
-        raise ValueError(
-            "UMBOD_MCP_TEST_BEARER_TOKEN must be set when UMBOD_AUTH is dev"
-        )
+
+
+def resolve_local_test_subject(operator: OperatorSettings) -> str:
+    try:
+        claims = jwt.decode(operator.mcp_test_bearer_token, options={"verify_signature": False})
+    except jwt.InvalidTokenError:
+        raise ValueError("UMBOD_MCP_TEST_BEARER_TOKEN must be a JWT when UMBOD_AUTH is dev") from None
+
+    subject = claims.get("sub")
+    if not isinstance(subject, str) or not subject.strip() or subject != subject.strip():
+        raise ValueError("UMBOD_MCP_TEST_BEARER_TOKEN must have a nonblank sub without surrounding whitespace")
+    email = claims.get("email")
+    if not isinstance(email, str) or not email.strip():
+        raise ValueError("UMBOD_MCP_TEST_BEARER_TOKEN must have a nonblank email claim")
+    if claims.get("iss", LOCAL_DEVELOPMENT_ISSUER) != LOCAL_DEVELOPMENT_ISSUER:
+        raise ValueError(f"UMBOD_MCP_TEST_BEARER_TOKEN must omit iss or use {LOCAL_DEVELOPMENT_ISSUER}")
+    return subject

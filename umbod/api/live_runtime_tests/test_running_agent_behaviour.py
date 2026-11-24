@@ -76,6 +76,11 @@ async def test_running_admin_publication_mcp_reporting_and_admin_inspection_shar
                 assert report["submission"] == command
                 assert report["instructions"]["patterns"][0] == pattern
                 assert report["caller"]["subject"]["subject"]
+                personal_request = api.build_request("GET", f"/api/me/agent-behaviour/reports/{receipt['report_id']}")
+                del personal_request.headers["authorization"]
+                personal_detail = await api.send(personal_request)
+                assert personal_detail.status_code == 200, personal_detail.text
+                assert personal_detail.json()["report_id"] == receipt["report_id"]
                 changed_playbook = {**playbook, "collection_instructions": "Use the revised centrally managed review instructions"}
                 before_change = await api.get(f"{base}/configuration")
                 assert before_change.status_code == 200, before_change.text

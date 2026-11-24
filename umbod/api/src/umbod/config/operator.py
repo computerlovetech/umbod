@@ -308,10 +308,6 @@ class OperatorSettings(BaseSettings):
         default=True,
         validation_alias="UMBOD_ADMIN_AUTHENTICATION_SIMULATED_ADMIN",
     )
-    admin_simulated_user_id: str = Field(
-        default=defaults.ADMIN_SIMULATED_USER_ID,
-        validation_alias="UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_ID",
-    )
     admin_simulated_user_email: str = Field(
         default=defaults.ADMIN_SIMULATED_USER_EMAIL,
         validation_alias="UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_EMAIL",

@@ -101,7 +101,7 @@ kind load docker-image --name "${cluster_name}" "${core_image}" "${frontend_imag
 
 kubectl --context "${kube_context}" create secret generic umbod-ci \
     --from-literal="UMBOD_ROOT_SECRET=$(python3 -c 'import secrets; import sys; sys.stdout.write(secrets.token_urlsafe(48))')" \
-    --from-literal=UMBOD_MCP_TEST_BEARER_TOKEN=eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJraW5kLWNpIiwiaXNzIjoiaHR0cDovL2FnZW50LWNlbnRyYWwta2luZC5pbnZhbGlkIiwiZW1haWwiOiJraW5kLWNpQGV4YW1wbGUuaW52YWxpZCIsImdyb3VwcyI6WyJhZG1pbiJdfQ.
+    --from-literal=UMBOD_MCP_TEST_BEARER_TOKEN=eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJraW5kLWNpIiwiZW1haWwiOiJraW5kLWNpQGV4YW1wbGUuaW52YWxpZCIsImdyb3VwcyI6WyJhZG1pbiJdfQ.
 
 helm --kube-context "${kube_context}" install "${release_name}" "${chart_directory}" \
     --values "${chart_directory}/ci/kind-values.yaml" \

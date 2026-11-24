@@ -50,11 +50,12 @@ def test_mcp_settings_reject_non_positive_code_execution_timeout() -> None:
 
 
 def test_mcp_settings_use_existing_environment_variable_names(monkeypatch: MonkeyPatch) -> None:
+    token = jwt.encode({"sub": "alex", "email": "alex@example.com"}, key="", algorithm="none")
     settings = _config(
         monkeypatch,
         UMBOD_MCP_PORT="9999",
         UMBOD_MCP_TEST_USER_EMAIL="alex@example.com",
-        UMBOD_MCP_TEST_BEARER_TOKEN="test-token",
+        UMBOD_MCP_TEST_BEARER_TOKEN=token,
         UMBOD_MCP_TEST_USER_GROUP="test-users",
         UMBOD_MCP_PERMISSION_CLAIM="roles",
         UMBOD_MCP_AUTH_DEBUG_ENABLED="true",
@@ -63,7 +64,7 @@ def test_mcp_settings_use_existing_environment_variable_names(monkeypatch: Monke
     assert settings.mcp.port == 9999
     assert settings.mcp.auth_mode == "single_test_user"
     assert settings.mcp.test_user_email == "alex@example.com"
-    assert settings.mcp.test_bearer_token == "test-token"
+    assert settings.mcp.test_bearer_token == token
     assert settings.mcp.test_user_group == "test-users"
     assert settings.mcp.permission_group_claim == "roles"
     assert settings.mcp.auth_debug_enabled is True

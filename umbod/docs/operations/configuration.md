@@ -52,7 +52,7 @@ Umbod does not migrate SQLite schemas or persisted documents between incompatibl
 
 Physical usage-history and agent-behaviour retention runs only through `umbod cleanup`, not server lifecycles. Configure an external schedule against the same persistent database before rollout; see [scheduled cleanup](cleanup.md).
 
-Signed-in users can list their diagnostic reports at `GET /api/me/agent-behaviour/reports` and fetch an owned report by ID. These reads match the issuer and subject recorded when MCP accepted the report. In local development, the default simulated REST user and MCP test user both use `urn:umbod:local` and `local-test-user`. If you customize the MCP test token, use the same `sub` for `UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_ID` and omit `iss` or set it to `urn:umbod:local`. Data owned by the former simulated REST default, `simulated-user`, remains under that identity; set `UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_ID=simulated-user` to access it.
+Signed-in users can list their diagnostic reports at `GET /api/me/agent-behaviour/reports` and fetch an owned report by ID. These reads match the issuer and subject recorded when MCP accepted the report. With `UMBOD_AUTH=dev`, REST and MCP use the `sub` from `UMBOD_MCP_TEST_BEARER_TOKEN` as the local user; the default is `local-test-user`. If you customize the token, supply the same value to both services and omit `iss` or set it to `urn:umbod:local`. The former `UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_ID` setting is no longer used.
 
 ## Analytics backend
 

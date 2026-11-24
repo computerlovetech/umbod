@@ -28,6 +28,7 @@ from umbod.config.app import (
     UserProfileConfig,
 )
 from umbod.config.operator import OperatorSettings
+from umbod.config.validate import resolve_local_test_subject
 from umbod.config.personal_connection_policy import (
     resolve_personal_connections_enabled,
     resolve_personal_connections_oauth_enabled,
@@ -149,7 +150,11 @@ def _build_admin_auth(operator: OperatorSettings, auth_recipe: str) -> AdminAuth
         membership_claim=_admin_membership_claim(operator, auth_recipe),
         required_membership=operator.admin_group,
         simulated_admin=operator.admin_simulated_admin,
-        simulated_user_id=operator.admin_simulated_user_id,
+        simulated_user_id=(
+            resolve_local_test_subject(operator)
+            if auth_recipe == "dev"
+            else defaults.ADMIN_SIMULATED_USER_ID
+        ),
         simulated_user_email=operator.admin_simulated_user_email,
         simulated_user_name=operator.admin_simulated_user_name,
         debug_enabled=operator.admin_debug_enabled,
