@@ -11,28 +11,28 @@ test('removes the expired command and only requests a replacement after an expli
   const clipboard = new InMemoryClipboardWriter();
   const wizard = new InstallationWizardState(() => 'https://site.test/api/install/v1', () => source, clipboard);
   wizard.selectTelemetry('logs');
-  await wizard.prepareAndCopy();
+  await wizard.copyCommand();
   expect(source.requests).toEqual([]);
   wizard.goTo('review');
 
   try {
-    await wizard.prepareAndCopy();
-    expect(wizard.claim).toMatchObject({ status: 'ready', command: clipboard.text });
+    await wizard.copyCommand();
     expect(clipboard.text).toContain(source.code);
+    wizard.toggleCommandVisibility();
+    expect(wizard.commandPreview).toBe(clipboard.text);
     await vi.advanceTimersByTimeAsync(600_000);
-    expect(wizard.claim).toEqual({ status: 'expired' });
-    clipboard.text = '';
-    await wizard.copyPreparedCommand();
-    expect(clipboard.text).toBe('');
+    expect(wizard.copyLabel).toBe('Generate new command');
+    expect(wizard.canRevealCommand).toBe(false);
+    expect(wizard.commandPreview).not.toContain(source.code);
     expect(source.requests).toHaveLength(1);
 
     source.code = 'B'.repeat(43);
-    await wizard.prepareAndCopy();
-    expect(wizard.claim).toMatchObject({ status: 'ready', command: clipboard.text });
+    await wizard.copyCommand();
     expect(clipboard.text).toContain(source.code);
+    expect(wizard.commandPreview).not.toContain(source.code);
     expect(source.requests).toHaveLength(2);
   } finally {
-    wizard.clearClaim();
+    wizard.resetCommand();
   }
 });
 
@@ -45,12 +45,21 @@ test('does not publish or copy a response after telemetry eligibility is removed
   const wizard = new InstallationWizardState(() => 'https://site.test/api/install/v1', () => available ? source : undefined, clipboard);
   wizard.selectTelemetry('logs');
   wizard.goTo('review');
-  const preparing = wizard.prepareAndCopy();
-  available = false;
-  response.resolve();
-  await preparing;
-  expect(wizard.includesLogs).toBe(false);
-  expect(wizard.claim).toEqual({ status: 'idle' });
-  expect(clipboard.text).toBe('');
-  wizard.clearClaim();
+  try {
+    const preparing = wizard.copyCommand();
+    available = false;
+    response.resolve();
+    await preparing;
+    expect(wizard.includesLogs).toBe(false);
+    expect(wizard.canRevealCommand).toBe(false);
+    expect(wizard.commandPreview).not.toContain(source.code);
+    expect(clipboard.text).toBe('');
+    wizard.discardObsoleteCommand();
+    expect(source.requests[0]?.signal.aborted).toBe(true);
+    available = true;
+    expect(wizard.canRevealCommand).toBe(false);
+    expect(wizard.copyLabel).toBe('Copy command');
+  } finally {
+    wizard.resetCommand();
+  }
 });

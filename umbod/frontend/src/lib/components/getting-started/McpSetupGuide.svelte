@@ -1,10 +1,8 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
-  import CopyableValue from '#lib/components/admin/connectors/CopyableValue.svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
   import { InstallationWizardState } from './installation-wizard-state.svelte';
   import { installationPlatforms, installationHarnesses } from './plugin-installation-state.svelte';
-  import { BrowserNavigatorClipboardWriter } from '#lib/admin/clipboard.js';
   import type { TelemetryInstallClaims } from '#lib/telemetry-setup/api.js';
 
   let { installerBaseUrl, installClaims }: {
@@ -12,12 +10,15 @@
     installClaims?: TelemetryInstallClaims;
   } = $props();
 
-  const wizard = new InstallationWizardState(() => installerBaseUrl, () => installClaims, new BrowserNavigatorClipboardWriter());
+  const wizard = new InstallationWizardState(() => installerBaseUrl, () => installClaims, {
+    writeText: (command: string): Promise<void> => navigator.clipboard.writeText(command)
+  });
   const installation = wizard.installation;
   const identifier = $props.id();
   const headingId = `${identifier}-step-title`;
 
-  onDestroy(() => wizard.clearClaim());
+  $effect(() => wizard.discardObsoleteCommand());
+  onDestroy(() => wizard.resetCommand());
 
   async function navigate(transition: () => void): Promise<void> {
     transition();
@@ -70,37 +71,22 @@
         {/each}
       </dl>
       <div class="install-card">
-        <div class="command-heading"><h3>Install command</h3><span>{wizard.includesLogs && installation.platform === 'macos' ? 'Terminal · Bash or zsh' : installation.shell}</span></div>
-        {#if wizard.includesLogs}
-          {@const claim = wizard.claim}
-          <p>{installation.harness === 'codex' ? "The setup code is single-use and expires after 10 minutes. Run the command on a trusted machine. If you save the Codex settings, don't sync or share the configuration file containing the token." : 'The setup code is single-use and expires after 10 minutes. Run the command on a trusted machine.'}</p>
-          {#if claim.status === 'ready'}
-            <p role="status">{claim.copy === 'copied' ? 'Copied. ' : claim.copy === 'failed' ? 'Could not copy automatically. ' : ''}Run this single-use command promptly on a trusted machine. Keep it private.</p>
-            {#if claim.copy === 'failed'}<code class="claim-command">{claim.command}</code>{/if}
-            <div class="install-links">
-              <Button variant="secondary" disabled={claim.copy === 'pending'} onclick={() => wizard.copyPreparedCommand()}>Copy install command</Button>
-              <Button variant="secondary" disabled={claim.copy === 'pending'} onclick={() => wizard.prepareAndCopy()}>Generate new command</Button>
-            </div>
-          {:else}
-            {#if claim.status === 'pending'}
-              <p role="status">Preparing your install command…</p>
-            {:else if claim.status === 'error'}
-              <p class="error" role="alert">Could not prepare your install command.</p>
-            {:else if claim.status === 'expired'}
-              <p role="status">Your install command has expired.</p>
-            {/if}
-            <Button disabled={claim.status === 'pending'} onclick={() => wizard.prepareAndCopy()}>
-              {claim.status === 'expired' ? 'Generate new command' : 'Copy install command'}
+        <div class="command-heading"><h3>Install command</h3><span>{wizard.commandShell}</span></div>
+        <pre class="install-command"><code>{wizard.commandPreview}</code></pre>
+        <div class="command-actions">
+          <Button disabled={wizard.isCopyPending} onclick={() => wizard.copyCommand()}>{wizard.copyLabel}</Button>
+          {#if wizard.canRevealCommand}
+            <Button variant="quiet" aria-pressed={wizard.isCommandRevealed} onclick={() => wizard.toggleCommandVisibility()}>
+              {wizard.isCommandRevealed ? 'Hide setup code' : 'Show full command'}
             </Button>
+            <Button variant="quiet" onclick={() => wizard.resetCommand()}>Reset command</Button>
           {/if}
-        {:else}
-          <CopyableValue value={installation.command} />
-        {/if}
-        <p class="requirement">{installation.requirements}{wizard.includesLogs && installation.harness === 'codex' && installation.platform !== 'windows' ? ' Saving Codex telemetry requires Python 3.11 or later.' : ''}</p>
-        <div class="install-links">
-          <a href={installation.scriptUrl} target="_blank" rel="noreferrer">Inspect installer</a>
-          <a href={installation.documentationUrl} target="_blank" rel="noreferrer">{installation.harnessLabel} documentation</a>
         </div>
+        <div class="command-instructions">
+          <p>Paste into {installation.platform === 'windows' ? 'PowerShell' : 'Terminal'}.{wizard.includesLogs ? ' Use once within 10 minutes.' : ''}</p>
+          <div role="status">{#if wizard.commandStatus}<p>{wizard.commandStatus}</p>{/if}</div>
+        </div>
+        {#if wizard.commandError}<p class="error" role="alert">Could not prepare your install command.</p>{/if}
       </div>
     {/if}
 
@@ -151,18 +137,19 @@
   .choice input { flex: none; margin: 4px 0 0 auto; accent-color: var(--admin-accent); }
   .choice img, .choice svg { flex: none; width: 24px; height: 24px; object-fit: contain; }
   .choice svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-  .claim-command { max-width: 100%; overflow-wrap: anywhere; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 0.6rem 0.7rem; font-family: var(--admin-mono); font-size: 0.8rem; user-select: all; }
+  .install-command { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 0.8rem; font-family: var(--admin-mono); font-size: 0.8rem; }
+  .install-command code { font-family: inherit; white-space: inherit; user-select: all; }
   .choice:has(:focus-visible), h2:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
   .summary { --columns: 3; }
   .summary div { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 9px 12px; }
   .summary dt { font-size: 12px; color: var(--admin-muted); }
   .summary dd { margin: 0; font-weight: 650; }
-  .install-card { display: grid; justify-items: start; gap: 12px; min-width: 0; margin-top: 20px; }
+  .install-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; margin-top: 20px; padding: 16px; border: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel); }
   .command-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
   .command-heading span { color: var(--admin-muted); font-size: 13px; }
   .error { color: var(--admin-danger-text); }
-  .install-links { display: flex; flex-wrap: wrap; gap: 12px 24px; }
-  a { color: var(--admin-accent-strong); font-size: 13px; text-underline-offset: 3px; }
+  .command-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .command-instructions [role='status'] p { margin-top: 4px; }
   .actions { display: flex; gap: 10px; margin-top: 20px; }
   .actions :global(.continue) { margin-inline-start: auto; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

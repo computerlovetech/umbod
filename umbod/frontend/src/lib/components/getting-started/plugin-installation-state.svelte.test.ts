@@ -56,7 +56,6 @@ describe('plugin installation choices', (): void => {
     expect(state.platform).toBe('windows');
     expect(state.harness).toBe('claude-code');
     expect(state.harnessLabel).toBe('Claude Code');
-    expect(state.documentationUrl).toContain('code.claude.com');
   });
 
   test('reads the latest deployment URL and quotes it for each shell', (): void => {

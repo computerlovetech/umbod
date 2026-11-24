@@ -1,15 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import type { ToastApi } from '#lib/components/feedback/toast-state.svelte.js';
 import McpSetupGuide from './McpSetupGuide.svelte';
 import { InMemoryTelemetryInstallClaims } from '#lib/telemetry-setup/in-memory-api.test-support.js';
-
-vi.mock('#lib/components/feedback/index.js', () => ({
-  useToast: (): ToastApi => ({
-    success: (): number => 1, warning: (): number => 1, error: (): number => 1,
-    dismiss: (): void => {}
-  })
-}));
 
 const cleanups: Array<() => Promise<void>> = [];
 
@@ -90,10 +82,10 @@ test('uses native radio cards and focuses the step heading on Continue, Back and
 });
 
 test.each([
-  ['macos', 'codex', 'curl -fsSL', 'sh', 'Python 3.8+ and curl', 'https://developers.openai.com/codex/plugins'],
-  ['linux', 'claude-code', 'curl -fsSL', 'sh', 'Python 3.8+ and curl', 'https://code.claude.com/docs/en/plugins'],
-  ['windows', 'claude-code', 'irm -MaximumRedirection 0', 'ps1', 'PowerShell 5.1+', 'https://code.claude.com/docs/en/plugins']
-])('offers the copyable standard installer and docs for %s with %s', async (platform, harness, prefix, extension, requires, docs): Promise<void> => {
+  ['macos', 'codex', 'curl -fsSL', 'sh', 'Terminal'],
+  ['linux', 'claude-code', 'curl -fsSL', 'sh', 'Bash · includes WSL'],
+  ['windows', 'claude-code', 'irm -MaximumRedirection 0', 'ps1', 'PowerShell']
+])('shows the complete standard command immediately for %s and %s', async (platform, harness, prefix, extension, shell): Promise<void> => {
   const target = render();
   const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
   select(target, platform);
@@ -114,13 +106,13 @@ test.each([
   expect(command?.match(/https?:\/\//g)).toHaveLength(1);
   expect(command).not.toContain('--base-url');
   expect(command).not.toContain('--expected-endpoint');
-  expect(target.textContent).toContain(requires);
-  expect(target.textContent).toContain('No administrator access required.');
-  expect(target.textContent).not.toContain('Manual setup');
-  requiredElement(target, `a[href="${scriptUrl}"]`);
-  requiredElement(target, `a[href="${docs}"]`);
-  requiredElement<HTMLButtonElement>(target, '.copyable-value button').click();
-  await vi.waitFor((): void => expect(clipboard).toHaveBeenCalledWith(command));
+  const card = requiredElement(target, '.install-card');
+  expect(card.textContent).toContain(`Install command${shell}`);
+  expect(card.textContent).not.toMatch(/Requires|Inspect installer|Installer preview|10 minutes|Show full command/);
+  expect(card.querySelector('a')).toBeNull();
+  press(card, 'Copy command');
+  await vi.waitFor((): void => expect(card.textContent).toContain('Copied'));
+  expect(clipboard).toHaveBeenCalledExactlyOnceWith(command);
 });
 
 test.each([
@@ -137,23 +129,33 @@ test.each([
   press(target, 'Continue');
   expect(requiredElement(target, 'code').textContent).not.toContain(claims.code);
   chooseLogs(target, harness);
-  expect(target.textContent).not.toContain('Copy install command');
-  expect(target.innerHTML).not.toContain(claims.code);
+  expect(target.textContent).not.toContain('Copy command');
   press(target, 'Continue');
-  expect(target.querySelector('code')).toBeNull();
+  const preview = requiredElement(target, 'code').textContent;
+  expect(preview).toContain('••••');
+  expect(target.textContent).toContain('Use once within 10 minutes.');
+  expect(target.textContent).not.toContain('Show full command');
+  expect(target.innerHTML).not.toContain(claims.code);
   expect(claims.requests).toEqual([]);
   expect(clipboard).not.toHaveBeenCalled();
-  press(target, 'Copy install command');
+  press(target, 'Copy command');
   expect(requiredElement(target, '[role="status"]').textContent).toContain('Preparing');
-  await vi.waitFor((): void => expect(target.textContent).toContain('Copied.'));
+  await vi.waitFor((): void => expect(target.textContent).toContain('Copied'));
   expect(claims.requests.map(({ request }) => request)).toEqual([{ harness }]);
   const command = clipboard.mock.calls[0]?.[0];
   expect(command).toContain(`https://site.test/api/install/v1/${harness}/install.${extension}`);
   expect(command).toContain(claims.code);
   expect(command?.split('\n')).toHaveLength(1);
   expect(clipboard).toHaveBeenCalledExactlyOnceWith(command);
+  expect(preview).toBe(command?.replace(claims.code, '••••••••••••••••'));
   expect(target.innerHTML).not.toContain(claims.code);
-  press(target, 'Copy install command');
+  press(target, 'Show full command');
+  expect(requiredElement(target, 'code').textContent).toBe(command);
+  expect(requiredElement(target, 'button[aria-pressed]').getAttribute('aria-pressed')).toBe('true');
+  press(target, 'Hide setup code');
+  expect(requiredElement(target, 'code').textContent).toBe(preview);
+  expect(target.innerHTML).not.toContain(claims.code);
+  press(target, 'Copied');
   await tick();
   expect(claims.requests).toHaveLength(1);
   expect(clipboard).toHaveBeenCalledTimes(2);
@@ -166,14 +168,17 @@ test('shows a selectable command after clipboard failure and reports preparation
   const target = render(claims);
   chooseLogs(target, 'codex');
   press(target, 'Continue');
-  press(target, 'Copy install command');
+  press(target, 'Copy command');
   await vi.waitFor((): void => expect(requiredElement(target, '[role="alert"]').textContent).toBe('Could not prepare your install command.'));
   expect(target.textContent).not.toContain('sensitive response detail');
-  expect(target.querySelector('code')).toBeNull();
+  expect(requiredElement(target, 'code').textContent).toContain('••••');
   claims.beforeCreate = async (): Promise<void> => {};
-  press(target, 'Copy install command');
-  await vi.waitFor((): void => expect(target.textContent).toContain('Could not copy automatically.'));
+  press(target, 'Copy command');
+  await vi.waitFor((): void => expect(requiredElement(target, '[role="status"]').textContent).toContain('Clipboard unavailable.'));
   expect(requiredElement(target, 'code').textContent).toContain(claims.code);
+  press(target, 'Reset command');
+  expect(target.innerHTML).not.toContain(claims.code);
+  expect(target.textContent).not.toMatch(/Clipboard unavailable|Show full command|Hide setup code/);
 });
 
 test('discards an outstanding claim when the user leaves Review', async (): Promise<void> => {
@@ -184,8 +189,8 @@ test('discards an outstanding claim when the user leaves Review', async (): Prom
   const target = render(claims);
   chooseLogs(target, 'claude-code');
   press(target, 'Continue');
-  press(target, 'Copy install command');
-  press(target, 'Copy install command');
+  press(target, 'Copy command');
+  press(target, 'Copy command');
   expect(claims.requests).toHaveLength(1);
   press(target, 'Back');
   expect(claims.requests[0]?.signal.aborted).toBe(true);
@@ -195,5 +200,39 @@ test('discards an outstanding claim when the user leaves Review', async (): Prom
   press(target, 'Continue');
   expect(claims.requests).toHaveLength(1);
   expect(clipboard).not.toHaveBeenCalled();
-  expect(target.querySelector('code')).toBeNull();
+  expect(requiredElement(target, 'code').textContent).toContain('••••');
+  expect(target.innerHTML).not.toContain(claims.code);
+});
+
+test('clears copy feedback and expires a revealed claim before generating a masked replacement', async (): Promise<void> => {
+  vi.useFakeTimers();
+  const claims = new InMemoryTelemetryInstallClaims();
+  const clipboard = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+  const target = render(claims);
+  chooseLogs(target, 'codex');
+  press(target, 'Continue');
+  press(target, 'Copy command');
+  await vi.waitFor((): void => expect(target.textContent).toContain('Copied'));
+  press(target, 'Show full command');
+  const originalCode = claims.code;
+  expect(requiredElement(target, 'code').textContent).toContain(originalCode);
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(target.textContent).toContain('Copy command');
+  expect(target.textContent).not.toContain('Copied');
+  await vi.advanceTimersByTimeAsync(10 * 60_000 - 2_000);
+  expect(target.innerHTML).not.toContain(originalCode);
+  expect(target.textContent).not.toMatch(/Show full command|Hide setup code|Reset command/);
+  expect(requiredElement(target, '[role="status"]').textContent).toContain('expired');
+  claims.code = 'B'.repeat(43);
+  press(target, 'Generate new command');
+  await vi.waitFor((): void => expect(target.textContent).toContain('Copied'));
+  expect(claims.requests).toHaveLength(2);
+  expect(clipboard.mock.lastCall?.[0]).toContain(claims.code);
+  expect(target.innerHTML).not.toContain(claims.code);
+  press(target, 'Show full command');
+  expect(requiredElement(target, 'code').textContent).toContain(claims.code);
+  press(target, 'Back');
+  press(target, 'Continue');
+  expect(target.innerHTML).not.toContain(claims.code);
+  expect(target.textContent).not.toContain('Show full command');
 });

@@ -64,19 +64,7 @@ export class PluginInstallationState {
     return this.selectedPlatform.shell;
   }
 
-  get requirements(): string {
-    return this.platform === 'windows'
-      ? `Requires ${this.harnessLabel} and PowerShell 5.1+. No administrator access required.`
-      : `Requires ${this.harnessLabel}, Python 3.8+ and curl. No administrator access required.`;
-  }
-
   get harnessLabel(): string {
     return installationHarnesses.find((harness) => harness.value === this.harness)!.label;
-  }
-
-  get documentationUrl(): string {
-    return this.harness === 'codex'
-      ? 'https://developers.openai.com/codex/plugins'
-      : 'https://code.claude.com/docs/en/plugins';
   }
 }
