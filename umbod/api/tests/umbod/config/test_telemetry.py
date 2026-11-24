@@ -37,6 +37,8 @@ def test_telemetry_defaults_only_contain_telemetry_settings() -> None:
     assert config.otlp_receiver.port == 4318
     assert not config.otlp_receiver.enabled
     assert not config.telemetry_analytics.enabled
+    assert not config.telemetry_analytics.raw_archive_enabled
+    assert config.telemetry_analytics.raw_archive_retention_days == 30
 
 
 def test_telemetry_production_ignores_unrelated_invalid_settings(
@@ -69,6 +71,8 @@ def test_telemetry_loads_dedicated_dotenv(tmp_path: Path) -> None:
         "UMBOD_OTLP_MAX_REQUEST_BYTES=2048\n"
         "UMBOD_TELEMETRY_ANALYTICS_ENABLED=true\n"
         "UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH=/tmp/analytics.sqlite3\n"
+        "UMBOD_TELEMETRY_ANALYTICS_RAW_ARCHIVE_ENABLED=true\n"
+        "UMBOD_TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS=7\n"
         "UMBOD_REST_PORT=invalid\n",
         encoding="utf-8",
     )
@@ -83,6 +87,8 @@ def test_telemetry_loads_dedicated_dotenv(tmp_path: Path) -> None:
     assert config.otlp_receiver.allow_unauthenticated
     assert config.telemetry_analytics.enabled
     assert config.telemetry_analytics.sqlite_path == "/tmp/analytics.sqlite3"
+    assert config.telemetry_analytics.raw_archive_enabled
+    assert config.telemetry_analytics.raw_archive_retention_days == 7
 
 
 @pytest.mark.parametrize(
@@ -94,6 +100,8 @@ def test_telemetry_loads_dedicated_dotenv(tmp_path: Path) -> None:
         ("UMBOD_OTLP_PORT", "invalid"),
         ("UMBOD_OTLP_MAX_REQUEST_BYTES", "0"),
         ("UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH", ":memory:"),
+        ("UMBOD_TELEMETRY_ANALYTICS_RAW_ARCHIVE_ENABLED", "true"),
+        ("UMBOD_TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS", "0"),
     ],
 )
 def test_telemetry_rejects_invalid_settings(

@@ -31,6 +31,8 @@ def test_analytics_defaults_are_disabled_with_independent_disk_path() -> None:
     assert AppConfig().telemetry_analytics.model_dump() == {
         "enabled": False,
         "sqlite_path": ".data/analytics.sqlite3",
+        "raw_archive_enabled": False,
+        "raw_archive_retention_days": 30,
     }
 
 
@@ -45,6 +47,30 @@ def test_analytics_environment_overrides_are_assembled(
 
     assert config.telemetry_analytics.enabled is enabled
     assert config.telemetry_analytics.sqlite_path == "metrics/analytics.sqlite3"
+
+
+def test_archive_environment_overrides_are_assembled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("UMBOD_TELEMETRY_ANALYTICS_ENABLED", "true")
+    monkeypatch.setenv("UMBOD_TELEMETRY_ANALYTICS_RAW_ARCHIVE_ENABLED", "true")
+    monkeypatch.setenv("UMBOD_TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS", "14")
+
+    config = build_app_config(OperatorSettings(_env_file=None))
+
+    assert config.telemetry_analytics.raw_archive_enabled is True
+    assert config.telemetry_analytics.raw_archive_retention_days == 14
+
+
+def test_archive_requires_enabled_analytics() -> None:
+    with pytest.raises(ValidationError, match="raw archive requires telemetry analytics"):
+        TelemetryAnalyticsConfig(raw_archive_enabled=True)
+
+
+@pytest.mark.parametrize("days", [0, -1])
+def test_archive_retention_requires_positive_days(days: int) -> None:
+    with pytest.raises(ValidationError, match="greater than 0"):
+        TelemetryAnalyticsConfig(raw_archive_retention_days=days)
+    with pytest.raises(ValidationError, match="greater than 0"):
+        OperatorSettings(_env_file=None, telemetry_analytics_raw_archive_retention_days=days)
 
 
 def test_analytics_path_does_not_inherit_application_path_or_data_directory(
@@ -170,10 +196,14 @@ def test_safe_inspection_exposes_separate_analytics_group_without_ingestion_secr
     assert {entry.variable: entry.value for entry in group.entries} == {
         "UMBOD_TELEMETRY_ANALYTICS_ENABLED": True,
         "UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH": "analytics.sqlite3",
+        "UMBOD_TELEMETRY_ANALYTICS_RAW_ARCHIVE_ENABLED": False,
+        "UMBOD_TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS": 30,
     }
     assert safe_app_config_dump(config)["telemetry_analytics"] == {
         "enabled": True,
         "sqlite_path": "analytics.sqlite3",
+        "raw_archive_enabled": False,
+        "raw_archive_retention_days": 30,
     }
     assert "private-ingestion-token" not in inspection.model_dump_json()
     assert "bearer_token" not in safe_app_config_dump(config)["otlp_receiver"]

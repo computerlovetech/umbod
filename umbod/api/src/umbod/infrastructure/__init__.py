@@ -2,6 +2,11 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from umbod.infrastructure.telemetry.backfill_composition import create_log_archive_backfill
+    from umbod.infrastructure.telemetry.replay_composition import (
+        create_log_archive_replay,
+        create_log_archive_replay_with_normalizer,
+    )
     from umbod.infrastructure.http import OutboundHttpClientFactory
     from umbod.infrastructure.mcp_endpoint_access import open_anonymous_mcp_initialization
     from umbod.infrastructure.mcp_registry import open_official_mcp_registry
@@ -60,6 +65,9 @@ __all__ = [
     "create_receiver_app_with_registry",
     "install_telemetry_receiver",
     "migrate_local_content",
+    "create_log_archive_backfill",
+    "create_log_archive_replay",
+    "create_log_archive_replay_with_normalizer",
     "create_configured_analytics_runtime",
     "create_disabled_analytics_runtime",
     "create_sqlite_analytics_runtime",
@@ -89,6 +97,9 @@ __all__ = [
 ]
 
 _EXPORTS: dict[str, str] = {
+    "create_log_archive_backfill": ".telemetry.backfill_composition",
+    "create_log_archive_replay": ".telemetry.replay_composition",
+    "create_log_archive_replay_with_normalizer": ".telemetry.replay_composition",
     "OutboundHttpClientFactory": ".http",
     "open_anonymous_mcp_initialization": ".mcp_endpoint_access",
     "open_official_mcp_registry": ".mcp_registry",

@@ -189,7 +189,7 @@ def test_public_exports_are_exact() -> None:
         "PresentDimensionValue", "TelemetryAnalyticsReader", "TelemetryAnalyticsUnavailable",
         "TimeBucket", "TimeRange", "Unbucketed",
         "AnalyticsLogRecord", "LogOwnership", "LogWriteBatch", "OwnedLog", "UnownedLog", "analytics_owner_id",
-        "TelemetryAnalyticsRuntime", "TelemetryAnalyticsWriter",
+        "ArchivedLogWriteBatch", "LogAppendBatch", "TelemetryAnalyticsRuntime", "TelemetryAnalyticsWriter",
     }
     assert set(analytics.__all__) == expected
     assert all(getattr(analytics, name) is not None for name in expected)

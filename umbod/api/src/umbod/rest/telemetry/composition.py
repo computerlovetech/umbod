@@ -20,6 +20,7 @@ from umbod.infrastructure import create_disabled_analytics_runtime
 from umbod.rest.telemetry.dependencies import (
     get_analytics_reader,
     get_analytics_writer,
+    get_raw_archive_enabled,
     get_receiver_config,
 )
 from umbod.rest.telemetry.errors import TelemetryHttpError
@@ -51,7 +52,11 @@ def install_telemetry_receiver(
 
     install_analytics_dependencies(app, create_disabled_analytics_runtime())
     install_unavailable_telemetry_token_verifier(app)
+    def provide_raw_archive_enabled() -> bool:
+        return config.telemetry_analytics.raw_archive_enabled
+
     app.dependency_overrides[get_receiver_config] = provide_receiver_config
+    app.dependency_overrides[get_raw_archive_enabled] = provide_raw_archive_enabled
     app.add_exception_handler(TelemetryHttpError, telemetry_error_response)
     app.include_router(router)
 

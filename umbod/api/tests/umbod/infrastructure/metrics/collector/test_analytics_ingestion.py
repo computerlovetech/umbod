@@ -18,7 +18,7 @@ from umbod.core.telemetry.analytics import (
     InstanceScope,
     LogCountQuery,
     LogDimension,
-    LogWriteBatch,
+    LogAppendBatch,
     NoTimeBuckets,
     OwnersScope,
     TelemetryAnalyticsReader,
@@ -109,7 +109,7 @@ class RecordingRuntime:
 
 
 class UnavailableWriter:
-    async def append_logs(self, batch: LogWriteBatch) -> None:
+    async def append_logs(self, batch: LogAppendBatch) -> None:
         raise TelemetryAnalyticsUnavailable("private database diagnostic")
 
 

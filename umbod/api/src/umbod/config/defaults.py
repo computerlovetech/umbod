@@ -14,6 +14,7 @@ INTERNAL_API_ORIGIN: Final[str] = ""
 DATA_DIR: Final[str] = ".data"
 CONNECTOR_STORE_SQLITE_PATH: Final[str] = ".data/umbod.sqlite3"
 TELEMETRY_ANALYTICS_SQLITE_PATH: Final[str] = ".data/analytics.sqlite3"
+TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS: Final[int] = 30
 LOCAL_CONNECTOR_CONFIGURATION_SECRET: Final[str] = "umbod-local-connector-configuration-secret"
 LOCAL_DOWNSTREAM_MCP_CREDENTIAL_SECRET: Final[str] = "umbod-local-downstream-mcp-secret"
 OPENAPI_JSON_IMPORT_MAX_BYTES: Final[int] = 10_485_760

@@ -1,6 +1,8 @@
 import gzip
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import timezone
+from typing import Literal
 
 import pytest
 from fastapi import FastAPI
@@ -24,13 +26,16 @@ from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
 from umbod.config import AppConfig, OtlpReceiverConfig
 from umbod.core.telemetry import TelemetryExport, TelemetrySignal, TelemetryUnavailable
 from umbod.core.telemetry.analytics import (
+    ArchivedLogWriteBatch,
+    LogAppendBatch,
     LogDimension,
     LogWriteBatch,
+    UnownedLog,
     TelemetryAnalyticsUnavailable,
     TelemetryAnalyticsWriter,
 )
 from umbod.infrastructure import install_telemetry_receiver
-from umbod.rest.telemetry.dependencies import get_analytics_writer, get_telemetry_sink
+from umbod.rest.telemetry.dependencies import get_analytics_writer, get_raw_archive_enabled, get_telemetry_sink
 
 
 class RecordingSink:
@@ -46,10 +51,10 @@ class RecordingSink:
 
 class RecordingAnalyticsWriter:
     def __init__(self, unavailable: bool = False) -> None:
-        self.batches: list[LogWriteBatch] = []
+        self.batches: list[LogAppendBatch] = []
         self.unavailable = unavailable
 
-    async def append_logs(self, batch: LogWriteBatch) -> None:
+    async def append_logs(self, batch: LogAppendBatch) -> None:
         if self.unavailable:
             raise TelemetryAnalyticsUnavailable(
                 "private analytics failure ingestion-secret"
@@ -76,7 +81,7 @@ def writer() -> RecordingAnalyticsWriter:
 
 @contextmanager
 def receiver_client(
-    config: AppConfig, sink: RecordingSink, writer: RecordingAnalyticsWriter
+    config: AppConfig, sink: RecordingSink, writer: RecordingAnalyticsWriter, *, archive_enabled: bool = False,
 ) -> Iterator[TestClient]:
     app = FastAPI()
     install_telemetry_receiver(app, config)
@@ -87,8 +92,13 @@ def receiver_client(
     def provide_writer() -> TelemetryAnalyticsWriter:
         return writer
 
+    def capture_archive() -> bool:
+        return True
+
     app.dependency_overrides[get_telemetry_sink] = provide_sink
     app.dependency_overrides[get_analytics_writer] = provide_writer
+    if archive_enabled:
+        app.dependency_overrides[get_raw_archive_enabled] = capture_archive
     with TestClient(app) as client:
         yield client
 
@@ -398,11 +408,12 @@ def test_sink_failure_returns_safe_binary_unavailable_before_analytics(
     assert not writer.batches
 
 
+@pytest.mark.parametrize("archive_enabled", [False, True])
 def test_analytics_failure_returns_safe_binary_unavailable(
-    config: AppConfig, sink: RecordingSink
+    config: AppConfig, sink: RecordingSink, archive_enabled: bool,
 ) -> None:
     writer = RecordingAnalyticsWriter(unavailable=True)
-    with receiver_client(config, sink, writer) as client:
+    with receiver_client(config, sink, writer, archive_enabled=archive_enabled) as client:
         response = client.post(
             "/v1/logs",
             content=export_request(TelemetrySignal.LOGS).SerializeToString(),
@@ -422,6 +433,7 @@ def test_binary_logs_are_normalized_into_analytics_dimensions(
     )
     assert response.status_code == 200
     assert len(writer.batches) == 1
+    assert isinstance(writer.batches[0], LogWriteBatch)
     assert len(writer.batches[0].records) == 1
     assert {
         group.dimension: group.value.value
@@ -433,3 +445,57 @@ def test_binary_logs_are_normalized_into_analytics_dimensions(
         LogDimension.TOOL_NAME: "read-file",
         LogDimension.SEVERITY: "INFO",
     }
+
+
+@pytest.mark.parametrize("encoding", ["json", "protobuf"])
+def test_archive_captures_exact_decompressed_body_and_normalization_receipt(
+    config: AppConfig, sink: RecordingSink, writer: RecordingAnalyticsWriter,
+    encoding: Literal["json", "protobuf"],
+) -> None:
+    if encoding == "protobuf":
+        body = export_request(TelemetrySignal.LOGS).SerializeToString() + b"\x98\x06\x01"
+        content_type = "application/x-protobuf"
+    else:
+        body = (
+            b'{ "resourceLogs": [{"scopeLogs":[{"logRecords":[{'
+            b'"attributes":[{"key":"skill.name","value":{"stringValue":"private-skill"}}]'
+            b'}]}]}] }\n'
+        )
+        content_type = "application/json"
+
+    with receiver_client(config, sink, writer, archive_enabled=True) as client:
+        response = client.post(
+            "/v1/logs",
+            content=gzip.compress(body),
+            headers={**headers("gzip"), "Content-Type": content_type},
+        )
+
+    assert response.status_code == 200
+    (archive,) = writer.batches
+    assert isinstance(archive, ArchivedLogWriteBatch)
+    assert archive.raw_payload == body
+    assert archive.encoding == encoding
+    assert archive.owner == UnownedLog(kind="unowned")
+    assert archive.received_at.tzinfo == timezone.utc
+    (record,) = archive.records
+    assert record.occurred_at == archive.received_at
+
+
+@pytest.mark.parametrize(
+    ("path", "body", "status"),
+    [
+        ("/v1/logs", b"", 200),
+        ("/v1/logs", b"\xff", 400),
+        ("/v1/metrics", export_request(TelemetrySignal.METRICS).SerializeToString(), 200),
+        ("/v1/traces", export_request(TelemetrySignal.TRACES).SerializeToString(), 200),
+    ],
+)
+def test_archive_only_captures_valid_nonempty_log_exports(
+    config: AppConfig, sink: RecordingSink, writer: RecordingAnalyticsWriter,
+    path: str, body: bytes, status: int,
+) -> None:
+    with receiver_client(config, sink, writer, archive_enabled=True) as client:
+        response = client.post(path, content=body, headers=headers())
+
+    assert response.status_code == status
+    assert not writer.batches

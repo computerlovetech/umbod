@@ -276,6 +276,8 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
         telemetry_analytics=TelemetryAnalyticsConfig(
             enabled=operator.telemetry_analytics_enabled,
             sqlite_path=operator.telemetry_analytics_sqlite_path,
+            raw_archive_enabled=operator.telemetry_analytics_raw_archive_enabled,
+            raw_archive_retention_days=operator.telemetry_analytics_raw_archive_retention_days,
         ),
         filesystem=FilesystemRuntimeConfig(
             content=_filesystem_content(operator),

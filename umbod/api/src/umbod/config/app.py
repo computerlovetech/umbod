@@ -1,7 +1,7 @@
 import ipaddress
 import re
 from pathlib import Path
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal, Self, Union
 from unicodedata import category
 from urllib.parse import urlsplit
 
@@ -145,6 +145,14 @@ def validate_telemetry_analytics_sqlite_path(value: str) -> str:
 class TelemetryAnalyticsConfig(ConfigModel):
     enabled: bool = False
     sqlite_path: str = defaults.TELEMETRY_ANALYTICS_SQLITE_PATH
+    raw_archive_enabled: bool = False
+    raw_archive_retention_days: int = Field(default=defaults.TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS, gt=0)
+
+    @model_validator(mode="after")
+    def validate_archive_requires_analytics(self) -> Self:
+        if self.raw_archive_enabled and not self.enabled:
+            raise ValueError("Telemetry raw archive requires telemetry analytics to be enabled")
+        return self
 
     @field_validator("sqlite_path")
     @classmethod

@@ -4,7 +4,7 @@ from umbod.core.telemetry.analytics import LogDimension
 from umbod.core.telemetry.analytics.activity import classify_activity
 
 APPLICATION_ID = 1431126350
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 LEGACY_COLUMNS = (
     ("occurred_at_us", "INTEGER", 1),
     ("owner_id", "TEXT", 0),
@@ -15,14 +15,27 @@ LEGACY_COLUMNS = (
     ("tool_name", "TEXT", 0),
 )
 ACTIVITY_COLUMNS = LEGACY_COLUMNS + (("activity_kind", "TEXT", 0), ("outcome", "TEXT", 0))
-COLUMNS = ACTIVITY_COLUMNS + (("normalization_json", "TEXT", 0),)
+NORMALIZATION_COLUMNS = ACTIVITY_COLUMNS + (("normalization_json", "TEXT", 0),)
+COLUMNS = NORMALIZATION_COLUMNS + (("raw_batch_id", "INTEGER", 0), ("raw_record_index", "INTEGER", 0))
+RAW_BATCH_COLUMNS = (
+    ("id", "INTEGER", 1),
+    ("raw_payload", "BLOB", 1),
+    ("encoding", "TEXT", 1),
+    ("received_at_us", "INTEGER", 1),
+    ("owner_id", "TEXT", 0),
+)
 
 
-async def ensure_schema(connection: aiosqlite.Connection) -> None:
+async def _schema_identity(connection: aiosqlite.Connection) -> tuple[int, int]:
     async with connection.execute("PRAGMA application_id") as cursor:
         application_id = (await cursor.fetchone())[0]
     async with connection.execute("PRAGMA user_version") as cursor:
         version = (await cursor.fetchone())[0]
+    return application_id, version
+
+
+async def ensure_schema(connection: aiosqlite.Connection) -> None:
+    application_id, version = await _schema_identity(connection)
     async with connection.execute(
         "SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'"
     ) as cursor:
@@ -39,26 +52,80 @@ async def ensure_schema(connection: aiosqlite.Connection) -> None:
             "ON analytics_logs (occurred_at_us, owner_id)"
         )
         await connection.execute(f"PRAGMA application_id = {APPLICATION_ID}")
-        await connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-    elif application_id != APPLICATION_ID or version not in (1, 2, SCHEMA_VERSION):
+        version = 3
+    elif application_id != APPLICATION_ID or version not in (1, 2, 3, SCHEMA_VERSION):
         raise ValueError("Unrecognized analytics database")
-    async with connection.execute("PRAGMA table_info(analytics_logs)") as cursor:
-        columns = tuple((row[1], row[2], row[3]) for row in await cursor.fetchall())
     if version == 1:
-        if columns != LEGACY_COLUMNS:
-            raise ValueError("Invalid analytics schema")
+        await _validate_columns(connection, "analytics_logs", LEGACY_COLUMNS)
         await _migrate_activity(connection)
         version = 2
-        columns = ACTIVITY_COLUMNS
     if version == 2:
-        if columns != ACTIVITY_COLUMNS:
-            raise ValueError("Invalid analytics schema")
+        await _validate_columns(connection, "analytics_logs", ACTIVITY_COLUMNS)
         await connection.execute("ALTER TABLE analytics_logs ADD COLUMN normalization_json TEXT")
+        version = 3
+    if version == 3:
+        await _validate_columns(connection, "analytics_logs", NORMALIZATION_COLUMNS)
+        await _migrate_raw_archive(connection)
         await connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-    async with connection.execute("PRAGMA table_info(analytics_logs)") as cursor:
-        columns = tuple((row[1], row[2], row[3]) for row in await cursor.fetchall())
-    if columns != COLUMNS:
+    await validate_current_schema(connection)
+
+
+async def validate_current_schema(connection: aiosqlite.Connection) -> None:
+    if await _schema_identity(connection) != (APPLICATION_ID, SCHEMA_VERSION):
+        raise ValueError("Unrecognized analytics database")
+    await _validate_columns(connection, "analytics_logs", COLUMNS)
+    await _validate_archive_schema(connection)
+
+
+async def _validate_columns(
+    connection: aiosqlite.Connection, table: str, expected: tuple[tuple[str, str, int], ...],
+) -> None:
+    async with connection.execute(
+        'SELECT name, type, "notnull" FROM pragma_table_info(?) ORDER BY cid', (table,),
+    ) as cursor:
+        columns = tuple(tuple(row) for row in await cursor.fetchall())
+    if columns != expected:
         raise ValueError("Invalid analytics schema")
+
+
+async def _validate_archive_schema(connection: aiosqlite.Connection) -> None:
+    await _validate_columns(connection, "analytics_raw_batches", RAW_BATCH_COLUMNS)
+    async with connection.execute(
+        "SELECT name FROM pragma_table_info('analytics_raw_batches') WHERE pk > 0"
+    ) as cursor:
+        if [row[0] for row in await cursor.fetchall()] != ["id"]:
+            raise ValueError("Invalid analytics schema")
+    async with connection.execute(
+        'SELECT info.name FROM pragma_index_list(\'analytics_logs\') AS indexes '
+        'JOIN pragma_index_info(indexes.name) AS info '
+        'WHERE indexes.name = \'analytics_logs_raw_record\' AND indexes."unique" = 1 '
+        'AND indexes.partial = 0 ORDER BY info.seqno'
+    ) as cursor:
+        if [row[0] for row in await cursor.fetchall()] != ["raw_batch_id", "raw_record_index"]:
+            raise ValueError("Invalid analytics schema")
+
+
+async def _migrate_raw_archive(connection: aiosqlite.Connection) -> None:
+    await connection.execute(
+        "CREATE TABLE analytics_raw_batches ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+        "raw_payload BLOB NOT NULL CHECK(typeof(raw_payload) = 'blob' AND length(raw_payload) > 0), "
+        "encoding TEXT NOT NULL CHECK(encoding IN ('json', 'protobuf')), "
+        "received_at_us INTEGER NOT NULL, owner_id TEXT)"
+    )
+    await connection.execute(
+        "CREATE INDEX analytics_raw_batches_receipt ON analytics_raw_batches (received_at_us)"
+    )
+    await connection.execute("ALTER TABLE analytics_logs ADD COLUMN raw_batch_id INTEGER")
+    await connection.execute(
+        "ALTER TABLE analytics_logs ADD COLUMN raw_record_index INTEGER CHECK("
+        "(raw_batch_id IS NULL AND raw_record_index IS NULL) OR "
+        "(raw_batch_id IS NOT NULL AND raw_record_index IS NOT NULL AND raw_record_index >= 0))"
+    )
+    await connection.execute(
+        "CREATE UNIQUE INDEX analytics_logs_raw_record "
+        "ON analytics_logs (raw_batch_id, raw_record_index)"
+    )
 
 
 async def _migrate_activity(connection: aiosqlite.Connection) -> None:
@@ -82,4 +149,3 @@ async def _migrate_activity(connection: aiosqlite.Connection) -> None:
                     source, event, tool,
                 ),
             )
-    await connection.execute("PRAGMA user_version = 2")

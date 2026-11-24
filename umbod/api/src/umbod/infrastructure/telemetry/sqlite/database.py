@@ -1,11 +1,13 @@
 import asyncio
 import sqlite3
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 
 import aiosqlite
 
+from umbod.config.defaults import TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS
 from umbod.core.telemetry.analytics import (
     TelemetryAnalyticsReader,
     TelemetryAnalyticsUnavailable,
@@ -20,7 +22,11 @@ from umbod.infrastructure.connections import (
 from umbod.infrastructure.connections.lifecycle import complete_cleanup
 from umbod.infrastructure.connections.sqlite import SQLiteConnectionDriver
 
+from .retention import archive_cutoff_us, expire_raw_archives, utc_now
 from .schema import ensure_schema
+
+ARCHIVE_SWEEP_INTERVAL_SECONDS = 3600
+ARCHIVE_SWEEP_RETRY_SECONDS = 60
 
 
 def validate_path(database_path: Path, protected_paths: tuple[Path, ...]) -> Path:
@@ -63,6 +69,9 @@ def prepare_directory(path: Path, protected_paths: tuple[Path, ...]) -> None:
 
 class SqliteAnalyticsRuntime:
     def __init__(self, database_path: Path, protected_paths: tuple[Path, ...]) -> None:
+        self._retention_days = TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS
+        self._clock: Callable[[], datetime] = utc_now
+        self._sweeper: asyncio.Task[None] | None = None
         try:
             self._path = validate_path(database_path, protected_paths)
             self._protected_paths = tuple(path.absolute() for path in protected_paths)
@@ -78,6 +87,24 @@ class SqliteAnalyticsRuntime:
         self._ready = False
         self._closed = False
         self._active = 0
+
+    @classmethod
+    def with_retention(
+        cls,
+        database_path: Path,
+        protected_paths: tuple[Path, ...],
+        raw_archive_retention_days: int,
+        clock: Callable[[], datetime],
+    ) -> "SqliteAnalyticsRuntime":
+        if raw_archive_retention_days < 1:
+            raise ValueError("Analytics archive retention must be positive")
+        runtime = cls(database_path, protected_paths)
+        runtime._retention_days = raw_archive_retention_days
+        runtime._clock = clock
+        return runtime
+
+    def archive_cutoff_us(self) -> int:
+        return archive_cutoff_us(self._clock(), self._retention_days)
 
     def create_reader(self) -> TelemetryAnalyticsReader:
         from .reader import SqliteAnalyticsReader
@@ -138,7 +165,26 @@ class SqliteAnalyticsRuntime:
                     journal_mode = (await cursor.fetchone())[0]
                 if journal_mode != "wal":
                     raise ValueError("Analytics requires WAL journal mode")
+            next_sweep = await self._sweep_archives_once()
             self._ready = True
+            if not self._closed:
+                self._sweeper = asyncio.create_task(self._sweep_archives(next_sweep))
+
+    async def _sweep_archives_once(self) -> float:
+        started_at = asyncio.get_running_loop().time()
+        try:
+            async with self._operation():
+                async with self._connections.get_connection() as connection:
+                    await expire_raw_archives(connection, self.archive_cutoff_us())
+        except TelemetryAnalyticsUnavailable:
+            return started_at + ARCHIVE_SWEEP_RETRY_SECONDS
+        return started_at + ARCHIVE_SWEEP_INTERVAL_SECONDS
+
+    async def _sweep_archives(self, next_sweep: float) -> None:
+        loop = asyncio.get_running_loop()
+        while True:
+            await asyncio.sleep(max(0, next_sweep - loop.time()))
+            next_sweep = await self._sweep_archives_once()
 
     async def ensure_ready(self) -> None:
         async with self._operation():
@@ -151,11 +197,23 @@ class SqliteAnalyticsRuntime:
             async with self._connections.get_connection() as connection:
                 yield connection
 
+    @asynccontextmanager
+    async def ready_connection(self) -> AsyncIterator[aiosqlite.Connection]:
+        async with self._operation():
+            if not self._ready:
+                raise TelemetryAnalyticsUnavailable("Telemetry analytics is unavailable")
+            async with self._connections.get_connection() as connection:
+                yield connection
+
     async def shutdown(self) -> None:
         await complete_cleanup(self._shutdown())
 
     async def _shutdown(self) -> None:
         async with self._condition:
             self._closed = True
+        if self._sweeper is not None:
+            self._sweeper.cancel()
+            await asyncio.gather(self._sweeper, return_exceptions=True)
+        async with self._condition:
             await self._condition.wait_for(lambda: self._active == 0)
         await self._connections.close()

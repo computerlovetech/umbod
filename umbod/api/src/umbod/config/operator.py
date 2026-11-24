@@ -62,6 +62,10 @@ class OperatorSettings(BaseSettings):
 
     telemetry_analytics_enabled: bool = False
     telemetry_analytics_sqlite_path: str = defaults.TELEMETRY_ANALYTICS_SQLITE_PATH
+    telemetry_analytics_raw_archive_enabled: bool = False
+    telemetry_analytics_raw_archive_retention_days: int = Field(
+        default=defaults.TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS, gt=0,
+    )
     otlp_public_base_url: str = ""
 
     @field_validator("otlp_public_base_url")

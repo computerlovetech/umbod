@@ -11,7 +11,7 @@ from umbod.config.telemetry import TelemetryAppConfig
 from umbod.core.diagnostics import ApplicationFailure, PublishingSignalFailureHandler
 from umbod.core.signals import Signal
 from umbod.core.telemetry import TelemetryExport, TelemetrySink, TelemetryUnavailable
-from umbod.core.telemetry.analytics import LogWriteBatch, TelemetryAnalyticsUnavailable, TelemetryAnalyticsWriter
+from umbod.core.telemetry.analytics import LogAppendBatch, TelemetryAnalyticsUnavailable, TelemetryAnalyticsWriter
 from umbod.logging import create_application_failure_signal
 from umbod.infrastructure.metrics.rest import PrometheusRestMetricsRecorder
 from umbod.infrastructure.metrics.rest import create_rest_metrics_app
@@ -36,10 +36,10 @@ class RecordingSink:
 
 class RecordingWriter:
     def __init__(self) -> None:
-        self.batches: list[LogWriteBatch] = []
+        self.batches: list[LogAppendBatch] = []
         self.unavailable = False
 
-    async def append_logs(self, batch: LogWriteBatch) -> None:
+    async def append_logs(self, batch: LogAppendBatch) -> None:
         if self.unavailable:
             raise TelemetryAnalyticsUnavailable("private analytics sentinel")
         self.batches.append(batch)
@@ -191,7 +191,7 @@ def test_unexpected_ingestion_exception_preserves_failure_and_counts_one_request
     def fail_export(batch: TelemetryExport) -> None:
         raise original_error
 
-    async def fail_append(batch: LogWriteBatch) -> None:
+    async def fail_append(batch: LogAppendBatch) -> None:
         raise original_error
 
     if operation == "sink":

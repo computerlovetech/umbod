@@ -12,4 +12,6 @@ description: Backend-neutral log counting contracts and validated aggregation mo
 - [Ports](ports.py) — Backend-neutral reader, writer, and runtime boundaries.
 - [Write models](write_models.py) — Validated log records, stable issuer-qualified owner keys and atomic write batches.
 - [Models](models.py) — Immutable paginated queries, dimensions, scopes, time buckets, and count results.
+- [Backfill](backfill.py) — Bounded receipt-window selection and replay port.
+- [Replay](replay.py) — Internal preview and apply operations and sanitized replay summaries.
 - [Errors](errors.py) — Unavailable analytics readers.

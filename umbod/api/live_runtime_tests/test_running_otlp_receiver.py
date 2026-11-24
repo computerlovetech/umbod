@@ -13,7 +13,11 @@ _RUNTIME_SIGNALS: dict[str, tuple[str, str, str, dict[str, JsonValue]]] = {
         "resourceLogs",
         "scopeLogs",
         "logRecords",
-        {"body": {"stringValue": "runtime export"}},
+        {
+            "eventName": "codex.skill_invocation",
+            "body": {"stringValue": "runtime export"},
+            "attributes": [{"key": "skill.name", "value": {"stringValue": "runtime-fixture-skill"}}],
+        },
     ),
     "metrics": (
         "resourceMetrics",

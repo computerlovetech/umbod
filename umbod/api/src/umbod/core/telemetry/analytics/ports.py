@@ -1,7 +1,7 @@
 from typing import Protocol
 
 from .models import LogCountQuery, LogCountResult
-from .write_models import LogWriteBatch
+from .write_models import LogAppendBatch
 
 
 class TelemetryAnalyticsReader(Protocol):
@@ -9,7 +9,7 @@ class TelemetryAnalyticsReader(Protocol):
 
 
 class TelemetryAnalyticsWriter(Protocol):
-    async def append_logs(self, batch: LogWriteBatch) -> None: ...
+    async def append_logs(self, batch: LogAppendBatch) -> None: ...
 
 
 class TelemetryAnalyticsRuntime(Protocol):

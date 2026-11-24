@@ -50,6 +50,10 @@ class TelemetrySettings(BaseSettings):
     otlp_port: int = Field(default=4318, ge=1, le=65535)
     telemetry_analytics_enabled: bool = False
     telemetry_analytics_sqlite_path: str = defaults.TELEMETRY_ANALYTICS_SQLITE_PATH
+    telemetry_analytics_raw_archive_enabled: bool = False
+    telemetry_analytics_raw_archive_retention_days: int = Field(
+        default=defaults.TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS, gt=0,
+    )
 
 
 def load_telemetry_app_config(env_file: str) -> TelemetryAppConfig:
@@ -71,5 +75,7 @@ def load_telemetry_app_config(env_file: str) -> TelemetryAppConfig:
         telemetry_analytics=TelemetryAnalyticsConfig(
             enabled=settings.telemetry_analytics_enabled,
             sqlite_path=settings.telemetry_analytics_sqlite_path,
+            raw_archive_enabled=settings.telemetry_analytics_raw_archive_enabled,
+            raw_archive_retention_days=settings.telemetry_analytics_raw_archive_retention_days,
         ),
     )

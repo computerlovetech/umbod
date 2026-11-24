@@ -2,7 +2,7 @@ from hashlib import sha256
 from json import dumps
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, StrictBytes, model_validator
 
 from umbod.core.telemetry.normalization import NormalizationEvidence
 
@@ -42,3 +42,30 @@ class AnalyticsLogRecord(AnalyticsModel):
 
 class LogWriteBatch(AnalyticsModel):
     records: tuple[AnalyticsLogRecord, ...]
+
+
+class LogArchiveSource(AnalyticsModel):
+    model_config = ConfigDict(hide_input_in_errors=True)
+
+    raw_payload: Annotated[StrictBytes, Field(min_length=1, repr=False)]
+    encoding: Literal["json", "protobuf"]
+    received_at: UtcDatetime
+    owner: Annotated[LogOwnership, Field(discriminator="kind")]
+
+
+class ArchivedLogWriteBatch(LogArchiveSource):
+    records: Annotated[
+        tuple[AnalyticsLogRecord, ...],
+        Field(min_length=1, description="Normalized records in original OTLP resource/scope/record order"),
+    ]
+
+    @model_validator(mode="after")
+    def validate_records(self) -> Self:
+        if any(record.owner != self.owner for record in self.records):
+            raise ValueError("Archived logs must belong to the trusted owner")
+        if any(record.normalization.kind != "normalized" for record in self.records):
+            raise ValueError("Archived logs must be normalized")
+        return self
+
+
+LogAppendBatch = LogWriteBatch | ArchivedLogWriteBatch

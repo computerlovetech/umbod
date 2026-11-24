@@ -24,6 +24,8 @@ from umbod.core.persistence import (
 )
 from umbod.core.telemetry.analytics import (
     AnalyticsLogRecord,
+    ArchivedLogWriteBatch,
+    LogAppendBatch,
     LogCountQuery,
     LogCountResult,
     LogWriteBatch,
@@ -112,7 +114,9 @@ class _Writer:
     def __init__(self, runtime: InMemoryTelemetryAnalyticsRuntime) -> None:
         self._runtime = runtime
 
-    async def append_logs(self, batch: LogWriteBatch) -> None:
+    async def append_logs(self, batch: LogAppendBatch) -> None:
+        if isinstance(batch, ArchivedLogWriteBatch):
+            raise TelemetryAnalyticsUnavailable("Telemetry archiving is unavailable")
         try:
             validated = LogWriteBatch.model_validate(batch.model_dump())
         except ValidationError:

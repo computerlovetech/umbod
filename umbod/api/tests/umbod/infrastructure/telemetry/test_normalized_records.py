@@ -1,10 +1,17 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
-from umbod.core.telemetry.analytics import LogWriteBatch, TelemetryAnalyticsUnavailable, UnownedLog
+from umbod.core.telemetry.analytics import (
+    ArchivedLogWriteBatch,
+    LogWriteBatch,
+    OwnedLog,
+    TelemetryAnalyticsRuntime,
+    TelemetryAnalyticsUnavailable,
+    UnownedLog,
+)
 from umbod.core.telemetry.normalization import NormalizedLogRecord
 from umbod.infrastructure.telemetry.sqlite.database import SqliteAnalyticsRuntime
 from umbod.rest.telemetry.normalization import normalize_analytics_logs
@@ -147,3 +154,113 @@ async def test_invalid_normalization_schema_is_rejected_before_storage_io(
     finally:
         await runtime.shutdown()
     assert not path.exists()
+
+
+@pytest.fixture
+def archived_batch(normalized_batch: LogWriteBatch) -> ArchivedLogWriteBatch:
+    owner = OwnedLog(kind="owned", owner_id="trusted-owner")
+    return ArchivedLogWriteBatch(
+        raw_payload=b"\x00archived-private-payload\xff",
+        encoding="protobuf",
+        received_at=datetime(1970, 1, 1, 1, 0, 1, tzinfo=timezone(timedelta(hours=1))),
+        owner=owner,
+        records=tuple(record.model_copy(update={"owner": owner}) for record in normalized_batch.records),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("owner_id", ["trusted-owner", None], ids=["owned", "unowned"])
+async def test_archived_append_stores_exact_raw_bytes_and_links_normalized_rows_in_order(
+    tmp_path: Path, archived_batch: ArchivedLogWriteBatch, normalized_batch: LogWriteBatch,
+    owner_id: str | None,
+) -> None:
+    if owner_id is None:
+        archived_batch = ArchivedLogWriteBatch(
+            raw_payload=archived_batch.raw_payload,
+            encoding="protobuf",
+            received_at=archived_batch.received_at,
+            owner=UnownedLog(kind="unowned"),
+            records=normalized_batch.records,
+        )
+    runtime = SqliteAnalyticsRuntime(tmp_path / "analytics.sqlite3", ())
+    analytics: TelemetryAnalyticsRuntime = runtime
+    try:
+        await analytics.create_writer().append_logs(archived_batch)
+        async with runtime.connection() as connection:
+            async with connection.execute(
+                "SELECT id, raw_payload, encoding, received_at_us, owner_id FROM analytics_raw_batches"
+            ) as cursor:
+                (archive,) = await cursor.fetchall()
+            async with connection.execute(
+                "SELECT raw_batch_id, raw_record_index, owner_id, normalization_json "
+                "FROM analytics_logs ORDER BY raw_record_index"
+            ) as cursor:
+                rows = await cursor.fetchall()
+    finally:
+        await runtime.shutdown()
+    assert tuple(archive[1:]) == (archived_batch.raw_payload, "protobuf", 1_000_000, owner_id)
+    assert [tuple(row) for row in rows] == [
+        (archive[0], index, owner_id, record.normalization.model_dump_json())
+        for index, record in enumerate(archived_batch.records)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_rejected_archived_append_rolls_back_raw_batch_and_first_normalized_row(
+    tmp_path: Path, archived_batch: ArchivedLogWriteBatch,
+) -> None:
+    runtime = SqliteAnalyticsRuntime(tmp_path / "analytics.sqlite3", ())
+    try:
+        async with runtime.connection() as connection:
+            await connection.execute(
+                "CREATE TRIGGER reject_second_record BEFORE INSERT ON analytics_logs "
+                "WHEN NEW.raw_record_index = 1 BEGIN SELECT RAISE(ABORT, 'private error'); END"
+            )
+            await connection.commit()
+        with pytest.raises(TelemetryAnalyticsUnavailable, match="^Telemetry analytics is unavailable$"):
+            await runtime.create_writer().append_logs(archived_batch)
+        async with runtime.connection() as connection:
+            async with connection.execute(
+                "SELECT (SELECT COUNT(*) FROM analytics_raw_batches), (SELECT COUNT(*) FROM analytics_logs)"
+            ) as cursor:
+                assert tuple(await cursor.fetchone()) == (0, 0)
+    finally:
+        await runtime.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_raw_deletion_keeps_historical_links_and_never_reuses_batch_id(
+    tmp_path: Path, archived_batch: ArchivedLogWriteBatch,
+) -> None:
+    runtime = SqliteAnalyticsRuntime(tmp_path / "analytics.sqlite3", ())
+    try:
+        await runtime.create_writer().append_logs(archived_batch)
+        async with runtime.connection() as connection:
+            async with connection.execute("SELECT id FROM analytics_raw_batches") as cursor:
+                (first_id,) = await cursor.fetchone()
+            await connection.execute("DELETE FROM analytics_raw_batches")
+            await connection.commit()
+        await runtime.create_writer().append_logs(archived_batch)
+        async with runtime.connection() as connection:
+            async with connection.execute("SELECT id FROM analytics_raw_batches") as cursor:
+                (second_id,) = await cursor.fetchone()
+            async with connection.execute(
+                "SELECT raw_batch_id FROM analytics_logs ORDER BY raw_batch_id, raw_record_index"
+            ) as cursor:
+                linked_ids = [row[0] for row in await cursor.fetchall()]
+    finally:
+        await runtime.shutdown()
+    assert second_id > first_id
+    assert linked_ids == [first_id, first_id, second_id, second_id]
+
+
+def test_archive_rejects_wrong_owner_without_disclosing_payload(
+    archived_batch: ArchivedLogWriteBatch,
+) -> None:
+    with pytest.raises(ValidationError, match="trusted owner") as error:
+        ArchivedLogWriteBatch.model_validate(
+            archived_batch.model_dump() | {"owner": OwnedLog(kind="owned", owner_id="wrong-owner")}
+        )
+    assert "archived-private-payload" not in str(error.value)
+    assert "archived-private-payload" not in repr(error.value)
+    assert "archived-private-payload" not in repr(archived_batch)

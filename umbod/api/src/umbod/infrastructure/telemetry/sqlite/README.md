@@ -10,4 +10,6 @@ description: File-backed analytics storage independent of application persistenc
 - [Schema](schema.py) — Database identity, transactional schema upgrades, and unavailable historical normalization evidence.
 - [Reader](reader.py) — Parameterized SQL counts, grouping, filtering, and time buckets.
 - [Writer](writer.py) — Atomic append-only analytics dimensions and versioned normalized records.
+- [Backfill](backfill.py) — Existing-schema connections and metadata-only selection.
+- [Replay](replay.py) — Reads eligible archives and replaces only the selected batch’s unified rows atomically.
 - [Values](values.py) — Exact UTC microsecond conversions.

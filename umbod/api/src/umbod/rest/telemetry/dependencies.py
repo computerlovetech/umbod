@@ -30,6 +30,10 @@ def get_telemetry_sink() -> TelemetrySink:
     return StdoutTelemetrySink()
 
 
+def get_raw_archive_enabled() -> bool:
+    raise RuntimeError("Telemetry raw archive configuration is not installed")
+
+
 def get_analytics_writer() -> TelemetryAnalyticsWriter:
     raise RuntimeError("Telemetry analytics writer is not installed")
 

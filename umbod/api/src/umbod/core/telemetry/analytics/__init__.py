@@ -25,6 +25,8 @@ from .ports import (
 )
 from .write_models import (
     AnalyticsLogRecord,
+    ArchivedLogWriteBatch,
+    LogAppendBatch,
     LogOwnership,
     LogWriteBatch,
     OwnedLog,
@@ -34,6 +36,8 @@ from .write_models import (
 
 __all__ = [
     "AnalyticsLogRecord",
+    "ArchivedLogWriteBatch",
+    "LogAppendBatch",
     "LogOwnership",
     "LogWriteBatch",
     "analytics_owner_id",

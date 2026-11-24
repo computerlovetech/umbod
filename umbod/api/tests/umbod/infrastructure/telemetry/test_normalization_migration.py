@@ -40,10 +40,17 @@ async def _version_two_database(path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_version_two_upgrade_preserves_rows_indexes_and_unknown_evidence_on_reopen(tmp_path: Path) -> None:
+@pytest.mark.parametrize("version", [2, 3])
+async def test_archive_upgrade_preserves_rows_indexes_and_unknown_evidence_on_reopen(
+    tmp_path: Path, version: int,
+) -> None:
     path = tmp_path / "analytics.sqlite3"
     await _version_two_database(path)
     async with aiosqlite.connect(path) as connection:
+        if version == 3:
+            await connection.execute("ALTER TABLE analytics_logs ADD COLUMN normalization_json TEXT")
+            await connection.execute("PRAGMA user_version = 3")
+            await connection.commit()
         async with connection.execute("SELECT rowid, * FROM analytics_logs ORDER BY rowid") as cursor:
             original_rows = await cursor.fetchall()
         async with connection.execute("SELECT name, sql FROM sqlite_master ORDER BY name") as cursor:
@@ -54,7 +61,7 @@ async def test_version_two_upgrade_preserves_rows_indexes_and_unknown_evidence_o
             await runtime.ensure_ready()
             async with runtime.connection() as connection:
                 async with connection.execute("PRAGMA user_version") as cursor:
-                    assert (await cursor.fetchone())[0] == 3
+                    assert (await cursor.fetchone())[0] == 4
                 async with connection.execute("SELECT rowid, * FROM analytics_logs ORDER BY rowid") as cursor:
                     rows = await cursor.fetchall()
                 async with connection.execute(
@@ -63,9 +70,10 @@ async def test_version_two_upgrade_preserves_rows_indexes_and_unknown_evidence_o
                     objects = await cursor.fetchall()
         finally:
             await runtime.shutdown()
-        assert [tuple(row[:-1]) for row in rows] == original_rows
-        assert [row[-1] for row in rows] == [None, None]
-        assert [tuple(row) for row in objects] == [row for row in original_objects if row[0] != "analytics_logs"]
+        legacy_width = len(original_rows[0])
+        assert [tuple(row[:legacy_width]) for row in rows] == original_rows
+        assert all(value is None for row in rows for value in row[legacy_width:])
+        assert all(row in [tuple(item) for item in objects] for row in original_objects if row[0] != "analytics_logs")
 
 
 @pytest.mark.asyncio

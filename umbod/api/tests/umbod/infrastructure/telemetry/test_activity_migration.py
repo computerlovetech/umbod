@@ -55,13 +55,14 @@ async def test_version_one_backfill_preserves_raw_rows_indexes_and_reopens_idemp
                 async with connection.execute("SELECT * FROM analytics_logs ORDER BY occurred_at_us") as cursor:
                     rows = await cursor.fetchall()
                 async with connection.execute("PRAGMA user_version") as cursor:
-                    assert (await cursor.fetchone())[0] == 3
+                    assert (await cursor.fetchone())[0] == 4
                 async with connection.execute("SELECT name, sql FROM sqlite_master WHERE type = 'index' ORDER BY name") as cursor:
-                    assert [tuple(row) for row in await cursor.fetchall()] == original_indexes
+                    indexes = [tuple(row) for row in await cursor.fetchall()]
+                assert all(index in indexes for index in original_indexes)
         finally:
             await runtime.shutdown()
         assert [row[:7] for row in rows] == original_rows
-        assert [row[9] for row in rows] == [None] * len(original_rows)
+        assert [row[9:] for row in rows] == [(None, None, None)] * len(original_rows)
         assert [row[7:9] for row in rows] == [
             ("file_read", "unknown"), ("tool_call", "unknown"),
             ("skill_activation", None), (None, None), (None, None),
