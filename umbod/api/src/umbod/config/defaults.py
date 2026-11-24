@@ -49,6 +49,6 @@ AUTH0_PERMISSION_GROUP_CLAIM: Final[str] = "permissions"
 
 ADMIN_JWT_HEADER_NAME: Final[str] = "X-Forwarded-Access-Token"
 ADMIN_REQUIRED_MEMBERSHIP: Final[str] = "umbod-admins"
-ADMIN_SIMULATED_USER_ID: Final[str] = "simulated-user"
+ADMIN_SIMULATED_USER_ID: Final[str] = "local-test-user"
 ADMIN_SIMULATED_USER_EMAIL: Final[str] = "test-user@example.com"
 ADMIN_SIMULATED_USER_NAME: Final[str] = "Test User"

@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from tests.persistence_runtime import create_inmemory_runtime
 from umbod.config import AppConfig
 from umbod.core.agent_behaviour import PatternAssessment, SubmitDiagnosticReport, create_agent_behaviour_service
-from umbod.core.callers import AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity
+from umbod.core.callers import LOCAL_DEVELOPMENT_ISSUER, AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity
 from umbod.core.persistence import Database
 from umbod.rest.authentication.verifiers import ProductionJwksJwtVerifier
 from umbod.rest.factories import ConnectorApiDependencyFactories
@@ -45,11 +45,14 @@ def headers(key: rsa.RSAPrivateKey, subject: str) -> dict[str, str]:
     return {"Authorization": "Bearer " + token}
 
 
-async def seed_report(database: Database, issuer: str, subject: str) -> UUID:
+async def seed_report(
+    database: Database, issuer: str, subject: str,
+    authentication: AuthenticationProvenance = AuthenticationProvenance.UPSTREAM_VERIFIED,
+) -> UUID:
     service = create_agent_behaviour_service(database)
     playbook = service.get_defaults().playbooks[0]
     instructions = await service.get_instructions(playbook.id)
-    caller = CallerContext(authentication=AuthenticationProvenance.UPSTREAM_VERIFIED, subject=SubjectIdentity(
+    caller = CallerContext(authentication=authentication, subject=SubjectIdentity(
         issuer=DeclaredIssuer(value=issuer), subject=subject,
     ))
     submission = SubmitDiagnosticReport(
@@ -90,6 +93,29 @@ def api(signing_key: rsa.RSAPrivateKey, tmp_path: Path, monkeypatch: pytest.Monk
         other_user_report = client.portal.call(seed_report, runtime.database, ISSUER, "bob")
         client.portal.call(seed_report, runtime.database, "https://another.identity.test/", "alice")
         yield ReportsApi(client, headers(signing_key, "alice"), headers(signing_key, "bob"), own_report, other_user_report)
+
+
+def test_default_local_rest_user_can_read_existing_mcp_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    deployment = tmp_path / "connectors.json"
+    deployment.write_text('{"connectors":[]}', encoding="utf-8")
+    monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
+    settings = AppConfig(rest={"metrics_enabled": False}, connector_store={"type": "inmemory"})
+    runtime = create_inmemory_runtime()
+    factories = ConnectorApiDependencyFactories.from_settings(settings, runtime, ())
+    with TestClient(create_app_with_dependency_factories(factories)) as client:
+        assert client.portal is not None
+        report_id = str(client.portal.call(
+            seed_report, runtime.database, LOCAL_DEVELOPMENT_ISSUER, "local-test-user", AuthenticationProvenance.LOCAL_TEST,
+        ))
+
+        listed = client.get(PATH)
+        detail = client.get(f"{PATH}/{report_id}")
+
+        assert listed.status_code == detail.status_code == 200
+        assert [item["report_id"] for item in listed.json()["items"]] == [report_id]
+        assert detail.json()["report_id"] == report_id
 
 
 def test_personal_list_limits_count_and_page_to_verified_owner(api: ReportsApi) -> None:

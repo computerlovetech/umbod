@@ -4,6 +4,7 @@ from fastmcp.server.auth import AccessToken
 from mcp.server.auth.middleware.auth_context import auth_context_var
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 
+from umbod.config import AppConfig
 from umbod.config.defaults import MCP_TEST_BEARER_TOKEN
 from umbod.core.agent_behaviour import CallerNotAuthorized
 from umbod.core.callers import LOCAL_DEVELOPMENT_ISSUER, AuthenticationProvenance, DeclaredIssuer, SubjectIdentity, UnavailableIssuer
@@ -28,6 +29,23 @@ def test_configured_local_test_provider_uses_reserved_development_issuer_only_wh
         else:
             with pytest.raises(CallerNotAuthorized):
                 policy.require()
+    finally:
+        auth_context_var.reset(reset)
+
+
+@pytest.mark.asyncio
+async def test_default_mcp_diagnostic_reporter_matches_simulated_rest_identity() -> None:
+    provider = SingleTestUserOAuthProvider(MCP_TEST_BEARER_TOKEN, "http://localhost")
+    capture = CurrentDiagnosticCallerCapture(FastMCP("diagnostic-caller", auth=provider))
+    token = await provider.load_access_token(MCP_TEST_BEARER_TOKEN)
+    assert token is not None
+    reset = auth_context_var.set(AuthenticatedUser(token))
+    try:
+        caller = DiagnosticCallerPolicy(capture, True).require()
+        assert caller.subject == SubjectIdentity(
+            issuer=DeclaredIssuer(value=LOCAL_DEVELOPMENT_ISSUER),
+            subject=AppConfig().admin_authentication.simulated_user_id,
+        )
     finally:
         auth_context_var.reset(reset)
 
