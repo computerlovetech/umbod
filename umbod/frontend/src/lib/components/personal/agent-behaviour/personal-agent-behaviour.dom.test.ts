@@ -22,19 +22,26 @@ test('uses owned report snapshots to filter and inspect entries without admin co
   const list = vi.fn(api.reports.list);
   const state = new PersonalReportsState({ list, get: api.reports.get });
   const target = document.createElement('div'); document.body.append(target);
-  const component = mount(PersonalAgentBehaviourView, { target, props: { state } });
+  let component = mount(PersonalAgentBehaviourView, { target, props: { state } });
   try {
     await vi.waitFor((): void => expect(target.querySelector('.report-row')?.textContent).toContain('review'));
     expect(target.textContent).not.toContain('Collection settings');
-    target.querySelector<HTMLButtonElement>('.report-row')!.click();
-    await vi.waitFor((): void => expect(target.querySelector('dialog')?.textContent).toContain('The agent retried with a different tool'));
+    const reportLink = target.querySelector<HTMLAnchorElement>('a.report-row');
+    expect(reportLink?.getAttribute('href')).toBe(`/insights/agent-behaviour?report=${api.rows[0].report_id}`);
+    const reportId = new URL(reportLink!.href).searchParams.get('report');
+    await unmount(component);
+    component = mount(PersonalAgentBehaviourView, { target, props: { state, reportId } });
+    await vi.waitFor((): void => expect(target.querySelector('article')?.textContent).toContain('The agent retried with a different tool'));
     expect(target.textContent).not.toContain('Delete entry');
-    expect(target.querySelector('[role="alertdialog"]')).toBeNull();
-    target.querySelector<HTMLButtonElement>('dialog button[aria-label="Close"]')!.click(); flushSync();
+    expect(target.querySelector('dialog')).toBeNull();
+    expect(target.querySelector('a.admin-back-link')?.getAttribute('href')).toBe('/insights/agent-behaviour');
+    await unmount(component);
+    component = mount(PersonalAgentBehaviourView, { target, props: { state } });
+    await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(2));
     choose(target, 'Reporting settings', 'Historical review');
     choose(target, 'Pattern', 'Missing context');
     choose(target, 'Status', 'Not observed');
-    expect(list).toHaveBeenCalledTimes(1);
+    expect(list).toHaveBeenCalledTimes(2);
     target.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor((): void => expect(list).toHaveBeenLastCalledWith({ limit: 25, offset: 0, playbook_id: 'review', pattern_id: 'missing-context', status: 'not_observed' }, expect.any(AbortSignal)));
     await vi.waitFor((): void => expect(target.querySelector('.report-row')?.textContent).toContain('Historical review'));
@@ -47,10 +54,8 @@ test('clears personal entries and filter choices when detail access is lost', as
   const get = async (): Promise<never> => { throw new HttpError(403, 'Forbidden', null); };
   const state = new PersonalReportsState({ list: api.reports.list, get });
   const target = document.createElement('div'); document.body.append(target);
-  const component = mount(PersonalAgentBehaviourView, { target, props: { state } });
+  const component = mount(PersonalAgentBehaviourView, { target, props: { state, reportId: api.rows[0].report_id } });
   try {
-    await vi.waitFor((): void => expect(target.querySelector('.report-row')).not.toBeNull());
-    target.querySelector<HTMLButtonElement>('.report-row')!.click();
     await vi.waitFor((): void => expect(target.querySelector('[role="alert"]')?.textContent).toContain('Your entries are no longer available'));
     expect(target.querySelector('form, .report-row, dialog')).toBeNull();
     expect(state.reports.reportingOptions).toEqual([]);

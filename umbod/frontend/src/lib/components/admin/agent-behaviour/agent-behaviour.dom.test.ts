@@ -1,10 +1,11 @@
 import { expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import { InMemoryAgentBehaviourApi } from '#lib/agent-behaviour/in-memory.test-support.js';
+import { deferred, InMemoryAgentBehaviourApi, storedReport } from '#lib/agent-behaviour/in-memory.test-support.js';
 import { ConfigurationState } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
 import { ReportsState } from '#lib/agent-behaviour/state/reports-state.svelte.js';
 import ConfigurationEditor from './ConfigurationEditor.svelte';
 import ReportsView from '#lib/components/shared/agent-behaviour/ReportsView.svelte';
+import ReportDetailView from '#lib/components/shared/agent-behaviour/ReportDetailView.svelte';
 
 function button(target: HTMLElement, label: string): HTMLButtonElement {
   const match = Array.from(target.querySelectorAll('button')).find((item): boolean => (item.getAttribute('aria-label') ?? item.textContent?.trim()) === label);
@@ -171,7 +172,7 @@ test('uses labelled shared dropdowns to draft filters before explicitly running 
   const state = new ReportsState(api.reports, vi.fn(), () => ({ patterns: [{ id: 'current-pattern', name: 'Current pattern name' }], playbooks: [{ id: 'current-settings', name: 'Current reporting name' }] }));
   await state.load();
   const target = document.createElement('div'); document.body.append(target);
-  const component = mount(ReportsView, { target, props: { state } }); flushSync();
+  const component = mount(ReportsView, { target, props: { state, listHref: '/insights/agent-behaviour' } }); flushSync();
   try {
     expect(target.querySelector('select')).toBeNull();
     const controls = target.querySelectorAll<HTMLButtonElement>('[role="combobox"]');
@@ -240,17 +241,57 @@ test('edits pattern polarity through the shared dropdown inside the pattern dial
   } finally { await unmount(component); target.remove(); state.dispose(); }
 });
 
+test('focuses a linked pattern once the report arrives', async (): Promise<void> => {
+  const api = new InMemoryAgentBehaviourApi();
+  const report = storedReport();
+  const pending = deferred<typeof report>();
+  const state = new ReportsState({ list: api.reports.list, get: () => pending.promise }, vi.fn());
+  const originalUrl = window.location.href;
+  window.history.replaceState(null, '', '#pattern-fallback');
+  const target = document.createElement('div'); document.body.append(target);
+  const component = mount(ReportDetailView, { target, props: { state, reportId: report.report_id, listHref: '/insights/agent-behaviour' } });
+  try {
+    expect(target.querySelector('#pattern-fallback')).toBeNull();
+    pending.resolve(report);
+    await vi.waitFor((): void => expect(document.activeElement?.id).toBe('pattern-fallback'));
+  } finally {
+    await unmount(component);
+    target.remove();
+    state.dispose();
+    window.history.replaceState(null, '', originalUrl);
+  }
+});
+
 test('renders original report snapshots and evidence only as escaped text', async (): Promise<void> => {
   const api = new InMemoryAgentBehaviourApi(); api.rows = [{ report_id: '00000000-0000-4000-8000-000000000001', received_at: '2026-06-01T00:00:00Z', expires_at: '2026-07-01T00:00:00Z', caller: { authentication: 'local_test', subject: { issuer: { value: 'issuer' }, subject: 'caller' } }, submission: { idempotency_key: '00000000-0000-4000-8000-000000000002', configuration_revision: 1, playbook_id: 'review', trigger: 'proactive', assessments: [{ pattern_id: 'first', status: 'observed', summary: 'Observed summary', evidence: ['<img src=x onerror=alert(1)>'] }, { pattern_id: 'second', status: 'not_observed', summary: '', evidence: [] }, { pattern_id: 'third', status: 'not_assessed', summary: 'Unavailable context', evidence: [] }] }, instructions: { configuration_revision: 1, playbook: { id: 'review', name: 'Original review', collection_instructions: 'Original collection instructions', pattern_ids: ['first', 'second', 'third'], enabled: true, allow_proactive: true }, patterns: ['first', 'second', 'third'].map((id) => ({ id, name: id, description: 'Original description', assessment_prompt: 'Original assessment', inclusion_criteria: 'Original inclusion', exclusion_criteria: 'Original exclusion', categories: [], polarity: 'neutral' as const, enabled: true })), reporting_guidance: 'Original guidance', resource_uri: 'umbod://agent-behaviour/playbooks/review' } }];
-  const state = new ReportsState(api.reports, vi.fn(), () => ({ patterns: [{ id: 'current-pattern', name: 'Current pattern name' }], playbooks: [{ id: 'current-settings', name: 'Current reporting name' }] })); await state.load();
-  const target = document.createElement('div'); document.body.append(target); const component = mount(ReportsView, { target, props: { state } }); flushSync();
-  await vi.waitFor((): void => expect(state.busy).toBe(false)); flushSync();
-  expect(target.querySelectorAll('.insight-query-fields [role="combobox"]')).toHaveLength(3);
-  expect(target.textContent).toContain('Previous reporting settings'); expect(target.textContent).toContain('Removed pattern');
-  expect(target.textContent).not.toContain('Revision'); expect(target.textContent).not.toContain(api.rows[0].report_id);
-  target.querySelector<HTMLButtonElement>('.report-row')!.click(); await vi.waitFor((): void => expect(state.detail).not.toBeNull()); flushSync();
-  expect(target.querySelector('.detail details:last-of-type')?.hasAttribute('open')).toBe(false);
-  expect(target.querySelector('img')).toBeNull(); expect(target.textContent).toContain('<img src=x onerror=alert(1)>'); expect(target.textContent).toContain('Not independently verified');
-  expect(Array.from(target.querySelectorAll('[data-status]')).map((node): string | null => node.textContent)).toEqual(['Observed', 'Not observed', 'Not assessed']); expect(target.textContent).toContain('Original inclusion'); expect(target.textContent).toContain('Original collection instructions'); expect(target.textContent).toContain('caller');
-  await unmount(component); target.remove(); state.dispose();
+  const state = new ReportsState(api.reports, vi.fn());
+  const target = document.createElement('div'); document.body.append(target);
+  const component = mount(ReportDetailView, { target, props: { state, reportId: api.rows[0].report_id, listHref: '/insights/agent-behaviour' } });
+  try {
+    await vi.waitFor((): void => expect(target.querySelector('h2')?.textContent).toBe('Original review'));
+    expect(target.querySelector('dialog')).toBeNull();
+    expect(target.querySelector('details[open]')).toBeNull();
+    expect(target.querySelector('img')).toBeNull();
+    expect(target.textContent).toContain('<img src=x onerror=alert(1)>');
+    expect(target.textContent).toContain('Not independently verified');
+    expect(target.textContent).not.toContain('No evidence supplied');
+    const links = Array.from(target.querySelectorAll('nav a'), (link): string | null => link.getAttribute('href'));
+    expect(links).toEqual(['#pattern-first', '#pattern-third', '#pattern-second']);
+    expect(links.map((link) => target.querySelector(`article${link}`)?.getAttribute('data-status'))).toEqual(['observed', 'not_assessed', 'not_observed']);
+    expect(target.querySelector('[aria-label="Assessment summary"]')?.textContent).toContain('1 not assessed');
+    expect(target.textContent).toContain('Original inclusion');
+    const technical = target.querySelector('section[aria-labelledby="technical-heading"]');
+    const overview = technical?.querySelector(':scope > dl');
+    expect(Array.from(overview?.querySelectorAll('dt') ?? [], (label): string | null => label.textContent)).toEqual([
+      'Report ID', 'Expires', 'Original configuration revision',
+    ]);
+    expect(overview?.textContent).toContain(api.rows[0].report_id);
+    const disclosures = Array.from(technical?.querySelectorAll('details') ?? []);
+    expect(disclosures.map((detail): string | null => detail.querySelector('summary')?.textContent ?? null)).toEqual([
+      'Caller and authentication', 'Original collection instructions', 'Original reporting guidance',
+    ]);
+    expect(disclosures[0].querySelector('dl')?.textContent).toContain('caller');
+    expect(disclosures[1].querySelector('p')?.textContent).toBe('Original collection instructions');
+    expect(disclosures[2].querySelector('p')?.textContent).toBe('Original guidance');
+  } finally { await unmount(component); target.remove(); state.dispose(); }
 });

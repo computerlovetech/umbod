@@ -245,7 +245,7 @@ describe('report inspection', (): void => {
     expect(state.reports.patterns).toEqual([]);
     state.dispose();
   });
-  test('stop fences pending reads and closes detail while start restores a reusable default query', async (): Promise<void> => {
+  test('stop fences pending reads and closes detail while start restores the applied query', async (): Promise<void> => {
     const api = new InMemoryAgentBehaviourApi(); api.rows = [report];
     const response = deferred<ReportPage>();
     const list = vi.spyOn(api.reports, 'list').mockReturnValueOnce(response.promise);
@@ -260,8 +260,8 @@ describe('report inspection', (): void => {
     expect(state.page.total).toBe(0); expect(state.busy).toBe(false);
     expect(state.detail).toBeNull(); expect(state.deleteConfirmation).toBe(false);
     state.start(); await vi.waitFor((): void => expect(state.busy).toBe(false));
-    expect(state.query).toEqual({ limit: 25, offset: 0 });
-    expect(state.draftQuery).toEqual({ limit: 25, offset: 0 });
+    expect(state.query).toEqual({ limit: 25, offset: 0, status: 'observed' });
+    expect(state.draftQuery).toEqual({ limit: 25, offset: 0, status: 'observed' });
     expect(state.page.total).toBe(1);
     state.dispose();
     expect(await state.runQuery()).toBe(false);
@@ -279,7 +279,20 @@ describe('report inspection', (): void => {
   });
   test('retains original snapshots and requires confirmation before deletion', async (): Promise<void> => {
     const api = new InMemoryAgentBehaviourApi(); api.rows = [report]; const state = new AdminReportsState(api.reports, vi.fn()); await state.load(); await state.open(report.report_id); api.current = { ...configuration, revision: 8 };
-    expect(state.detail?.instructions.configuration_revision).toBe(1); await state.remove(); expect(api.rows).toHaveLength(1); state.confirmDelete(); await state.remove(); expect(api.rows).toHaveLength(0); expect(state.detail).toBeNull(); expect(state.page.total).toBe(0);
+    expect(state.detail?.instructions.configuration_revision).toBe(1); expect(await state.remove()).toBe(false); expect(api.rows).toHaveLength(1); state.confirmDelete(); expect(await state.remove()).toBe(true); expect(api.rows).toHaveLength(0); expect(state.detail).toBeNull();
+  });
+  test('a deletion finishing after leaving the report does not request navigation', async (): Promise<void> => {
+    const api = new InMemoryAgentBehaviourApi(); api.rows = [report];
+    const response = deferred<void>();
+    const remove = vi.spyOn(api.reports, 'remove').mockReturnValue(response.promise);
+    const state = new AdminReportsState(api.reports, vi.fn());
+    await state.open(report.report_id);
+    state.confirmDelete();
+    const pending = state.remove();
+    state.close();
+    response.resolve(undefined);
+    expect(remove.mock.calls[0][1]?.aborted).toBe(true);
+    expect(await pending).toBe(false);
   });
   test('filters same assessments and resets offset', async (): Promise<void> => {
     const api = new InMemoryAgentBehaviourApi(); api.rows = [report]; const state = new ReportsState(api.reports, vi.fn()); await state.load(); state.paginate(1); await vi.waitFor((): void => expect(state.busy).toBe(false)); state.filter('status', 'not_assessed'); expect(state.query.offset).toBe(25); await state.runQuery(); expect(state.query.offset).toBe(0); expect(state.page.total).toBe(0);
@@ -289,6 +302,15 @@ describe('report inspection', (): void => {
     expect(state.patternName('fallback')).toBe('Removed pattern'); expect(state.reportingName('review')).toBe('Previous reporting settings');
     await state.open(report.report_id); expect(state.assessments[0].pattern?.name).toBe('Fallback');
     state.dispose(); const listing = vi.spyOn(api.reports, 'list'); state.filter('pattern_id', 'new-pattern'); await state.load(); expect(listing).not.toHaveBeenCalled();
+  });
+  test('invalid report links do not request an entry', async (): Promise<void> => {
+    const api = new InMemoryAgentBehaviourApi();
+    const get = vi.spyOn(api.reports, 'get');
+    const state = new ReportsState(api.reports, vi.fn());
+    await state.open('..');
+    expect(get).not.toHaveBeenCalled();
+    expect(state.detail).toBeNull();
+    expect(state.message).toBe('This entry is no longer available.');
   });
   test('ignores superseded list and detail responses', async (): Promise<void> => {
     const api = new InMemoryAgentBehaviourApi(); const old = deferred<ReportPage>(); vi.spyOn(api.reports, 'list').mockReturnValueOnce(old.promise); const state = new ReportsState(api.reports, vi.fn()); const pending = state.load(); await state.load(); old.resolve({ items: [], total: 99 }); await pending; expect(state.page.total).toBe(0);

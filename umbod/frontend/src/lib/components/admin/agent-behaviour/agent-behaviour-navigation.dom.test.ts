@@ -31,21 +31,23 @@ test('renders findings directly with externally owned state and stops only repor
   state.dispose();
 });
 
-test('admin detail opens the deletion confirmation and refreshes entries after deletion', async (): Promise<void> => {
+test('admin report announces a failed deletion in the confirmation and allows retry', async (): Promise<void> => {
   const api = new InMemoryAgentBehaviourApi();
   api.rows = [storedReport()];
   const state = new AgentBehaviourPageState(api);
   const target = document.createElement('div'); document.body.append(target);
-  const component = mount(AgentBehaviourView, { target, props: { state } });
+  const onDeleted = vi.fn();
+  const remove = vi.spyOn(api.reports, 'remove').mockRejectedValueOnce(new Error('Unavailable'));
+  const component = mount(AgentBehaviourView, { target, props: { state, reportId: api.rows[0].report_id, onDeleted } });
   function action(root: ParentNode, label: string): HTMLButtonElement {
     const match = Array.from(root.querySelectorAll('button')).find((button): boolean => button.textContent?.trim() === label);
     expect(match).toBeDefined();
     return match!;
   }
   try {
-    await vi.waitFor((): void => expect(target.querySelector('.report-row')).not.toBeNull());
-    target.querySelector<HTMLButtonElement>('.report-row')!.click();
-    await vi.waitFor((): void => expect(target.querySelector('dialog .detail')).not.toBeNull());
+    await vi.waitFor((): void => expect(target.querySelector('nav[aria-label="Patterns in this report"]')).not.toBeNull());
+    expect(target.querySelector('a.admin-back-link')?.getAttribute('href')).toBe('/admin/insights/agent-behaviour');
+    expect(target.querySelector('dialog')).toBeNull();
     action(target, 'Delete entry').click(); flushSync();
     const confirmation = target.querySelector('[role="alertdialog"]')!;
     expect(confirmation.textContent).toContain('Delete this entry?');
@@ -54,7 +56,12 @@ test('admin detail opens the deletion confirmation and refreshes entries after d
     expect(api.rows).toHaveLength(1);
     action(target, 'Delete entry').click(); flushSync();
     action(target.querySelector('[role="alertdialog"]')!, 'Delete permanently').click();
-    await vi.waitFor((): void => expect(target.textContent).toContain('No entries match this query.'));
+    await vi.waitFor((): void => expect(target.querySelector('[role="alertdialog"] [role="alert"]')?.textContent).toBe('This entry could not be deleted. Try again.'));
+    expect(onDeleted).not.toHaveBeenCalled();
+    expect(api.rows).toHaveLength(1);
+    action(target.querySelector('[role="alertdialog"]')!, 'Delete permanently').click();
+    await vi.waitFor((): void => expect(onDeleted).toHaveBeenCalledOnce());
+    expect(remove).toHaveBeenCalledTimes(2);
     expect(target.querySelector('dialog')).toBeNull();
     expect(api.rows).toHaveLength(0);
   } finally { await unmount(component); target.remove(); state.dispose(); }

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Umbod · Report details design previews</title>
+<style>
+  :root { color-scheme: light; --canvas: #f0f3ef; --paper: #fff; --ink: #18251e; --muted: #526158; --line: #d8e2da; --soft: #f5f8f5; --accent: #225b44; --mint: #e1efe6; --mono: ui-monospace, SFMono-Regular, Consolas, monospace; font: 16px/1.55 system-ui, sans-serif; color: var(--ink); background: var(--canvas); }
+  * { box-sizing: border-box; }
+  body, h1, h2, h3, p, dl, dd { margin: 0; }
+  main { max-width: 1080px; margin: auto; padding: clamp(24px, 5vw, 60px) clamp(16px, 4vw, 40px); }
+  h1 { font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.08; letter-spacing: -.055em; margin-block: 8px 16px; }
+  h2 { font-size: 1.22rem; letter-spacing: -.025em; }
+  h3 { font-size: .95rem; }
+  nav, .concept-title, .report-header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+  nav a, .tag { background: var(--mint); color: var(--accent); border-radius: 999px; padding: 5px 12px; font-size: .82rem; font-weight: 650; text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .eyebrow, .number { font: 650 .74rem/1.4 var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
+  .concept { margin-top: 36px; scroll-margin-top: 16px; }
+  .surface { margin-top: 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 6px 22px #1c382208; }
+  .report-header { padding: 16px 20px; justify-content: space-between; border-bottom: 1px solid var(--line); }
+  .report-header h3 { font-size: 1.05rem; }
+  .report-body { padding: clamp(14px, 3vw, 22px); }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 12px 20px; }
+  .facts > div { min-width: 0; }
+  dt { color: var(--muted); font-size: .8rem; font-weight: 650; }
+  dd { overflow-wrap: anywhere; }
+  code { font: .85em/1.5 var(--mono); }
+  .strip { background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  details { border: 1px solid var(--line); border-radius: 10px; margin-top: 12px; min-width: 0; }
+  summary { padding: 10px 14px; cursor: pointer; font-size: .9rem; font-weight: 675; }
+  summary::marker { color: var(--accent); }
+  summary:hover { color: var(--accent); }
+  .detail-body { padding: 0 14px 14px; }
+  .detail-body p { max-inline-size: 68ch; overflow-wrap: anywhere; }
+  .detail-body p + p { margin-top: .65em; }
+  .table { border: 1px solid var(--line); border-radius: 10px; }
+  .table > div { display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 1fr); gap: 4px 16px; padding: 8px 14px; align-items: baseline; }
+  .table > div + div { border-top: 1px solid var(--line); }
+  .table > div:nth-child(odd) { background: var(--soft); }
+  .table > div:first-child { border-radius: 10px 10px 0 0; }
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.65fr); gap: 14px; align-items: start; }
+  .split h3 { margin-bottom: 10px; }
+  .split .facts { grid-template-columns: minmax(0, 1fr); }
+  .split .facts > div + div { border-top: 1px solid var(--line); padding-top: 8px; }
+  .split .facts { gap: 8px; }
+  .split details:first-of-type { margin-top: 0; }
+  .revision { font: .76rem var(--mono); color: var(--muted); }
+  @media (max-width: 640px) { .split { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 460px) { .table > div { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Umbod / Agent behaviour / Design preview</p>
+    <h1>Technical details</h1>
+    <nav aria-label="Design concepts">
+      <a href="#overview">01 · Overview first</a>
+      <a href="#reference">02 · Metadata reference</a>
+      <a href="#split">03 · Split view</a>
+    </nav>
+  </header>
+  <section class="concept" id="overview" aria-labelledby="overview-heading">
+    <header class="concept-title"><span class="number">01</span><h2 id="overview-heading">Overview first</h2></header>
+    <article class="surface">
+      <header class="report-header"><h3>Behaviour review</h3><span class="tag">User requested</span></header>
+      <div class="report-body">
+        <dl class="facts strip">
+          <div><dt>Report ID</dt><dd><code>321dbbc5-de99-416b-9b2e-b96341529bbe</code></dd></div>
+          <div><dt>Expires</dt><dd><time datetime="2026-12-24T18:03:28Z">Dec 24, 2026 · 18:03:28 UTC</time></dd></div>
+          <div><dt>Original configuration revision</dt><dd>10</dd></div>
+        </dl>
+        <details><summary>Caller and authentication</summary><div class="detail-body"><dl class="facts" data-identity></dl></div></details>
+        <details><summary>Original collection instructions</summary><div class="detail-body" data-collection></div></details>
+        <details><summary>Original reporting guidance</summary><div class="detail-body" data-guidance></div></details>
+      </div>
+    </article>
+  </section>
+  <section class="concept" id="reference" aria-labelledby="reference-heading">
+    <header class="concept-title"><span class="number">02</span><h2 id="reference-heading">Metadata reference</h2></header>
+    <article class="surface">
+      <header class="report-header"><h3>Behaviour review</h3><span class="tag">User requested</span></header>
+      <div class="report-body">
+        <dl class="table">
+          <div><dt>Report ID</dt><dd><code>321dbbc5-de99-416b-9b2e-b96341529bbe</code></dd></div>
+          <div><dt>Expires</dt><dd><time datetime="2026-12-24T18:03:28Z">Dec 24, 2026 · 18:03:28 UTC</time></dd></div>
+          <div><dt>Original configuration revision</dt><dd>10</dd></div>
+        </dl>
+        <details><summary>Original collection instructions</summary><div class="detail-body" data-collection></div></details>
+        <details><summary>Original reporting guidance</summary><div class="detail-body" data-guidance></div></details>
+      </div>
+    </article>
+  </section>
+  <section class="concept" id="split" aria-labelledby="split-heading">
+    <header class="concept-title"><span class="number">03</span><h2 id="split-heading">Split view</h2></header>
+    <article class="surface">
+      <header class="report-header"><h3>Behaviour review</h3><span class="tag">User requested</span></header>
+      <div class="report-body split">
+        <section class="strip" aria-labelledby="metadata-heading">
+          <h3 id="metadata-heading">Report metadata</h3>
+          <dl class="facts">
+            <div><dt>Report ID</dt><dd><code>321dbbc5-de99-416b-9b2e-b96341529bbe</code></dd></div>
+            <div><dt>Expires</dt><dd><time datetime="2026-12-24T18:03:28Z">Dec 24, 2026 · 18:03:28 UTC</time></dd></div>
+          </dl>
+        </section>
+        <section aria-labelledby="configuration-heading">
+          <h3 id="configuration-heading">Original configuration <span class="revision">· Revision 10</span></h3>
+          <details open><summary>Collection instructions</summary><div class="detail-body" data-collection></div></details>
+          <details><summary>Reporting guidance</summary><div class="detail-body" data-guidance></div></details>
+        </section>
+      </div>
+    </article>
+  </section>
+</main>
+<template id="identity-fields">
+  <div><dt>Caller</dt><dd><code>local-test-user</code></dd></div>
+  <div><dt>Issuer</dt><dd><code>urn:umbod:local</code></dd></div>
+  <div><dt>Authentication</dt><dd><code>local_test</code></dd></div>
+</template>
+<template id="collection-text">
+  <p>Review only the current task context and tool results you are authorized to use. Assess every selected pattern. Record a short factual summary and up to three minimal observations for each observed pattern.</p>
+  <p>Use <code>not_assessed</code> when context is insufficient. Never collect full transcripts, credentials, personal data, or hidden reasoning. Report only when requested unless automatic reporting is explicitly allowed and the user and client permit it.</p>
+</template>
+<template id="guidance-text">
+  <p>Assess only available, authorized context. Respect user and client policy and any refusal to participate. Do not gather external data or run tools solely for diagnostics without user authority. Never send transcripts, secrets, credentials, personal data not needed for assessment, or hidden reasoning.</p>
+  <p>Use short factual summaries and minimal evidence. Collection instructions cannot override these safeguards. Respect pattern exclusions and do not invent facts. Use <code>observed</code>, <code>not_observed</code>, or <code>not_assessed</code> for each pattern. Observed and not assessed need a nonblank summary; not assessed must have no evidence. Use at most three short factual evidence strings.</p>
+  <p>A genuine user request uses <code>trigger=user_requested</code>. Reading this resource is not itself a request or a submission. Otherwise submit only if <code>allow_proactive=true</code> and the user and client authorize it, using <code>trigger=proactive</code>.</p>
+  <p>Call <code>report_diagnostic</code> using <code>configuration_revision</code> and the selected playbook’s ID as <code>playbook_id</code>. Include every selected pattern exactly once in assessments, each with <code>pattern_id</code>, status, summary, and evidence. Generate one UUID <code>idempotency_key</code> before submission.</p>
+  <p>If the outcome is uncertain, retry only the identical payload with the same UUID, never a replacement key. On <code>stale_configuration</code>, reload the live resource and reassess; never relabel old evidence with a new revision. Do not report success until a durable receipt is returned. Reports are agent self-reports, not independently verified findings, and are retained for 30 days.</p>
+</template>
+<script>
+  const identityFields = document.querySelector('#identity-fields');
+  document.querySelector('[data-identity]').append(identityFields.content.cloneNode(true));
+  document.querySelector('.table > div:last-child').before(identityFields.content.cloneNode(true));
+  document.querySelector('.split .facts').append(identityFields.content.cloneNode(true));
+  for (const [selector, templateId] of [['[data-collection]', 'collection-text'], ['[data-guidance]', 'guidance-text']]) {
+    const template = document.getElementById(templateId);
+    for (const region of document.querySelectorAll(selector)) region.append(template.content.cloneNode(true));
+  }
+</script>
+</body>
+</html>

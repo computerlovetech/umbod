@@ -18,7 +18,8 @@ description: Dashboard charts, insights, file previews, connector and tool prese
 ## Insights presentation
 
 - [AnalyticsWorkspace](../src/lib/components/shared/analytics/AnalyticsWorkspace.svelte) — Log queries, aggregate results, and session drill-down; callers inject state with the correct data scope.
-- [ReportsView](../src/lib/components/shared/agent-behaviour/ReportsView.svelte) — Diagnostic report filters, results, and evidence; callers supply read state and any permitted detail actions.
+- [ReportsView](../src/lib/components/shared/agent-behaviour/ReportsView.svelte) — Diagnostic report filters and linked results for personal and admin Insights.
+- [ReportDetailView](../src/lib/components/shared/agent-behaviour/ReportDetailView.svelte) — Indexed diagnostic report with saved evidence and criteria; callers provide read state and permitted actions.
 
 ## Files presentation
 

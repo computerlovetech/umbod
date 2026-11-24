@@ -20,16 +20,21 @@ export class AdminReportsState extends ReportsState {
   }
 
   confirmDelete = (): void => { if (this.detail && !this.detailBusy) this.deleteConfirmationValue = true; };
-  cancelDelete = (): void => { this.deleteConfirmationValue = false; };
+  cancelDelete = (): void => {
+    this.deleteConfirmationValue = false;
+    this.clearMessage();
+  };
 
-  remove = async (): Promise<void> => {
+  remove = async (): Promise<boolean> => {
     const detail = this.detail;
-    if (this.disposed || !detail || !this.deleteConfirmation || this.detailBusy) return;
+    if (this.disposed || !detail || !this.deleteConfirmation || this.detailBusy) return false;
+    let removed = false;
     await this.runDetailRequest(async (request): Promise<void> => {
       await this.adminApi.remove(detail.report_id, request.signal);
       if (!this.isCurrentDetailRequest(request)) return;
       this.close();
-      await this.load();
+      removed = true;
     }, 'This entry could not be deleted. Try again.');
+    return removed;
   };
 }

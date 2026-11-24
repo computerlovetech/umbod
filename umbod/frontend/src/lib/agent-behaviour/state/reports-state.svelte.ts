@@ -1,6 +1,6 @@
 import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { ReportReadsPort } from '../api';
-import { querySchema, type ReportQuery, type ReportPage, type DiagnosticReport } from '../domain/schemas';
+import { querySchema, reportSchema, type ReportQuery, type ReportPage, type DiagnosticReport } from '../domain/schemas';
 
 export interface ReportLabel {
   readonly id: string;
@@ -14,6 +14,11 @@ export interface ReportLabels {
   readonly seenDetail?: (detail: DiagnosticReport) => void;
   readonly clear?: () => void;
 }
+
+type AssessmentStatus = DiagnosticReport['submission']['assessments'][number]['status'];
+export const reportStatuses: Readonly<Record<AssessmentStatus, string>> = {
+  observed: 'Observed', not_observed: 'Not observed', not_assessed: 'Not assessed',
+};
 
 export class ReportsState {
   private queryValue = $state<ReportQuery>({ limit: 25, offset: 0 });
@@ -46,7 +51,16 @@ export class ReportsState {
   get pageNumber(): number { return Math.floor(this.queryValue.offset / this.queryValue.limit) + 1; }
   get assessments(): Array<DiagnosticReport['submission']['assessments'][number] & { pattern: DiagnosticReport['instructions']['patterns'][number] | undefined }> {
     const detail = this.detail;
-    return detail?.submission.assessments.map((assessment) => ({ ...assessment, pattern: detail.instructions.patterns.find((pattern): boolean => pattern.id === assessment.pattern_id) })) ?? [];
+    if (!detail) return [];
+    const order: Readonly<Record<AssessmentStatus, number>> = { observed: 0, not_assessed: 1, not_observed: 2 };
+    return detail.submission.assessments
+      .map((assessment) => ({ ...assessment, pattern: detail.instructions.patterns.find((pattern): boolean => pattern.id === assessment.pattern_id) }))
+      .sort((left, right): number => order[left.status] - order[right.status]);
+  }
+  get assessmentCounts(): Readonly<Record<AssessmentStatus, number>> {
+    const counts = { observed: 0, not_assessed: 0, not_observed: 0 };
+    for (const assessment of this.detailValue?.submission.assessments ?? []) counts[assessment.status]++;
+    return counts;
   }
   private failure = (error: unknown, fallback: string = 'Entries could not be loaded. Try again.'): void => {
     if (error instanceof AuthenticationRequiredError || (error instanceof HttpError && [401, 403].includes(error.status))) { this.revoke(); return; }
@@ -68,23 +82,23 @@ export class ReportsState {
     const parsed = querySchema.safeParse({ ...this.draftQueryValue, offset: 0 });
     if (!parsed.success) { this.messageValue = 'Select a valid entry filter.'; return false; }
     this.queryValue = parsed.data;
-    const statuses = { observed: 'Observed', not_observed: 'Not observed', not_assessed: 'Not assessed' };
-    this.summaryValue = [this.queryValue.playbook_id ? this.reportingName(this.queryValue.playbook_id) : 'All reporting settings', this.queryValue.pattern_id ? this.patternName(this.queryValue.pattern_id) : 'All patterns', this.queryValue.status ? statuses[this.queryValue.status] : 'All statuses'].join(' · ');
+    this.summaryValue = [this.queryValue.playbook_id ? this.reportingName(this.queryValue.playbook_id) : 'All reporting settings', this.queryValue.pattern_id ? this.patternName(this.queryValue.pattern_id) : 'All patterns', this.queryValue.status ? reportStatuses[this.queryValue.status] : 'All statuses'].join(' · ');
     return this.load();
   };
   start = (): void => {
     if (this.disposed) return;
-    this.stop();
-    this.resetQuery();
-    void this.runQuery();
+    void this.load();
   };
-  stop = (): void => {
+  stopList = (): void => {
     this.listRequest?.abort();
     this.listRequest = null;
-    this.close();
     this.pageValue = null;
-    this.labels().clear?.();
     this.busyValue = false;
+  };
+  stop = (): void => {
+    this.stopList();
+    this.close();
+    this.labels().clear?.();
     this.messageValue = '';
   };
   load = async (): Promise<boolean> => {
@@ -104,19 +118,26 @@ export class ReportsState {
   async open(id: string): Promise<void> {
     if (this.disposed) return;
     this.close(); this.messageValue = '';
+    if (!reportSchema.shape.report_id.safeParse(id).success) {
+      this.messageValue = 'This entry is no longer available.';
+      return;
+    }
     await this.runDetailRequest(async (request): Promise<void> => {
       const detail = await this.api.get(id, request.signal);
       if (!this.isCurrentDetailRequest(request)) return;
       this.labels().seenDetail?.(detail);
       this.detailValue = detail;
-    });
+    }, 'This entry could not be loaded.');
   }
 
   protected isCurrentDetailRequest(request: AbortController): boolean {
     return !this.disposed && this.detailRequest === request;
   }
 
+  protected clearMessage(): void { this.messageValue = ''; }
+
   protected async runDetailRequest(operation: (request: AbortController) => Promise<void>, fallback?: string): Promise<void> {
+    this.clearMessage();
     const request = new AbortController(); this.detailRequest = request; this.detailBusyValue = true;
     try { await operation(request); }
     catch (error) { if (this.isCurrentDetailRequest(request)) this.failure(error, fallback); }
