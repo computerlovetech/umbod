@@ -118,8 +118,9 @@ def test_browser_api_uses_authenticated_python_router_without_html_redirect() ->
     for router in ("umbod-browser-api", "umbod-browser-api-secure"):
         prefix = f"traefik.http.routers.{router}"
         if f"{prefix}.rule" in api_labels:
-            assert api_labels[f"{prefix}.rule"] == (
+            assert api_labels[f"{prefix}.rule"].replace("$$", "$") == (
                 "Host(`umbod-admin.computerlove.tech`) && PathPrefix(`/api/`)"
+                " && !PathRegexp(`^/api/install/v1/(codex|claude-code)/telemetry/redeem/?$`)"
             )
             assert api_labels[f"{prefix}.middlewares"].split(",") in [
                 ["umbod-browser-response@docker", "umbod-auth@docker"],
