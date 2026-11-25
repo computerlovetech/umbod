@@ -133,17 +133,27 @@ async def test_legacy_explicit_true_approves_with_safe_message(
     AcceptedElicitation(data=FileDeletionConfirmation(value=False)),
     AcceptedElicitation(data=True), AcceptedElicitation(data=1),
     AcceptedElicitation(data="true"), DeclinedElicitation(), CancelledElicitation(),
-    RuntimeError("secret-canary unsupported"), TimeoutError("secret-canary timeout"),
     SimpleNamespace(action="decline", data=True), None,
 ])
-async def test_legacy_rejects_nonapproval_and_sanitizes_errors(
+async def test_legacy_rejects_nonapproval(
     approval: McpFilesystemDeletionApproval, response: Any
 ) -> None:
     context = ApprovalContext(False)
     context.response = response
-    with pytest.raises(FileDeletionApprovalDenied) as raised:
+    with pytest.raises(FileDeletionApprovalDenied):
         await _confirm(approval, context)
-    assert "secret-canary" not in str(raised.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_type", [RuntimeError, TimeoutError])
+async def test_legacy_propagates_unexpected_elicitation_failures(
+    approval: McpFilesystemDeletionApproval, error_type: type[Exception],
+) -> None:
+    context = ApprovalContext(False)
+    context.response = error_type("unexpected elicitation failure")
+    with pytest.raises(error_type) as raised:
+        await _confirm(approval, context)
+    assert raised.value is context.response
 
 
 @pytest.mark.asyncio

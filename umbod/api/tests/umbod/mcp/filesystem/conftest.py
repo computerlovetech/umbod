@@ -41,6 +41,7 @@ from umbod.mcp.filesystem.discovery import FilesystemDiscoveryRuntime
 from tests.support import InMemoryMcpMetricsRecorder
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.logging.invocation.sink import McpToolInvocationLogSink
 from umbod.mcp.signals import McpInvocationPublisher
 
 
@@ -131,7 +132,9 @@ async def filesystem_state() -> AsyncIterator[FilesystemState]:
         await runtime.shutdown()
 
 
-def create_filesystem_server(state: FilesystemState, filtered: bool) -> FilesystemMcp:
+def create_filesystem_server(
+    state: FilesystemState, filtered: bool, *, invocation_logs: McpToolInvocationLogSink | None = None,
+) -> FilesystemMcp:
     application_failures = create_application_failure_signal()
     server = FastMCP(request_state_security=RequestStateSecurity(
         keys=[secrets.token_urlsafe(48)], ttl=300.0, audience="filesystem-delete-test",
@@ -139,8 +142,12 @@ def create_filesystem_server(state: FilesystemState, filtered: bool) -> Filesyst
     visibility = FilesystemToolVisibility(state.callers, state.runtime) if filtered else state.visibility
     if filtered:
         server.add_middleware(FilesystemVisibilityMiddleware(visibility))
+    signals = create_mcp_signals(
+        Mock() if invocation_logs is None else invocation_logs, state.metrics, Mock(),
+        application_failures=application_failures,
+    )
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), state.metrics, Mock(), application_failures=application_failures))),
+        McpObservedToolRegistrar(server, McpInvocationPublisher(signals)),
         state.callers, state.services, visibility, state.approval,
     )
     register_filesystem_resources(server, state.callers, state.services)

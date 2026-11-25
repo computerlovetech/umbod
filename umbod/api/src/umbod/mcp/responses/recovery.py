@@ -73,6 +73,8 @@ def _operation_recovery(
     early_strategy = _EARLY_STRATEGIES.get(tool_name)
     if early_strategy is not None:
         return early_strategy(state)
+    if error_code == "filesystem_delete_approval_unavailable":
+        return ("Only start a new deletion on explicit user request from an MCP client that can deliver the confirmation prompt.",)
     if error_code == "filesystem_delete_approval_denied":
         return (
             "No deletion was authorized by this failed approval. Do not fabricate acceptance, modify continuation state, or replay a consumed continuation.",

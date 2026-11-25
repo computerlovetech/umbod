@@ -2,18 +2,19 @@ import json
 from collections.abc import Callable
 from typing import Union
 
-from fastmcp.exceptions import AuthorizationError
 from fastmcp.server.context import Context
 from fastmcp.server.dependencies import get_access_token, get_context
 from fastmcp.tools import InputRequiredToolResult
-from mcp.shared.exceptions import MCPError
+from mcp.shared.exceptions import NoBackChannelError
 from mcp.types import ElicitRequest, ElicitRequestFormParams, ElicitResult, InputRequiredResult
 
 from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem.browsing import NodeSummary
 from umbod.core.invocation import ApprovalNonceConsumption, ApprovalNonceStore
 
-from .approval_state import FileDeletionApprovalDenied, FileDeletionApprovalStateCodec
+from .approval_state import (
+    FileDeletionApprovalDenied, FileDeletionApprovalStateCodec, FileDeletionApprovalUnavailable,
+)
 from .models import DeleteFileCommand, FileDeletionConfirmation
 from .ports import FileDeletionApproval
 
@@ -34,29 +35,27 @@ class McpFilesystemDeletionApproval:
     async def confirm(
         self, caller: CallerSnapshot, command: DeleteFileCommand, node: NodeSummary
     ) -> Union[FileDeletionApproval, InputRequiredToolResult]:
+        context = get_context()
+        request = getattr(context.request_context, "request", None)
+        if getattr(getattr(request, "params", None), "name", None) == "execute_code":
+            raise FileDeletionApprovalDenied("File deletion approval unavailable")
+        message = self._message(command, node)
+        if context._is_modern_protocol():
+            token = get_access_token()
+            client_id = token.client_id if token else ""
+            return await self._confirm_modern(context, caller, command, client_id, message)
         try:
-            context = get_context()
-            request = getattr(context.request_context, "request", None)
-            if getattr(getattr(request, "params", None), "name", None) == "execute_code":
-                raise FileDeletionApprovalDenied("File deletion approval unavailable")
-            message = self._message(command, node)
-            if context._is_modern_protocol():
-                token = get_access_token()
-                client_id = token.client_id if token else ""
-                return await self._confirm_modern(context, caller, command, client_id, message)
             response = await context.elicit(message, FileDeletionConfirmation)
-            confirmation = getattr(response, "data", None)
-            if (
-                getattr(response, "action", None) != "accept"
-                or not isinstance(confirmation, FileDeletionConfirmation)
-                or confirmation.value is not True
-            ):
-                raise FileDeletionApprovalDenied("File deletion approval denied")
-            return FileDeletionApproval.APPROVED
-        except (MCPError, AuthorizationError):
-            raise
-        except Exception:
-            raise FileDeletionApprovalDenied("File deletion approval denied") from None
+        except NoBackChannelError:
+            raise FileDeletionApprovalUnavailable() from None
+        confirmation = getattr(response, "data", None)
+        if (
+            getattr(response, "action", None) != "accept"
+            or not isinstance(confirmation, FileDeletionConfirmation)
+            or confirmation.value is not True
+        ):
+            raise FileDeletionApprovalDenied("File deletion approval denied")
+        return FileDeletionApproval.APPROVED
 
     async def _confirm_modern(
         self,

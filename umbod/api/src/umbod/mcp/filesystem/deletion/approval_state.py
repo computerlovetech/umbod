@@ -12,6 +12,10 @@ class FileDeletionApprovalDenied(Exception):
     pass
 
 
+class FileDeletionApprovalUnavailable(FileDeletionApprovalDenied):
+    pass
+
+
 class FileDeletionApprovalState(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 

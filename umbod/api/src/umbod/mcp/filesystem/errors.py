@@ -10,7 +10,7 @@ from umbod.mcp.tools.errors import (
     BuiltinToolApprovalDenied, BuiltinToolAuthorizationDenied, BuiltinToolError, BuiltinToolRejected,
 )
 
-from .deletion.approval_state import FileDeletionApprovalDenied
+from .deletion.approval_state import FileDeletionApprovalDenied, FileDeletionApprovalUnavailable
 
 from umbod.core.filesystem.authorization.errors import PermissionDenied
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
@@ -78,6 +78,10 @@ def filesystem_resource_operation() -> Iterator[None]:
 
 _OPERATION_FAILED = "filesystem_operation_failed: Filesystem operation failed. A write may have completed; check the destination before retrying. If this persists, contact the administrator with the request ID and server version."
 _DELETION_APPROVAL_DENIED = "filesystem_delete_approval_denied: File deletion requires explicit human approval"
+_DELETION_APPROVAL_UNAVAILABLE = (
+    "filesystem_delete_approval_unavailable: Deletion cancelled: approval is required, "
+    "but the confirmation prompt could not be delivered. No files were deleted."
+)
 
 
 def _details(message: str) -> ToolErrorDetails:
@@ -97,6 +101,7 @@ _ERROR_DETAILS.update({
     UploadReceiptUnavailable: _details("filesystem_upload_receipt_unavailable: Legacy upload has no verified receipt."),
 })
 _DELETION_APPROVAL_DETAILS = _details(_DELETION_APPROVAL_DENIED)
+_DELETION_APPROVAL_UNAVAILABLE_DETAILS = _details(_DELETION_APPROVAL_UNAVAILABLE)
 _OPERATION_FAILED_DETAILS = _details("filesystem_operation_failed: Filesystem operation failed.")
 _ERROR_RETRIES = {
     SharingPolicyUnavailable: RetryAdvice.NEVER,
@@ -119,6 +124,10 @@ def filesystem_preflight() -> Iterator[None]:
         yield
     except (MCPError, AuthorizationError):
         raise
+    except FileDeletionApprovalUnavailable:
+        raise BuiltinToolApprovalDenied(
+            _DELETION_APPROVAL_UNAVAILABLE, details=_DELETION_APPROVAL_UNAVAILABLE_DETAILS,
+        ) from None
     except FileDeletionApprovalDenied:
         raise BuiltinToolApprovalDenied(
             _DELETION_APPROVAL_DENIED, details=_DELETION_APPROVAL_DETAILS,

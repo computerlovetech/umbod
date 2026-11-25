@@ -1,7 +1,9 @@
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from io import StringIO
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
 import httpx
@@ -16,12 +18,15 @@ from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem import (
     ContentRef, MissingNode, OwnershipNotFound,
 )
+from umbod.core.filesystem.deletion.service import DeletionService
 from umbod.infrastructure import create_access_control_driver, create_namespace_driver
 from tests.umbod.mcp.test_http_transport import HEADERS, rpc_result
 from umbod.mcp.http_transport import MAX_MCP_REQUEST_BODY_BYTES, create_mcp_http_app
+from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
+from umbod.mcp.logging.invocation.sink import StdoutMcpToolInvocationLogSink
 from umbod.mcp.signals import McpInvocationPublisher
 
-from .conftest import FilesystemMcp, caller_snapshot
+from .conftest import FilesystemMcp, FilesystemState, caller_snapshot, create_filesystem_server
 from .test_browsing import create_node
 from .test_visibility import shared_namespace, save_namespace_access, select_caller
 from umbod.core.filesystem.namespaces.models import SharedNamespaceView
@@ -182,10 +187,16 @@ async def test_denied_approval_preserves_node_and_namespace_authority(
 
 @pytest.mark.asyncio
 async def test_stateless_legacy_http_cannot_delete_without_backchannel(
-    filesystem_invocation_mcp: FilesystemMcp,
+    filesystem_state: FilesystemState, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
 ) -> None:
-    filesystem = filesystem_invocation_mcp
-    node_id, policy = await prepare_file(filesystem)
+    output = StringIO()
+    filesystem = create_filesystem_server(
+        filesystem_state, filtered=False,
+        invocation_logs=StdoutMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter(), output),
+    )
+    delete_file = AsyncMock()
+    monkeypatch.setattr(DeletionService, "delete_file", delete_file)
+    node_id, _ = await prepare_file(filesystem)
     namespace = create_namespace_driver(database=filesystem.database)
     policies = create_access_control_driver(database=filesystem.database)
     before = await namespace.get_node(UUID(node_id))
@@ -202,9 +213,19 @@ async def test_stateless_legacy_http_cannot_delete_without_backchannel(
             })
             result = rpc_result(response)
     assert result["isError"]
-    assert "Cannot send 'elicitation/create'" in result["content"][0]["text"]
-    assert "no back-channel for server-initiated requests" in result["content"][0]["text"]
-    assert "schema_version" not in result.get("_meta", {}).get("computerlove.tech/umbod", {})
+    assert "Deletion cancelled: approval is required, but the confirmation prompt could not be delivered. No files were deleted." in result["content"][0]["text"]
+    assert "Only start a new deletion on explicit user request" in result["content"][1]["text"]
+    guidance = result["_meta"]["computerlove.tech/umbod"]["guidance"]
+    assert guidance["error"]["code"] == "filesystem_delete_approval_unavailable"
+    assert guidance["operation_state"] == "not_started"
+    assert guidance["recovery"]["retry"] == "never"
+    delete_file.assert_not_called()
+
+    records = [json.loads(line) for line in output.getvalue().splitlines()]
+    deletion_record, = (record for record in records if record["attributes"]["mcp.tool.name"] == TOOL)
+    assert deletion_record["severity_text"] == "WARNING"
+    assert deletion_record["attributes"]["mcp.failure.category"] == "authorization"
+    assert all(record.levelname not in {"ERROR", "CRITICAL"} for record in caplog.records)
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
     assert await policies.list_grants(UUID(node_id)) == []
