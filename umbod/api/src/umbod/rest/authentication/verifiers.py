@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError
 from umbod.core.connectors.downstream_mcp.adapters.identity import simulated_user_claims
-from umbod.core.connectors.downstream_mcp.personal_connections.development_identity_models import SimulatedUserIdentity
+from umbod.core.connectors.downstream_mcp.personal.connections.development_identity_models import SimulatedUserIdentity
 
 
 class ProductionJwksJwtVerifier:

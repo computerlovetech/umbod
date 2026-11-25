@@ -1,7 +1,12 @@
 from umbod.core.configuration.persistence import TextCipher
 from umbod.core.persistence import AllFields, AllOf, DatabaseSession, Equals, Query, Unordered
 
-from ..personal_connections.models import MissingPersonalConnection, PersonalConnection, PersonalConnectionKey, PersonalConnectionState
+from ..personal.connections import (
+    MissingPersonalConnection,
+    PersonalConnection,
+    PersonalConnectionKey,
+    PersonalConnectionState,
+)
 from .schema import PERSONAL_CONNECTION_TABLE, PERSONAL_CONNECTION_NAMESPACE, PERSONAL_CONNECTION_SUBJECT, PERSONAL_CONNECTION_CONNECTOR_ID
 
 

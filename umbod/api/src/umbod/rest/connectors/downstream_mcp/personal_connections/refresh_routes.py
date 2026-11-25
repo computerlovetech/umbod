@@ -4,10 +4,17 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict
 
-from umbod.core.connectors.downstream_mcp.personal_connections.inventory_models import PersonalConnectorUnavailable
-from umbod.core.connectors.downstream_mcp.personal_connections.models import MissingCanonicalPrincipal
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_models import PersonalRefreshChanged, PersonalRefreshConflict, PersonalRefreshReconnectRequired, PersonalRefreshUnsupported
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_service import PersonalRefreshService
+from umbod.core.connectors.downstream_mcp.personal.connections import (
+    MissingCanonicalPrincipal,
+    PersonalConnectorUnavailable,
+)
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh import (
+    PersonalRefreshChanged,
+    PersonalRefreshConflict,
+    PersonalRefreshReconnectRequired,
+    PersonalRefreshService,
+    PersonalRefreshUnsupported,
+)
 
 from .oauth_dependencies import require_personal_oauth
 from .refresh_dependencies import get_personal_refresh_service

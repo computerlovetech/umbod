@@ -1,4 +1,4 @@
-from umbod.core.connectors.downstream_mcp.personal_connections import InMemoryPersonalConnectionStore
+from umbod.core.connectors.downstream_mcp.personal.connections import InMemoryPersonalConnectionStore
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService

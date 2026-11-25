@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, StrictBool
 
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalConnectorSelection
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalConnectorSelection
 
 
 class PersonalEnablementRequest(BaseModel):

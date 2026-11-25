@@ -8,12 +8,16 @@ from umbod.core.messaging.discovery_events import connector_discovery_changed_ev
 from umbod.core.messaging.stores.event_stream import append_event_in_session
 from umbod.core.persistence import AllOf, Database, DatabaseSession, Equals, TransactionMode, UpsertCommand
 
-from ..personal_connections.models import PersonalConnectionKey
-from ..personal_connections.runtime_models import PersonalAuthorizationRequired, PersonalInventoryRefreshRequired, PersonalRuntimeAuthorizationQuery, PersonalRuntimeTarget, PersonalRuntimeUnavailable
-from ..personal_tools import (
+from ..personal.connections import PersonalConnectionKey, RejectPersonalAuthorization
+from ..personal.tools import (
     AdmitPersonalTool,
     MissingInventoryRevision,
+    PersonalAuthorizationRequired,
+    PersonalInventoryRefreshRequired,
     PersonalInventoryRevision,
+    PersonalRuntimeAuthorizationQuery,
+    PersonalRuntimeTarget,
+    PersonalRuntimeUnavailable,
     PersonalToolAdmission,
     PersonalToolObservation,
     PersonalToolRecord,
@@ -21,7 +25,6 @@ from ..personal_tools import (
     SavePersonalToolObservation,
     contract_fingerprint,
 )
-from ..personal_connections.health_models import RejectPersonalAuthorization
 from .personal_authorization_rejections import record_rejection
 from .personal_runtime_authorizations import load_personal_runtime_binding, load_personal_runtime_target
 from .personal_discovery_projection import AvailableDiscovery, DISCOVERY_AVAILABILITY_ADAPTER, discovery_filter

@@ -23,11 +23,11 @@ from tests.umbod.mcp.connectors.downstream_mcp.personal_runtime_support import e
 from tests.umbod.mcp.connectors.downstream_mcp.test_personal_execution_pipeline import InvocationLog, provider_for
 from tests.umbod.mcp.connectors.downstream_mcp.signal_support import invocation_signals
 from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
-from umbod.core.connectors.downstream_mcp.personal_connections.models import SetPersonalConnectionEnabled
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory
-from umbod.core.connectors.downstream_mcp.personal_tools.models import PersonalToolDiscoveryQuery, PersonalToolRecord
-from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolDiscoveryReader
-from umbod.core.connectors.downstream_mcp.personal_tools.service import PersonalToolDiscoveryService
+from umbod.core.connectors.downstream_mcp.personal.connections.models import SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalToolInventory
+from umbod.core.connectors.downstream_mcp.personal.tools.models import PersonalToolDiscoveryQuery, PersonalToolRecord
+from umbod.core.connectors.downstream_mcp.personal.tools.ports import PersonalToolDiscoveryReader
+from umbod.core.connectors.downstream_mcp.personal.tools.service import PersonalToolDiscoveryService
 from umbod.core.invocation import ConnectorInvocation, PermitAllConnectorInvocationPolicy
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperations

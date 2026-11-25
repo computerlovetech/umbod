@@ -5,11 +5,18 @@ from pydantic import BaseModel, ConfigDict
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, PersonalConnectionKey
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryService, PersonalToolPolicyUnavailable
+from umbod.core.connectors.downstream_mcp.personal.connections import (
+    PersonalAuthorizationHealthUnavailable,
+    PersonalCaller,
+    PersonalConnectionKey,
+)
+from umbod.core.connectors.downstream_mcp.personal.tools import (
+    PersonalMcpTransport,
+    PersonalRuntimeAuthorizationQuery,
+    PersonalRuntimeUnavailable,
+    PersonalToolDiscoveryService,
+    PersonalToolPolicyUnavailable,
+)
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
 

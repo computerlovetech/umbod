@@ -8,15 +8,15 @@ from pydantic import SecretStr
 
 from tests.umbod.core.connectors.downstream_mcp.test_personal_refresh import refresh_store, reservation
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import authorize_personal_grant
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthQuery
-from umbod.core.connectors.downstream_mcp.personal_connections.inventory_models import PersonalConnectorQuery, PersonalConnectorSelection
-from umbod.core.connectors.downstream_mcp.personal_connections.models import Authorized
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_models import PersonalRefreshConflict, PersonalRefreshReconnectRequired, PersonalRefreshUnavailable
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_ports import PersonalRefreshStore
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_provider_models import PersonalOAuthRefreshDenied, RefreshPersonalOAuth
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_service import PersonalRefreshService
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthFailureEvidence
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import authorize_personal_grant
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import PersonalAuthorizationHealthQuery
+from umbod.core.connectors.downstream_mcp.personal.connections.inventory_models import PersonalConnectorQuery, PersonalConnectorSelection
+from umbod.core.connectors.downstream_mcp.personal.connections.models import Authorized
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.models import PersonalRefreshConflict, PersonalRefreshReconnectRequired, PersonalRefreshUnavailable
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.ports import PersonalRefreshStore
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.provider_models import PersonalOAuthRefreshDenied, RefreshPersonalOAuth
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.service import PersonalRefreshService
+from umbod.core.connectors.downstream_mcp.personal.oauth.failures import OAuthFailureEvidence
 from umbod.core.invocation.diagnostics import NoDownstreamResponse
 
 __all__ = ["runtime_case", "refresh_store"]

@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from umbod.core.configuration.persistence import TextCipher
 from umbod.core.persistence import AllOf, DatabaseSession, DeleteQuery, Equals
 
-from ..personal_connections.models import Authorized, PersonalConnection, PersonalConnectionKey
+from ..personal.connections import Authorized, PersonalConnection, PersonalConnectionKey
 from .personal_authorization_health_schema import PERSONAL_AUTHORIZATION_REJECTION_CONNECTOR_ID, PERSONAL_AUTHORIZATION_REJECTION_NAMESPACE, PERSONAL_AUTHORIZATION_REJECTION_SUBJECT, PERSONAL_AUTHORIZATION_REJECTION_TABLE
 from .queries import query_all
 

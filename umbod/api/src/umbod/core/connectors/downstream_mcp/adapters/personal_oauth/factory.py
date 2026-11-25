@@ -1,18 +1,18 @@
 from collections.abc import AsyncIterator
 from ...management import utc_clock
 
-from ...personal_oauth_applications.ports import PersonalOAuthApplicationStore
+from ...personal.oauth.applications import PersonalOAuthApplicationStore
 from contextlib import asynccontextmanager
 
-from ...personal_connections.oauth_ports import PersonalOAuthProvider
-from ...personal_connections.refresh_provider_ports import PersonalOAuthRefreshProvider
+from ...personal.oauth.authorization import PersonalOAuthProvider
+from ...personal.oauth.refresh import PersonalOAuthRefreshProvider
 from .callback import CallbackURLPolicy
 from .network import SafeOAuthHttpTransport
 from umbod.core.network import public_http_connection_pool
 from .provider import DiscoveredPersonalOAuthProvider
 from .refresh import StoredPersonalOAuthRefreshProvider
 from .setup import DiscoveredPersonalOAuthSetupProvider
-from ...personal_oauth_setup.ports import PersonalOAuthSetupProvider
+from ...personal.oauth.setup import PersonalOAuthSetupProvider
 
 
 @asynccontextmanager

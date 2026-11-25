@@ -13,12 +13,12 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import
 from umbod.core.network import PublicAddressNetworkBackend
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthHttpTransport
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import (
     PersonalOAuthProviderFailure,
     PersonalOAuthProviderUnsupported,
     PreparePersonalOAuth,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthProvider
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.ports import PersonalOAuthProvider
 
 from .conftest import response
 from .test_network import MemoryNetwork, MemoryStream, request

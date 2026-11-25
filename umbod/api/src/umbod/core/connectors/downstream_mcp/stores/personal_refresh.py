@@ -15,10 +15,24 @@ from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE, CON
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE, PUBLICATION_STATE_CONNECTOR_ID
 
 from ..models import uses_personal_oauth
-from ..personal_connections.authorization_models import ExpiringPersonalToken, PersonalOAuthGrant, PresentPersonalRefreshToken
-from ..personal_connections.grant_binding import validated_bound_grant
-from ..personal_connections.models import Authorized, PersonalConnection, PersonalConnectionKey
-from ..personal_connections.refresh_models import CompletePersonalRefresh, FailPersonalRefresh, PersonalRefreshChanged, PersonalRefreshClaim, PersonalRefreshCommand, PersonalRefreshConflict, PersonalRefreshReconnectRequired, PersonalRefreshUnsupported, ReservePersonalRefresh
+from ..personal.oauth.grants import (
+    ExpiringPersonalToken,
+    PersonalOAuthGrant,
+    PresentPersonalRefreshToken,
+    validated_bound_grant,
+)
+from ..personal.connections import Authorized, PersonalConnection, PersonalConnectionKey
+from ..personal.oauth.refresh import (
+    CompletePersonalRefresh,
+    FailPersonalRefresh,
+    PersonalRefreshChanged,
+    PersonalRefreshClaim,
+    PersonalRefreshCommand,
+    PersonalRefreshConflict,
+    PersonalRefreshReconnectRequired,
+    PersonalRefreshUnsupported,
+    ReservePersonalRefresh,
+)
 from .personal_authorization_rejection_records import authorization_fingerprint, clear_rejection, matching_rejection
 from .personal_connection_records import load_personal_connection
 from .personal_oauth_configurations import load_personal_oauth_configuration

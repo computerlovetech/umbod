@@ -14,8 +14,8 @@ from umbod.config.app import (
     PersonalConnectionsConfig,
     RuntimeConfig,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalCaller, UnavailablePersonalCaller, ResolvedPersonalIdentity
-from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalCaller, UnavailablePersonalCaller, ResolvedPersonalIdentity
+from umbod.core.connectors.downstream_mcp.personal.connections.principal import canonical_principal
 from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCallerProvider

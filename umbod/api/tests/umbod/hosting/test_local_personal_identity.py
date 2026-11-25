@@ -6,9 +6,9 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 
 from umbod.config.app import AppConfig
-from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import local_personal_identity_enabled
-from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
-from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import ResolvedPersonalIdentity
+from umbod.core.connectors.downstream_mcp.personal.connections.development_identity import local_personal_identity_enabled
+from umbod.core.connectors.downstream_mcp.personal.connections.principal import canonical_principal
+from umbod.core.connectors.downstream_mcp.personal.connections.identity_models import ResolvedPersonalIdentity
 from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.hosting import JwtClaims, create_rest_app

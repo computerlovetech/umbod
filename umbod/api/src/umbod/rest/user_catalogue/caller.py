@@ -6,9 +6,12 @@ from pydantic import BaseModel, ConfigDict
 from umbod.core.callers import AuthenticationProvenance, CallerContext, GroupMembership
 from umbod.core.connectors.downstream_mcp.adapters.identity import personal_group_membership, personal_identity_facts
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalIdentityResolution
-from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import PersonalIdentityRejection, UnresolvedPersonalIdentity
-from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
+from umbod.core.connectors.downstream_mcp.personal.connections import (
+    PersonalIdentityRejection,
+    PersonalIdentityResolution,
+    UnresolvedPersonalIdentity,
+    canonical_principal,
+)
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_caller_context, get_verified_access_claims
 from umbod.rest.dependencies import get_connector_api_dependency_factories

@@ -13,7 +13,7 @@ from tests.umbod.rest.connectors.downstream_mcp.personal_connections.test_oauth_
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.setup import DiscoveredPersonalOAuthSetupProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.models import DiscoverPersonalOAuthSetup, PersonalOAuthSetupDiscovery, PersonalOAuthSetupValidation, ValidatePersonalOAuthSetup
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup.models import DiscoverPersonalOAuthSetup, PersonalOAuthSetupDiscovery, PersonalOAuthSetupValidation, ValidatePersonalOAuthSetup
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_diagnostics import get_oauth_application_failures
 from umbod.rest.connectors.downstream_mcp.personal_oauth_setup import get_setup_provider
 from .test_personal_catalogue import client as client, payload

@@ -12,7 +12,7 @@ from umbod.mcp.connectors.downstream_mcp.ports import DownstreamClientFactory
 from umbod.mcp.runtime_adapters import OpenApiRuntimeAdapters, create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolRuntime
+from umbod.core.connectors.downstream_mcp.personal.tools import DisabledPersonalToolRuntime, PersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperations
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCallerProvider, McpPersonalToolRuntime, PersonalDiscoveryMiddleware, PersonalToolReservationMiddleware, personal_tool_permission_check
 

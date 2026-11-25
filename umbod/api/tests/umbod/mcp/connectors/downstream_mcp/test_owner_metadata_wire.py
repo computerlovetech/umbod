@@ -1,6 +1,6 @@
 import asyncio
 from datetime import timedelta
-from umbod.core.connectors.downstream_mcp.personal_connections.models import SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.connections.models import SetPersonalConnectionEnabled
 from typing import Any
 
 import pytest

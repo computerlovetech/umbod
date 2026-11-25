@@ -11,11 +11,11 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider impor
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.refresh import StoredPersonalOAuthRefreshProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.setup import DiscoveredPersonalOAuthSetupProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthHttpResponse, OAuthHttpRequest
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import PersonalOAuthGrant
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PreparePersonalOAuth, PersonalOAuthProviderUnsupported, PersonalOAuthProviderFailure
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_provider_models import RefreshPersonalOAuth, PersonalOAuthRefreshUncertain
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import DynamicConfidentialOAuthClient, PersonalOAuthPolicy
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.models import ValidatePersonalOAuthSetup
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import PersonalOAuthGrant
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import PreparePersonalOAuth, PersonalOAuthProviderUnsupported, PersonalOAuthProviderFailure
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.provider_models import RefreshPersonalOAuth, PersonalOAuthRefreshUncertain
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import DynamicConfidentialOAuthClient, PersonalOAuthPolicy
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup.models import ValidatePersonalOAuthSetup
 
 from .conftest import ProviderCase, exchange_command, response
 

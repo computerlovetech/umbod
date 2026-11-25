@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from umbod.core.connectors.downstream_mcp.personal_connections import (
+from umbod.core.connectors.downstream_mcp.personal.connections import (
     PersonalConnectorInventory,
     PersonalConnectorQuery,
     PersonalConnectorUnavailable,

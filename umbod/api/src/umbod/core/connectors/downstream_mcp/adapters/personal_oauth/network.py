@@ -4,7 +4,7 @@ from urllib.parse import quote_plus
 import anyio
 import httpcore
 
-from ...personal_connections.oauth_failure_models import OAuthFailureEvidence
+from ...personal.oauth.failures import OAuthFailureEvidence
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, DownstreamResponseEvidence, NoDownstreamResponse
 from .failure import OAuthOperationProgress, OAuthTransportFailure, adapter_failure_evidence, rejected_response
 from .transport import BasicOAuthHttpAuthentication, OAuthDestination, OAuthHttpRequest, OAuthHttpResponse

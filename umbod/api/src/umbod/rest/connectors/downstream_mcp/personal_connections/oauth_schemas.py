@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthAttemptView
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization import PersonalOAuthAttemptView
 
 
 class PersonalOAuthStartRequest(BaseModel):

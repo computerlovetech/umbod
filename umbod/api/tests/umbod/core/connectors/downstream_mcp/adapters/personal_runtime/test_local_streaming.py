@@ -10,8 +10,8 @@ import pytest
 from anyio.abc import SocketAttribute, SocketStream
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import FastMCPPersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_ports import PersonalMcpTransport
 
 from .conftest import ScriptedNetwork, ScriptedResolver, ScriptedStream
 

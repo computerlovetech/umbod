@@ -8,7 +8,7 @@ import anyio
 import httpcore2
 from pydantic import SecretStr
 
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalRuntimeUnavailable
 
 
 class PublicAddressResolver(Protocol):

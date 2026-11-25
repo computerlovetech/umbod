@@ -6,7 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from tests.support.application_failures import CapturingApplicationFailures
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthFailureEvidence, OAuthFailureReason
+from umbod.core.connectors.downstream_mcp.personal.oauth.failures import OAuthFailureEvidence, OAuthFailureReason
 from umbod.core.diagnostics import ApplicationFailure, ApplicationFailureKind, CorrelatedFailureContext, NoFailureContext
 from umbod.core.diagnostics.oauth import PublishingOAuthFailureObserver
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, DownstreamResponseEvidence, NoDownstreamResponse

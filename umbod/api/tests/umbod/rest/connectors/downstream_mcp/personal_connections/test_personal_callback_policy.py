@@ -6,13 +6,13 @@ import pytest
 
 from umbod.config.app import AppConfig
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
-from umbod.core.connectors.downstream_mcp.personal_oauth_applications.ports import PersonalOAuthApplicationStore
+from umbod.core.connectors.downstream_mcp.personal.oauth.applications.ports import PersonalOAuthApplicationStore
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_dependencies import get_personal_callback_policy
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.connectors.downstream_mcp.personal_connections import oauth_dependencies, refresh_dependencies
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthProvider
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_provider_ports import PersonalOAuthRefreshProvider
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.ports import PersonalOAuthProvider
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.provider_ports import PersonalOAuthRefreshProvider
 
 
 @pytest.fixture

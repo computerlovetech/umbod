@@ -12,8 +12,8 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.refresh import StoredPersonalOAuthRefreshProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthHttpRequest, OAuthHttpResponse
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_provider_models import PersonalOAuthRefreshUncertain, RefreshPersonalOAuth
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import PersonalOAuthProviderFailure
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.provider_models import PersonalOAuthRefreshUncertain, RefreshPersonalOAuth
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, NoDownstreamResponse
 from umbod.core.network import PublicAddressNetworkBackend
 

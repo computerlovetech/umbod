@@ -6,7 +6,7 @@ def test_personal_identity_policy_import_does_not_initialize_configuration_or_fr
     result = subprocess.run(
         [sys.executable, "-c", (
             "import sys; "
-            "from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal; "
+            "from umbod.core.connectors.downstream_mcp.personal.connections.principal import canonical_principal; "
             "prefixes = ('fastapi', 'fastmcp', 'mcp', 'umbod.config', 'umbod.rest', 'umbod.mcp'); "
             "loaded = [name for name in sys.modules "
             "if any(name == prefix or name.startswith(prefix + '.') for prefix in prefixes)]; "

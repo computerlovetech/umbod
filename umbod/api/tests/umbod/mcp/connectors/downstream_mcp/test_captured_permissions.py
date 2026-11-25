@@ -36,7 +36,7 @@ from umbod.core.permissions import ConnectorCapabilityPermission, InMemoryGroupC
 from umbod.mcp.connectors.downstream_mcp import GroupDownstreamToolPermissionPolicy, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.connectors.downstream_mcp import permissions as permission_boundary
 from umbod.mcp.auth.local_test_auth import SingleTestUserOAuthProvider
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
+from umbod.core.connectors.downstream_mcp.personal.tools import DisabledPersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoverySnapshot
 
 

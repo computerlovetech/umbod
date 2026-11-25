@@ -18,18 +18,14 @@ from umbod.core.publishing.stores.schema import (
 )
 
 from ..models import uses_personal_oauth
-from ..personal_connections.authorization_models import (
-    ExpiringPersonalToken,
-)
-from ..personal_connections.models import Authorized, PersonalConnection
-from ..personal_connections.runtime_models import (
+from ..personal.oauth.grants import ExpiringPersonalToken, validated_bound_grant
+from ..personal.connections import Authorized, PersonalConnection, RejectPersonalAuthorization
+from ..personal.tools import (
     PersonalAuthorizationRequired,
     PersonalRuntimeAuthorizationQuery,
     PersonalRuntimeTarget,
     PersonalRuntimeUnavailable,
 )
-from ..personal_connections.grant_binding import validated_bound_grant
-from ..personal_connections.health_models import RejectPersonalAuthorization
 from .personal_authorization_rejection_records import matching_rejection
 from .personal_authorization_rejections import record_rejection
 from .personal_connection_records import load_personal_connection

@@ -15,8 +15,15 @@ from umbod.core.invocation.failure_evidence import (
 )
 
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable
+from umbod.core.connectors.downstream_mcp.personal.tools import (
+    InvokePersonalTool,
+    PersonalRuntimeUnavailable,
+    PersonalToolPolicyInvalid,
+    PersonalToolRecord,
+    PersonalToolRuntime,
+    validate_contract_schema,
+)
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalAuthorizationHealthUnavailable
 from umbod.mcp.signals.diagnostics import invocation_failure
 from typing import Any
 
@@ -25,13 +32,10 @@ from fastmcp.server.providers.proxy import ProxyTool
 from fastmcp.tools import ToolResult
 from fastmcp.tools.base import Tool
 from mcp.types import CallToolResult
-from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRecord, PersonalToolRuntime
 from jsonschema.validators import validator_for
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
-from umbod.core.connectors.downstream_mcp.personal_tools.schema_validation import PersonalToolPolicyInvalid
 from referencing import Registry
-from umbod.core.connectors.downstream_mcp.personal_tools import validate_contract_schema
 
 from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.invocation import (

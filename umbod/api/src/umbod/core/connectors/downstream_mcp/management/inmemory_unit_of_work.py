@@ -7,17 +7,22 @@ from umbod.core.publishing.events import connector_publication_changed_event
 from umbod.core.messaging.discovery_events import connector_discovery_changed_event
 import asyncio
 
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.ports import PersonalOAuthSetupStore
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import PersonalOAuthSetupBinding
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup import (
+    PersonalOAuthSetupBinding,
+    PersonalOAuthSetupStore,
+)
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup import definition_fingerprint
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationQuery
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import (
+    PersonalOAuthConfigurationQuery,
+    PersonalOAuthConfigurationStore,
+    ReplacePersonalOAuthConfiguration,
+)
 
-from ..personal_tools import PersonalToolAccessStore, PersonalToolPolicyStore
+from ..personal.tools import PersonalToolAccessStore, PersonalToolPolicyStore
 
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore, ReplacePersonalOAuthConfiguration
 from umbod.core.connectors.downstream_mcp.management.unit_of_work import CreatePersonalOAuthConnectorAggregate
 
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalConnectionStore
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalConnectionStore
 from copy import deepcopy
 from collections.abc import Awaitable, Callable
 from typing import TypeVar

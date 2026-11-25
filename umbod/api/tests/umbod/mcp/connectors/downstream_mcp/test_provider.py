@@ -28,7 +28,7 @@ from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, Replac
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.core.permissions import ConnectorCapabilityPermission, ConnectorToolPermission, InMemoryGroupConnectorToolPermissions
 from umbod.mcp.connectors.native import ModernConnectorApprovalRequired
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolRuntime
+from umbod.core.connectors.downstream_mcp.personal.tools import DisabledPersonalToolRuntime, PersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, DownstreamToolPermissionPolicySource, GroupDownstreamToolPermissionPolicy, NativeCapabilityProviderView, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.logging import McpAuditEvent, McpAuditRecorder
 from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter

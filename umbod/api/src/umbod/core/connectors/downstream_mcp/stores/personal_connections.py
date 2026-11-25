@@ -18,11 +18,9 @@ from collections.abc import Callable
 
 from umbod.core.configuration.persistence import TextCipher
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
-from umbod.core.connectors.downstream_mcp.personal_connections.inventory_models import (
-    PersonalConnectorUnavailable,
-)
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalConnectorUnavailable
 from umbod.core.connectors.downstream_mcp.stores.ports import CONNECTOR_DEFINITION_ADAPTER
-from umbod.core.connectors.downstream_mcp.personal_connections.models import (
+from umbod.core.connectors.downstream_mcp.personal.connections.models import (
     Authorized,
     PersonalConnection,
     PersonalConnectionKey,

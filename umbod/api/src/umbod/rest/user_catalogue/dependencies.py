@@ -16,7 +16,7 @@ from umbod.core.connectors.downstream_mcp.catalog import StoreBackedDownstreamCa
 from umbod.core.connectors.downstream_mcp.catalog.definitions import InMemoryConnectorDefinitionReader
 from umbod.core.connectors.downstream_mcp.management import utc_clock
 from umbod.core.connectors.downstream_mcp.models import ConnectorDefinitionModel, uses_personal_oauth
-from umbod.core.connectors.downstream_mcp.personal_connections import (
+from umbod.core.connectors.downstream_mcp.personal.connections import (
     ResolvedPersonalIdentity,
 )
 from umbod.core.connectors.downstream_mcp.user_catalogue import (

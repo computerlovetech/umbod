@@ -5,8 +5,8 @@ from typing import Annotated
 from fastapi import Depends
 
 from umbod.core.connectors.downstream_mcp.management import utc_clock
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, CanonicalPrincipal
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryQuery, PersonalToolDiscoveryReader
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCaller, CanonicalPrincipal
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolDiscoveryQuery, PersonalToolDiscoveryReader
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.core.connectors.downstream_mcp.stores.ports import ConnectorDefinitionReader
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores

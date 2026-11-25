@@ -15,7 +15,7 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport impo
     OAuthHttpRequest,
     OAuthHttpTransport,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import PersonalOAuthProviderFailure
 
 
 class MemoryStream(httpcore.AsyncNetworkStream):

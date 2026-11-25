@@ -6,10 +6,10 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.metadata impor
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.setup import DiscoveredPersonalOAuthSetupProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthHttpResponse
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import DynamicPublicOAuthClient, PersonalOAuthPolicy
-from umbod.core.connectors.downstream_mcp.personal_oauth_metadata import DiscoverPersonalOAuthMetadata
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.models import DiscoverPersonalOAuthSetup
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import DynamicPublicOAuthClient, PersonalOAuthPolicy
+from umbod.core.connectors.downstream_mcp.personal.oauth.metadata import DiscoverPersonalOAuthMetadata
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup.models import DiscoverPersonalOAuthSetup
 
 from .conftest import ProviderCase, exchange_command, response
 

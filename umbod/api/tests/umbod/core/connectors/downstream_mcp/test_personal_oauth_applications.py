@@ -9,11 +9,11 @@ from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_application_schema import PERSONAL_OAUTH_APPLICATION_TABLE
 from umbod.core.connectors.downstream_mcp.stores.queries import query_all
 from umbod.core.persistence import NoFilter
-from umbod.core.connectors.downstream_mcp.personal_oauth_applications.models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.applications.models import (
     ClaimedOAuthApplication, CompleteOAuthApplication, ExpiringApplicationSecret,
     OAuthApplicationUnavailable, RegisteredApplicationReference, ResolveOAuthApplication,
 )
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthSettings, DynamicConfidentialOAuthClient, ReplacePersonalOAuthConfiguration
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthSettings, DynamicConfidentialOAuthClient, ReplacePersonalOAuthConfiguration
 from umbod.core.connectors.downstream_mcp.management import DeleteDownstreamConnectorAggregate
 from umbod.core.connectors.downstream_mcp.stores import create_downstream_mcp_stores
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_applications import EncryptedPersonalOAuthApplicationStore

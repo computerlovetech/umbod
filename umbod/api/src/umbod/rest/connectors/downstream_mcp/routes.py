@@ -62,12 +62,12 @@ from umbod.core.connectors.downstream_mcp.probe import (
     DownstreamConnectorValidationError,
 )
 from umbod.core.connectors.downstream_mcp.publishing import DownstreamConnectorPublisher
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import PersonalOAuthSetupRequired
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup import PersonalOAuthSetupRequired
 from umbod.core.connectors.downstream_mcp.stores import (
     ConnectorHealthFound,
     ToolCatalogFound,
 )
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import (
     PersonalOAuthConfiguration,
     PersonalOAuthConfigurationConflict,
     PersonalOAuthConfigurationQuery,

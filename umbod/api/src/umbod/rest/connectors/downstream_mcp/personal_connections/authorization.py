@@ -3,9 +3,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from umbod.core.connectors.downstream_mcp.management import utc_clock
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, PersonalConnectionKey, PersonalConnectorInventory, PersonalConnectorQuery, PersonalConnectorUnavailable
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealth, PersonalAuthorizationHealthQuery
-from umbod.core.connectors.downstream_mcp.personal_connections.health_ports import PersonalAuthorizationHealthStore
+from umbod.core.connectors.downstream_mcp.personal.connections import (
+    PersonalAuthorizationHealth,
+    PersonalAuthorizationHealthQuery,
+    PersonalAuthorizationHealthStore,
+    PersonalCaller,
+    PersonalConnectionKey,
+    PersonalConnectorInventory,
+    PersonalConnectorQuery,
+    PersonalConnectorUnavailable,
+)
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
 

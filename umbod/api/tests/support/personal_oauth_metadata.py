@@ -1,4 +1,4 @@
-from umbod.core.connectors.downstream_mcp.personal_oauth_metadata import DiscoverPersonalOAuthMetadata, PersonalOAuthMetadataResult
+from umbod.core.connectors.downstream_mcp.personal.oauth.metadata import DiscoverPersonalOAuthMetadata, PersonalOAuthMetadataResult
 
 
 class InMemoryPersonalOAuthMetadataProvider:

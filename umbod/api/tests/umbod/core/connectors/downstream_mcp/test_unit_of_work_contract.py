@@ -1,7 +1,7 @@
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup import PersonalOAuthSetupStoreService
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
 from dataclasses import replace
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey, SetPersonalConnectionEnabled, InMemoryPersonalConnectionStore
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalConnectionKey, SetPersonalConnectionEnabled, InMemoryPersonalConnectionStore
 from umbod.core.connectors.downstream_mcp.management import DeleteDownstreamConnectorAggregate
 from umbod.core.activation import ActivationStatus, CapabilityRef
 from umbod.core.connectors.downstream_mcp.management.unit_of_work import ApplyDiscoveredCatalog, DeleteCatalog, InvalidateDownstreamConnectorAggregate

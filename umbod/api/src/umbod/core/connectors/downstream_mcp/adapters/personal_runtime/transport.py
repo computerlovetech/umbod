@@ -21,7 +21,7 @@ from umbod.core.invocation.failure_evidence import (
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoDownstreamResponse
 
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import (
+from umbod.core.connectors.downstream_mcp.personal.tools import (
     PersonalAuthorizationRejected,
     PersonalRuntimeLimits,
     PersonalRuntimeTarget,
@@ -29,9 +29,10 @@ from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models im
     PersonalToolCall,
     PersonalToolInventory,
     PersonalToolResult,
+    contract_fingerprint,
+    validate_contract_schema,
 )
 
-from umbod.core.connectors.downstream_mcp.personal_tools.contract_validation import contract_fingerprint, validate_contract_schema
 
 from ..tool_mapping import bind_tool, map_sdk_tool
 from .http import PersonalHttpTransport, ResponseHeaderObserver

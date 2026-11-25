@@ -1,7 +1,10 @@
 from urllib.parse import urlencode, urlsplit
 
 from umbod.config.app import validate_collector_base_url
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRequired, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.tools import (
+    PersonalAuthorizationRequired,
+    PersonalToolResult,
+)
 
 
 def validate_recovery_origin(origin: str) -> str:

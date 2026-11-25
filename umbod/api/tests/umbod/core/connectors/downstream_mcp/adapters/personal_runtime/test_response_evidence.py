@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.http import ResponseHeaderObserver
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.operation import OperationState
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, InvocationFailureDiagnostic, NoDownstreamResponse
 from umbod.core.invocation.failure_evidence import InvocationExceptionEvidence, current_invocation_failure, invocation_failure_scope
 

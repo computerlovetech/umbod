@@ -14,7 +14,7 @@ from umbod.core.capabilities.descriptions import (
 from umbod.core.capabilities.descriptions.factories import ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.callers import GroupMembership
-from umbod.core.connectors.downstream_mcp.personal_connections import (
+from umbod.core.connectors.downstream_mcp.personal.connections import (
     Authorized,
     CanonicalPrincipal,
     PersonalConnection,

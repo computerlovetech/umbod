@@ -1,4 +1,4 @@
-from umbod.core.connectors.downstream_mcp.personal_connections import UnavailablePersonalCaller
+from umbod.core.connectors.downstream_mcp.personal.connections import UnavailablePersonalCaller
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
 import asyncio
 from collections.abc import AsyncIterator
@@ -10,7 +10,7 @@ from pydantic import SecretStr
 
 from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
-from umbod.core.connectors.downstream_mcp.personal_connections import (
+from umbod.core.connectors.downstream_mcp.personal.connections import (
     Authorized,
     CanonicalPrincipal,
     InMemoryPersonalConnectionStore,

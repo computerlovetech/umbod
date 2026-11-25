@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from umbod.config import AppConfig
-from ..personal_connections.identity_models import PersonalIdentityPolicy
+from ..personal.connections import PersonalIdentityPolicy
 from umbod.core.connectors.downstream_mcp.security import resolve_downstream_mcp_credential_secret
 
 

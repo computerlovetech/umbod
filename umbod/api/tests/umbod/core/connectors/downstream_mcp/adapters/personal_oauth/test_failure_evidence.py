@@ -10,9 +10,9 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback impor
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.refresh import StoredPersonalOAuthRefreshProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthHttpRequest, OAuthHttpResponse
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthEvidenceError, OAuthFailureEvidence, oauth_failure_evidence
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_provider_models import PersonalOAuthRefreshDenied, PersonalOAuthRefreshUncertain, RefreshPersonalOAuth
+from umbod.core.connectors.downstream_mcp.personal.oauth.failures import OAuthEvidenceError, OAuthFailureEvidence, oauth_failure_evidence
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.provider_models import PersonalOAuthRefreshDenied, PersonalOAuthRefreshUncertain, RefreshPersonalOAuth
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, NoDownstreamResponse
 
 from .conftest import ProviderCase, exchange_command, response

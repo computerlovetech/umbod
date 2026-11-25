@@ -3,9 +3,9 @@ from urllib.parse import SplitResult, urlunsplit
 from pydantic import SecretStr, TypeAdapter
 
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, NoDownstreamResponse
-from ...personal_connections.oauth_failure_models import OAuthFailureEvidence, OAuthFailureReason
-from ...personal_connections.oauth_models import PersonalOAuthProviderUnsupported
-from ...personal_oauth_configuration.models import OAuthIssuer
+from ...personal.oauth.failures import OAuthFailureEvidence, OAuthFailureReason
+from ...personal.oauth.authorization import PersonalOAuthProviderUnsupported
+from ...personal.oauth.configuration import OAuthIssuer
 
 from .failure import OAuthOperationProgress, oauth_failure_boundary, rejected_response, request_with_progress
 from .validation import AuthorizationServer, ProtectedResource, parse_json, validated_url

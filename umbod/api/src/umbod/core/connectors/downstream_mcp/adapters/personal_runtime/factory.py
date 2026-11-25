@@ -3,8 +3,7 @@ import ssl
 import httpcore2
 
 from umbod.core.connectors.downstream_mcp.management import utc_clock
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalMcpTransport, PersonalRuntimeLimits
 
 from .network import SystemAddressResolver
 from .transport import FastMCPPersonalMcpTransport

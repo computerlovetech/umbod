@@ -1,6 +1,6 @@
 from tests.umbod.core.connectors.downstream_mcp.personal_discovery_support import read_available
 
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, UnavailablePersonalCaller
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCaller, UnavailablePersonalCaller
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
 from dataclasses import dataclass
 
@@ -8,8 +8,8 @@ from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizat
 from tests.umbod.core.connectors.downstream_mcp.test_personal_tools_s3_contracts import approved_tool
 from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import InMemoryPersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRuntime, PersonalToolRuntimeService, SavePersonalToolObservation, contract_fingerprint
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.tools import InvokePersonalTool, PersonalToolRuntime, PersonalToolRuntimeService, SavePersonalToolObservation, contract_fingerprint
 
 
 @dataclass(frozen=True)

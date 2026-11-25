@@ -7,14 +7,14 @@ from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import c
 from tests.umbod.core.connectors.downstream_mcp.personal_discovery_support import read_available
 from tests.umbod.core.connectors.downstream_mcp.test_personal_refresh import command, refresh_store, reservation
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, install_authorization, runtime_case
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, SetPersonalConnectionEnabled
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import authorize_personal_grant
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_models import FailPersonalRefresh
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import RejectPersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_ports import PersonalRefreshStore
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRequired, PersonalInventoryRefreshRequired, PersonalRuntimeUnavailable
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryQuery, PersonalToolDiscoveryService, PersonalToolRuntimeService, SavePersonalToolObservation
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationQuery, ReplacePersonalOAuthConfiguration, PersonalOAuthSettings
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import authorize_personal_grant
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.models import FailPersonalRefresh
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import RejectPersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.ports import PersonalRefreshStore
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalAuthorizationRequired, PersonalInventoryRefreshRequired, PersonalRuntimeUnavailable
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolDiscoveryQuery, PersonalToolDiscoveryService, PersonalToolRuntimeService, SavePersonalToolObservation
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationQuery, ReplacePersonalOAuthConfiguration, PersonalOAuthSettings
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery
 from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE
 from umbod.core.persistence import DeleteQuery, NoFilter, TransactionMode

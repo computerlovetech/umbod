@@ -1,14 +1,14 @@
-from umbod.core.connectors.downstream_mcp.personal_connections.models import PersonalConnectionKey
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import (
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalConnectionKey
+from umbod.core.connectors.downstream_mcp.personal.tools import (
     PersonalRuntimeTarget,
     PersonalRuntimeUnavailable,
     PersonalToolCall,
     PersonalToolInventory,
     PersonalToolResult,
+    contract_fingerprint,
 )
 
 
-from umbod.core.connectors.downstream_mcp.personal_tools.contract_validation import contract_fingerprint
 
 
 class InMemoryPersonalMcpTransport:

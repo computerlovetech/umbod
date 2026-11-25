@@ -6,10 +6,13 @@ from fastapi import Depends, HTTPException
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
-from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import local_personal_identity_enabled
+from umbod.core.connectors.downstream_mcp.personal.connections.development_identity import local_personal_identity_enabled
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.factory import configured_personal_oauth_provider
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthProvider
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthCallbackService, PersonalOAuthService
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization import (
+    PersonalOAuthCallbackService,
+    PersonalOAuthProvider,
+    PersonalOAuthService,
+)
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
 
@@ -18,10 +21,10 @@ from .dependencies import (
     get_personal_connector_inventory,
     get_personal_caller,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, PersonalConnectorInventory
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCaller, PersonalConnectorInventory
 from .oauth_policy import OAuthPolicy
 from .oauth_diagnostics import get_oauth_failure_observer
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_diagnostics import PersonalOAuthFailureObserver
+from umbod.core.connectors.downstream_mcp.personal.oauth.diagnostics import PersonalOAuthFailureObserver
 
 
 def require_personal_oauth(policy: OAuthPolicy) -> None:

@@ -7,8 +7,8 @@ from pydantic import SecretStr
 from umbod.core.configuration.persistence import TextCipher
 from umbod.core.persistence import AllOf, DatabaseSession, DeleteQuery, Equals, UpsertCommand
 
-from ..personal_connections.models import Authorized, PersonalConnection, PersonalConnectionKey
-from ..personal_connections.refresh_models import PersonalRefreshClaim
+from ..personal.connections import Authorized, PersonalConnection, PersonalConnectionKey
+from ..personal.oauth.refresh import PersonalRefreshClaim
 from .personal_refresh_schema import PERSONAL_REFRESH_NAMESPACE, PERSONAL_REFRESH_SUBJECT, PERSONAL_REFRESH_CONNECTOR_ID, PERSONAL_REFRESH_TABLE
 from .queries import query_all
 from .schema import PersonalConnectionRecord, PersonalConnectionRecordKey

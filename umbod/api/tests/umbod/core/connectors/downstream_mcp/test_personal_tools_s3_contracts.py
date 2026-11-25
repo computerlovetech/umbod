@@ -13,9 +13,9 @@ from umbod.core.activation import ActivationStatus, CapabilityRef
 from umbod.core.capabilities.domain import CapabilityIdentity
 from umbod.core.connectors.downstream_mcp.management import DeleteDownstreamConnectorAggregate
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool, DiscoveredToolWithoutOutputSchema, ToolIdentity
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey, SetPersonalConnectionEnabled
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolInventory
-from umbod.core.connectors.downstream_mcp.personal_tools import (
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalConnectionKey, SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolInventory
+from umbod.core.connectors.downstream_mcp.personal.tools import (
     AdmitPersonalTool,
     PersonalToolDiscoveryService,
     PersonalToolPolicy,
@@ -136,7 +136,7 @@ async def assert_stale_observation_save_rejects_revocation(runtime_case: Runtime
     elif revocation == "disconnect":
         await runtime_case.bundle.personal_connections.disconnect(runtime_case.query.key)
     elif revocation == "configuration":
-        from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationQuery, PersonalOAuthSettings, PreconfiguredPublicOAuthClient, ReplacePersonalOAuthConfiguration
+        from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationQuery, PersonalOAuthSettings, PreconfiguredPublicOAuthClient, ReplacePersonalOAuthConfiguration
         configuration = await runtime_case.bundle.personal_oauth_configurations.get(PersonalOAuthConfigurationQuery(connector_id="personal"))
         await runtime_case.bundle.personal_oauth_configurations.replace(ReplacePersonalOAuthConfiguration(connector_id="personal", expected_revision=configuration.policy.revision, settings=PersonalOAuthSettings(requested_scopes=("different",), client=PreconfiguredPublicOAuthClient(issuer_url="https://issuer.example", client_id="client"))))
     elif revocation == "unpublish":
@@ -148,7 +148,7 @@ async def assert_stale_observation_save_rejects_revocation(runtime_case: Runtime
         await runtime_case.bundle.unit_of_work.delete(DeleteDownstreamConnectorAggregate(connector_id="personal"))
     else:
         from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import install_authorization
-        from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import authorize_personal_grant
+        from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import authorize_personal_grant
         await install_authorization(runtime_case, authorize_personal_grant(runtime_case.grant.model_copy(update={"access_token": SecretStr("rotated")})))
     with pytest.raises(PersonalRuntimeUnavailable):
         await runtime_case.bundle.personal_tool_access.save_observation(command)
@@ -243,8 +243,8 @@ def test_fingerprint_ignores_private_labels_but_tracks_execution_and_schema() ->
 
 @pytest.mark.asyncio
 async def test_two_principals_keep_distinct_inventories_and_reject_cipher_transplant(runtime_case: RuntimeCase) -> None:
-    from umbod.core.connectors.downstream_mcp.personal_connections import ReplacePersonalAuthorization
-    from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import authorize_personal_grant
+    from umbod.core.connectors.downstream_mcp.personal.connections import ReplacePersonalAuthorization
+    from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import authorize_personal_grant
     from umbod.core.connectors.downstream_mcp.stores.personal_tools_schema import PERSONAL_TOOL_OBSERVATION_TABLE, PersonalToolObservationRecordKey
 
     first = approved_tool("read")
@@ -354,7 +354,7 @@ async def test_discovery_rechecks_time_after_network(runtime_case: RuntimeCase) 
 
 def test_local_schema_references_and_explicit_empty_output_contract() -> None:
     from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithOutputSchema
-    from umbod.core.connectors.downstream_mcp.personal_tools import validate_output
+    from umbod.core.connectors.downstream_mcp.personal.tools import validate_output
 
     tool = approved_tool("read")
     local = tool.model_copy(update={"input_schema": {"$defs": {"value": {"type": "string"}}, "type": "object", "properties": {"value": {"$ref": "#/$defs/value"}}, "required": ["value"]}})

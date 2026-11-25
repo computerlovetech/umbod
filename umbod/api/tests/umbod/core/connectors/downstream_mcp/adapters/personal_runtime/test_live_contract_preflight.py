@@ -1,6 +1,6 @@
 import pytest
 
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall
 
 from .conftest import ScriptedNetwork, ScriptedResolver, make_transport
 from .contracts import LOOKUP_FINGERPRINT

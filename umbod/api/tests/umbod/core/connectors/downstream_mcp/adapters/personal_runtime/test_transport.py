@@ -3,9 +3,9 @@ from .contracts import LOOKUP_FINGERPRINT, LOOKUP_TOOL
 import pytest
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import InMemoryPersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_connections.models import CanonicalPrincipal
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
+from umbod.core.connectors.downstream_mcp.personal.connections.models import CanonicalPrincipal
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_ports import PersonalMcpTransport
 
 
 

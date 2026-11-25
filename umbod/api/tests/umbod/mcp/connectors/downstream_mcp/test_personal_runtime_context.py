@@ -10,9 +10,9 @@ from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 
 from tests.umbod.mcp.test_personal_caller import _settings
 from umbod.core.callers import AuthenticationProvenance, UnavailableSubject
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCallerProvider
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCallerProvider
 from umbod.mcp.connectors.downstream_mcp import personal_runtime
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, UnavailablePersonalCaller
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCaller, UnavailablePersonalCaller
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCallerProvider, personal_tool_permission_check
 
 

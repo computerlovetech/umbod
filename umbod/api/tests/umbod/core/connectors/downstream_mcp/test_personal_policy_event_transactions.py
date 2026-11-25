@@ -10,7 +10,7 @@ from tests.support.personal_discovery_events import _tool as _tool
 from umbod.core.messaging.stores.schema import EVENT_TABLE, MessagingEventKey, MessagingEventRecord
 from umbod.core.persistence import Database, DatabaseSession, GeneratedIntegerKeyInsertCommand, Table, TransactionMode
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolPolicyStore, ReplacePersonalToolPolicy
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolPolicyStore, ReplacePersonalToolPolicy
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, SaveConnectorDefinition, ToolCatalogFound, create_downstream_mcp_stores
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
 

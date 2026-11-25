@@ -7,7 +7,7 @@ from .contracts import LOOKUP_FINGERPRINT
 import pytest
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.operation import OperationState
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall
 
 
 def request(target: PersonalRuntimeTarget, method: str, body: object) -> httpx2.Request:

@@ -7,10 +7,10 @@ from pydantic import SecretStr
 from tests.umbod.core.connectors.downstream_mcp.personal_discovery_support import read_available
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, install_authorization, runtime_case
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import authorize_personal_grant
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import RejectPersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRequired, PersonalRuntimeUnavailable
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryQuery, PersonalToolDiscoveryService, PersonalToolRuntimeService
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import authorize_personal_grant
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import RejectPersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalAuthorizationRequired, PersonalRuntimeUnavailable
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolDiscoveryQuery, PersonalToolDiscoveryService, PersonalToolRuntimeService
 from umbod.core.connectors.downstream_mcp.stores.personal_discovery_projection import DISCOVERY_AVAILABILITY_ADAPTER, AvailableDiscovery, discovery_filter
 from umbod.core.connectors.downstream_mcp.stores.personal_discovery_schema import PERSONAL_DISCOVERY_TABLE
 from umbod.core.connectors.downstream_mcp.stores.queries import query_all

@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import pytest
 import pytest_asyncio
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, PresentCallbackIssuer
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import GenericRoute, PresentCallbackIssuer
 
 from pydantic import SecretStr
 
@@ -13,14 +13,14 @@ from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from tests.umbod.core.connectors.downstream_mcp.test_personal_authorization_health import DisconnectWriteFailureCipher
 from umbod.core.connectors.downstream_mcp.management import DeleteDownstreamConnectorAggregate
 from umbod.core.connectors.downstream_mcp.stores.personal_connections import EncryptedPersonalConnectionStore
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import ExpiringPersonalToken, PresentPersonalRefreshToken, authorize_personal_grant
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthQuery, RejectPersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.models import SetPersonalConnectionEnabled
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import ClaimPersonalOAuthAttempt, CompletePersonalOAuthAttempt, PersonalOAuthAttemptQuery, PersonalOAuthConflict, PreparePersonalOAuth, PreparedPersonalOAuth, PublishPersonalOAuthAttempt, ReservePersonalOAuthAttempt
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import ExpiringPersonalToken, PresentPersonalRefreshToken, authorize_personal_grant
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import PersonalAuthorizationHealthQuery, RejectPersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.connections.models import SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import ClaimPersonalOAuthAttempt, CompletePersonalOAuthAttempt, PersonalOAuthAttemptQuery, PersonalOAuthConflict, PreparePersonalOAuth, PreparedPersonalOAuth, PublishPersonalOAuthAttempt, ReservePersonalOAuthAttempt
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_attempts import EncryptedPersonalOAuthAttemptStore
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_models import CompletePersonalRefresh, FailPersonalRefresh, PersonalRefreshChanged, PersonalRefreshCommand, PersonalRefreshConflict, PersonalRefreshReconnectRequired, PersonalRefreshUnsupported, ReservePersonalRefresh
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_ports import PersonalRefreshStore
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.models import CompletePersonalRefresh, FailPersonalRefresh, PersonalRefreshChanged, PersonalRefreshCommand, PersonalRefreshConflict, PersonalRefreshReconnectRequired, PersonalRefreshUnsupported, ReservePersonalRefresh
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.ports import PersonalRefreshStore
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeUnavailable
 from umbod.core.connectors.downstream_mcp.stores.personal_refresh import EncryptedPersonalRefreshStore
 from umbod.core.connectors.downstream_mcp.stores.personal_refresh_schema import PERSONAL_REFRESH_TABLE
 from umbod.core.persistence import AllFields, NoFilter, Query, TransactionMode, Unordered

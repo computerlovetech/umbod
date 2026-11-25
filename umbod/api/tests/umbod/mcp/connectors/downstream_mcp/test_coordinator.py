@@ -24,7 +24,7 @@ from umbod.core.connectors.downstream_mcp.models import ConnectorHealthy, Connec
 from umbod.core.connectors.downstream_mcp.stores import ConnectorHealthFound, ConnectorIdQuery, ReplaceToolCatalog, SaveConnectorDefinition, SaveCredential, ToolCatalogFound
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.mcp.connectors.native.tools import install_tool_list_changed_notifier
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
+from umbod.core.connectors.downstream_mcp.personal.tools import DisabledPersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.connectors.downstream_mcp.capability_notifications import CapabilityListChangeNotifier, NativeCapabilityProjection
 from umbod.mcp.connectors.downstream_mcp.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinator, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator

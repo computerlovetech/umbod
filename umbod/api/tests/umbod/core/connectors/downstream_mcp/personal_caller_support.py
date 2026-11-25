@@ -1,5 +1,5 @@
 from umbod.core.callers import AuthenticationProvenance, CallerContext, GroupMembership, SubjectIdentity, UnavailableIssuer
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalCaller
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalCaller
 
 
 def captured_personal_caller(principal: CanonicalPrincipal, group_ids: tuple[str, ...]) -> PersonalCaller:

@@ -5,8 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.metadata import DiscoveredPersonalOAuthMetadataProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import SafeOAuthHttpTransport
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
-from umbod.core.connectors.downstream_mcp.personal_oauth_metadata import DiscoverPersonalOAuthMetadata, PersonalOAuthMetadataProvider, PersonalOAuthMetadataResult
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization import (
+    PersonalOAuthProviderFailure,
+    PersonalOAuthProviderUnsupported,
+)
+from umbod.core.connectors.downstream_mcp.personal.oauth.metadata import DiscoverPersonalOAuthMetadata, PersonalOAuthMetadataProvider, PersonalOAuthMetadataResult
 from umbod.core.network import public_http_connection_pool
 from .dependencies import Factories
 from .preview_validation import BoundedPreviewRoute

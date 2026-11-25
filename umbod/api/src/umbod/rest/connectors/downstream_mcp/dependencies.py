@@ -8,7 +8,7 @@ from umbod.core.connectors.downstream_mcp.adapters.icon_discovery import Favicon
 from umbod.core.icons import FaviconDiscovery
 from umbod.rest.connectors.icons import get_favicon_discovery
 
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationStore
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores, create_downstream_mcp_stores
 from typing import Annotated
 from uuid import uuid4

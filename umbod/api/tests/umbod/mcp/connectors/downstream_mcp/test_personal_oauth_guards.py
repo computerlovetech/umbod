@@ -43,7 +43,7 @@ from umbod.core.invocation import (
     DirectInvocationDecision,
     PermitAllConnectorInvocationPolicy,
 )
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
+from umbod.core.connectors.downstream_mcp.personal.tools import DisabledPersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp import (
     ConnectorAwareDownstreamMcpToolProvider,
     DownstreamToolPermissionPolicy,

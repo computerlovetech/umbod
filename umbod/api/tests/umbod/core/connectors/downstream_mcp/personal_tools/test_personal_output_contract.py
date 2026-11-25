@@ -6,10 +6,10 @@ from pydantic import ValidationError
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from tests.umbod.core.connectors.downstream_mcp.test_personal_tools_s3_contracts import approved_tool, enable_tool, replace_policy, save_matches
 from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithOutputSchema
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalConnectionStore
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRuntimeService, contract_fingerprint
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalConnectionStore
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_ports import PersonalMcpTransport
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolRuntimeService, contract_fingerprint
 
 from .runtime_support import execution_case
 

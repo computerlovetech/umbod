@@ -8,9 +8,17 @@ from typing import Optional
 
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
-from umbod.core.connectors.downstream_mcp.personal_connections.caller import PersonalCaller, PersonalCallerProvider, UnavailablePersonalCaller
-from umbod.core.connectors.downstream_mcp.personal_tools.models import InvokePersonalTool, PersonalToolDiscoveryQuery, PersonalToolRecord
-from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolDiscoveryReader
+from umbod.core.connectors.downstream_mcp.personal.connections import (
+    PersonalCaller,
+    PersonalCallerProvider,
+    UnavailablePersonalCaller,
+)
+from umbod.core.connectors.downstream_mcp.personal.tools import (
+    InvokePersonalTool,
+    PersonalToolDiscoveryQuery,
+    PersonalToolDiscoveryReader,
+    PersonalToolRecord,
+)
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.connectors.downstream_mcp.permissions import DownstreamToolPermissionPolicy, DownstreamToolPermissionPolicySource
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryRuntime, DownstreamDiscoverySnapshot

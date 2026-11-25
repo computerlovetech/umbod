@@ -8,28 +8,28 @@ import json
 from datetime import UTC, datetime, timedelta
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeAuthorizationQuery
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import SecretStr
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import (
     FinishCallback, ClaimPersonalOAuthAttempt, ClaimedPersonalOAuthAttempt, CompletePersonalOAuthAttempt,
     FailPersonalOAuthAttempt, PersonalOAuthAttemptQuery, PersonalOAuthAttemptView, PublishPersonalOAuthAttempt,
     ReservePersonalOAuthAttempt,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthAttemptStore
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthFailureEvidence
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.ports import PersonalOAuthAttemptStore
+from umbod.core.connectors.downstream_mcp.personal.oauth.failures import OAuthFailureEvidence
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, PresentCallbackIssuer
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import GenericRoute, PresentCallbackIssuer
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthDestination, OAuthHttpRequest, OAuthHttpResponse
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalConnectorInventory, PersonalConnectorSelection
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthUnavailable
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthCallbackService, PersonalOAuthService
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import DynamicPublicOAuthClient, PersonalOAuthSettings, PreconfiguredConfidentialOAuthClient, PreconfiguredPublicOAuthClient, ReplacePersonalOAuthConfiguration
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalConnectorInventory, PersonalConnectorSelection
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import PersonalOAuthProviderFailure, PersonalOAuthUnavailable
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.service import PersonalOAuthCallbackService, PersonalOAuthService
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import DynamicPublicOAuthClient, PersonalOAuthSettings, PreconfiguredConfidentialOAuthClient, PreconfiguredPublicOAuthClient, ReplacePersonalOAuthConfiguration
 from umbod.core.connectors.downstream_mcp.stores import create_downstream_mcp_stores
 
 from .test_personal_oauth_attempt_persistence import AttemptCase, case as case

@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI
 
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_diagnostics import PersonalOAuthFailureObserver
+from umbod.core.connectors.downstream_mcp.personal.oauth.diagnostics import PersonalOAuthFailureObserver
 from umbod.core.diagnostics import ApplicationFailure, CorrelatedFailureContext, NoFailureContext
 from umbod.core.diagnostics.oauth import PublishingOAuthFailureObserver
 from umbod.core.signals import SignalPublisher

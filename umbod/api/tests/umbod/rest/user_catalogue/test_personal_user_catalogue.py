@@ -8,7 +8,7 @@ from umbod.core.capabilities import AbsentCapabilityOutputSchema, PresentCapabil
 from umbod.core.connectors.downstream_mcp.models import (
     DiscoveredToolWithoutOutputSchema, DiscoveredToolWithOutputSchema, ToolIdentity,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalToolInventory
 from umbod.rest.connectors.downstream_mcp.personal_connections.tools import get_personal_tool_transport
 
 from tests.umbod.rest.connectors.downstream_mcp.personal_connections.test_personal_connection_routes import PersonalApi, personal_api as personal_api

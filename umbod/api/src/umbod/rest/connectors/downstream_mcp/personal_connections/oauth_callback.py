@@ -8,13 +8,16 @@ from urllib.parse import parse_qsl
 from fastapi import APIRouter, Depends, Request
 from pydantic import SecretStr
 
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import CallbackRoute, GenericRoute, IssuerRoute, MissingCallbackIssuer, PresentCallbackIssuer
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import FinishCallback, PersonalOAuthProviderFailure
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthFailureEvidence
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import CallbackRoute, GenericRoute, IssuerRoute, MissingCallbackIssuer, PresentCallbackIssuer
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization import (
+    FinishCallback,
+    PersonalOAuthCallbackService,
+    PersonalOAuthProviderFailure,
+)
+from umbod.core.connectors.downstream_mcp.personal.oauth.failures import OAuthFailureEvidence
 from starlette.responses import HTMLResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthCallbackService
 
 from .dependencies import Factories
 from .oauth_dependencies import get_personal_oauth_callback_service

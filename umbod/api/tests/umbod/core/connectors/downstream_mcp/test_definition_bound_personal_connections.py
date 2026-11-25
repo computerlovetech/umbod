@@ -12,7 +12,7 @@ from umbod.core.connectors.downstream_mcp.management import (
     DownstreamConnectorUnitOfWork,
 )
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
-from umbod.core.connectors.downstream_mcp.personal_connections import (
+from umbod.core.connectors.downstream_mcp.personal.connections import (
     Authorized,
     CanonicalPrincipal,
     PersonalConnection,
@@ -23,9 +23,9 @@ from umbod.core.connectors.downstream_mcp.personal_connections import (
     ReplacePersonalAuthorization,
     SetPersonalConnectionEnabled,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.inventory import PersonalConnectorInventoryService
+from umbod.core.connectors.downstream_mcp.personal.connections.inventory import PersonalConnectorInventoryService
 from umbod.core.callers import GroupMembership
-from umbod.core.connectors.downstream_mcp.personal_connections.inventory_models import (
+from umbod.core.connectors.downstream_mcp.personal.connections.inventory_models import (
     PersonalConnectorUnavailable,
     SetPersonalConnectorEnablement,
 )

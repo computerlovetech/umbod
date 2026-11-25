@@ -5,8 +5,21 @@ from uuid import uuid4
 
 from umbod.core.configuration.persistence import TextCipher
 from umbod.core.connectors.downstream_mcp.models import ConnectorDefinition, uses_personal_oauth
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationUnavailable
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import CompletePersonalOAuthSetup, PersonalOAuthSetupBinding, PersonalOAuthSetupConflict, PersonalOAuthSetupQuery, PersonalOAuthSetupReceipt, PersonalOAuthSetupRequired, PersonalOAuthSetupStatus, SetupInProgress, SetupRequired, SetupValidated, StartedPersonalOAuthSetup, StartPersonalOAuthSetup
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationUnavailable
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup import (
+    CompletePersonalOAuthSetup,
+    PersonalOAuthSetupBinding,
+    PersonalOAuthSetupConflict,
+    PersonalOAuthSetupQuery,
+    PersonalOAuthSetupReceipt,
+    PersonalOAuthSetupRequired,
+    PersonalOAuthSetupStatus,
+    SetupInProgress,
+    SetupRequired,
+    SetupValidated,
+    StartPersonalOAuthSetup,
+    StartedPersonalOAuthSetup,
+)
 from umbod.core.persistence import AllFields, Database, DatabaseSession, Equals, Query, TransactionMode, Unordered, UpsertCommand
 from .personal_oauth_configurations import load_personal_oauth_configuration
 from .personal_oauth_setup_schema import PERSONAL_OAUTH_SETUP_CONNECTOR_ID, PERSONAL_OAUTH_SETUP_TABLE, PersonalOAuthSetupKey, PersonalOAuthSetupRecord

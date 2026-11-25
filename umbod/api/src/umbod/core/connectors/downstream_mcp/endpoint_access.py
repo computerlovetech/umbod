@@ -3,16 +3,14 @@ from typing import Annotated, Literal, Protocol
 from pydantic import Field
 
 from .models import DomainModel
-from .personal_connections.oauth_models import (
-    PersonalOAuthProviderFailure,
-    PersonalOAuthProviderUnsupported,
-)
-from .personal_oauth_metadata import (
+from .personal.oauth.authorization import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
+from .personal.oauth.metadata import (
+    AutomaticIssuerSelection,
     DiscoverPersonalOAuthMetadata,
+    MetadataEndpoint,
     PersonalOAuthMetadataProvider,
     PersonalOAuthMetadataResult,
 )
-from .personal_oauth_metadata.models import AutomaticIssuerSelection, MetadataEndpoint
 
 
 class CheckMcpEndpointAccess(DomainModel):

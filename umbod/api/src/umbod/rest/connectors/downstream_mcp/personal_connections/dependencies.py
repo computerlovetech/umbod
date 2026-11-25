@@ -3,14 +3,14 @@ from typing import Annotated
 from fastapi import Depends, HTTPException
 
 from umbod.core.callers import AuthenticationProvenance, CallerContext
-from umbod.core.connectors.downstream_mcp.personal_connections import (
+from umbod.core.connectors.downstream_mcp.personal.connections import (
     PersonalCaller,
     PersonalConnectionService,
     PersonalConnectorInventory,
     PersonalConnectorInventoryService,
     ResolvedPersonalIdentity,
+    canonical_principal,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.core.permissions import GroupPermissionStore
 from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts, personal_group_membership

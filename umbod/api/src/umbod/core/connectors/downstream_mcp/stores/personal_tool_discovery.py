@@ -2,9 +2,13 @@ from umbod.core.configuration.persistence import TextCipher
 from umbod.core.persistence import Database, ReadSession, AllOf, Equals
 
 from ..models import uses_personal_oauth
-from ..personal_connections.models import PersonalConnectionKey
-from ..personal_tools.models import PersonalToolDiscoveryQuery, PersonalToolRecord, PersonalToolObservation
-from ..personal_tools.contract_validation import contract_fingerprint
+from ..personal.connections import PersonalConnectionKey
+from ..personal.tools import (
+    PersonalToolDiscoveryQuery,
+    PersonalToolObservation,
+    PersonalToolRecord,
+    contract_fingerprint,
+)
 from .personal_discovery_projection import DISCOVERY_AVAILABILITY_ADAPTER, AvailableDiscovery, BlockedRefresh, PreparingRefresh, discovery_filter
 from .personal_discovery_schema import PERSONAL_DISCOVERY_TABLE
 from .personal_tools_schema import PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_OBSERVATION_NAMESPACE, PERSONAL_TOOL_OBSERVATION_SUBJECT, PERSONAL_TOOL_OBSERVATION_CONNECTOR_ID

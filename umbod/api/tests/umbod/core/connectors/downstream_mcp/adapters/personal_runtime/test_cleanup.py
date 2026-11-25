@@ -6,8 +6,8 @@ import pytest
 from fastmcp import Client
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import FastMCPPersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_ports import PersonalMcpTransport
 
 from .conftest import ScriptedNetwork, ScriptedResolver
 

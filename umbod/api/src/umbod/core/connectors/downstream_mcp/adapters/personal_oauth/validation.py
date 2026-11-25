@@ -2,14 +2,18 @@ import ipaddress
 import json
 from typing import Literal
 
-from ...personal_oauth_applications.models import AbsentApplicationReference, ApplicationReference, OAuthApplicationCredentials
+from ...personal.oauth.applications import (
+    AbsentApplicationReference,
+    ApplicationReference,
+    OAuthApplicationCredentials,
+)
 from pydantic import model_validator
 from urllib.parse import SplitResult, unquote, urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from umbod.core.network import validate_public_address
-from ...personal_connections.oauth_callback_models import GenericBinding, IssuerBinding
+from ...personal.oauth.callback import GenericBinding, IssuerBinding
 
 
 MAX_BODY_BYTES = 1_048_576

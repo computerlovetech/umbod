@@ -8,11 +8,18 @@ import re
 from datetime import UTC, datetime, timedelta
 from collections.abc import Callable
 
-from ...personal_oauth_applications.ports import PersonalOAuthApplicationStore
-from ...personal_oauth_applications.models import (
-    AbsentApplicationReference, ApplicationReference, ClaimedOAuthApplication, CompleteOAuthApplication,
-    ExpiringApplicationSecret, NonexpiringApplicationSecret, OAuthApplicationBinding,
-    OAuthApplicationCredentials, RegisteredApplicationReference, ResolveOAuthApplication,
+from ...personal.oauth.applications import (
+    AbsentApplicationReference,
+    ApplicationReference,
+    ClaimedOAuthApplication,
+    CompleteOAuthApplication,
+    ExpiringApplicationSecret,
+    NonexpiringApplicationSecret,
+    OAuthApplicationBinding,
+    OAuthApplicationCredentials,
+    PersonalOAuthApplicationStore,
+    RegisteredApplicationReference,
+    ResolveOAuthApplication,
 )
 from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit
@@ -20,7 +27,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit
 import anyio
 from pydantic import SecretStr
 
-from ...personal_connections.authorization_models import (
+from ...personal.oauth.grants import (
     AbsentPersonalRefreshToken,
     ExpiringPersonalToken,
     PersonalOAuthGrant,
@@ -28,24 +35,24 @@ from ...personal_connections.authorization_models import (
     UnknownPersonalTokenLifetime,
     authorize_personal_grant,
 )
-from ...personal_connections.oauth_callback_models import (
+from ...personal.oauth.callback import (
     GenericBinding, IssuerBinding, PresentCallbackIssuer, issuer_callback_uri, issuer_route_key, validate_callback_binding,
 )
-from ...personal_connections.models import Authorized
-from ...personal_connections.oauth_failure_models import OAuthFailureEvidence, OAuthFailureReason, OAuthFailureStage
+from ...personal.connections import Authorized
+from ...personal.oauth.failures import OAuthFailureEvidence, OAuthFailureReason, OAuthFailureStage
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, NoDownstreamResponse
 from .failure import OAuthOperationProgress, oauth_failure_boundary, rejected_response, request_with_progress
-from ...personal_connections.oauth_models import (
+from ...personal.oauth.authorization import (
     ExchangePersonalOAuth,
     PersonalOAuthProviderFailure,
     PersonalOAuthProviderUnsupported,
     PreparePersonalOAuth,
     PreparedPersonalOAuth,
 )
-from ...personal_oauth_configuration.models import (
+from ...personal.oauth.configuration import (
     PersonalOAuthClient,
-    PreconfiguredConfidentialOAuthClient,
     PersonalOAuthPolicy,
+    PreconfiguredConfidentialOAuthClient,
     parse_oauth_scopes,
 )
 from .callback import CallbackURLPolicy, validate_callback_url

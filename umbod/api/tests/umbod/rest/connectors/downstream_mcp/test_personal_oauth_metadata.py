@@ -9,7 +9,7 @@ from tests.support.personal_oauth_metadata import InMemoryPersonalOAuthMetadataP
 from tests.support.personal_oauth_setup import install_api_setup_validation
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.metadata import DiscoveredPersonalOAuthMetadataProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthHttpResponse
-from umbod.core.connectors.downstream_mcp.personal_oauth_metadata import DiscoveredPersonalOAuthMetadata
+from umbod.core.connectors.downstream_mcp.personal.oauth.metadata import DiscoveredPersonalOAuthMetadata
 from umbod.rest.connectors.downstream_mcp.personal_oauth_metadata import get_metadata_provider
 from tests.umbod.rest.connectors.downstream_mcp.personal_connections.test_personal_oauth_routes import OAuthApi, oauth_api as oauth_api
 from .test_personal_catalogue import client as client, payload

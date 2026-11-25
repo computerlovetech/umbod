@@ -5,13 +5,13 @@ from typing import Annotated, TypeVar
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import ValidationError
 
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization import (
     PersonalOAuthConflict,
     PersonalOAuthProviderFailure,
     PersonalOAuthProviderUnsupported,
+    PersonalOAuthService,
     PersonalOAuthUnavailable,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthService
 
 from .oauth_dependencies import get_personal_oauth_service, require_personal_oauth
 from .oauth_schemas import PersonalOAuthAttemptResponse, PersonalOAuthStartRequest, PersonalOAuthStartResponse

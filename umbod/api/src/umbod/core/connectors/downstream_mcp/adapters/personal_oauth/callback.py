@@ -1,6 +1,6 @@
 from enum import Enum
 
-from ...personal_connections.oauth_callback_models import validate_callback_uri
+from ...personal.oauth.callback import validate_callback_uri
 from .validation import validated_url
 
 

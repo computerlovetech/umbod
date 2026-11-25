@@ -1,29 +1,32 @@
 import re
 from datetime import datetime, timedelta
 from collections.abc import Callable
-from ...personal_oauth_applications.ports import PersonalOAuthApplicationStore
-from ...personal_oauth_applications.models import OAuthApplicationBinding, ResolveOAuthApplication
+from ...personal.oauth.applications import (
+    OAuthApplicationBinding,
+    PersonalOAuthApplicationStore,
+    ResolveOAuthApplication,
+)
 from typing import Literal
 from urllib.parse import urlencode
 
 import anyio
 from pydantic import BaseModel, ConfigDict, SecretStr
 
-from ...personal_connections.authorization_models import (
+from ...personal.oauth.grants import (
     ExpiringPersonalToken,
     PersonalOAuthGrant,
     PresentPersonalRefreshToken,
     authorize_personal_grant,
 )
-from ...personal_connections.models import Authorized
+from ...personal.connections import Authorized
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, NoDownstreamResponse
 from .failure import OAuthOperationProgress, oauth_failure_boundary, rejected_response, request_with_progress
-from ...personal_connections.refresh_provider_models import (
+from ...personal.oauth.refresh import (
     PersonalOAuthRefreshDenied,
     PersonalOAuthRefreshUncertain,
     RefreshPersonalOAuth,
 )
-from ...personal_oauth_configuration.models import parse_oauth_scopes, PreconfiguredConfidentialOAuthClient
+from ...personal.oauth.configuration import PreconfiguredConfidentialOAuthClient, parse_oauth_scopes
 from .refresh_logging import private_refresh_network_logs
 from .callback import CallbackURLPolicy, validate_callback_url
 from .transport import (

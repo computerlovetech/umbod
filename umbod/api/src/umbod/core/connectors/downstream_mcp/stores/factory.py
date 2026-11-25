@@ -1,34 +1,36 @@
 from dataclasses import dataclass
 
-from ..personal_oauth_applications.ports import PersonalOAuthApplicationStore
+from ..personal.oauth.applications import PersonalOAuthApplicationStore
 from .personal_oauth_applications import EncryptedPersonalOAuthApplicationStore, UnavailablePersonalOAuthApplicationStore
 
-from ..personal_oauth_setup.ports import PersonalOAuthSetupStore
+from ..personal.oauth.setup import PersonalOAuthSetupStore
 from .personal_oauth_setup import PersonalOAuthSetupStoreService
 
-from ..personal_tools.ports import PersonalToolDiscoveryReader
+from ..personal.tools import (
+    PersonalRuntimeAuthorizationStore,
+    PersonalToolAccessStore,
+    PersonalToolDiscoveryReader,
+    PersonalToolPolicyStore,
+)
 from .personal_tool_discovery import PersonalToolDiscoveryStore
 
-from ..personal_connections.refresh_ports import PersonalRefreshStore
+from ..personal.oauth.refresh import PersonalRefreshStore
 from .personal_refresh import EncryptedPersonalRefreshStore
 
-from ..personal_connections.health_ports import PersonalAuthorizationHealthStore
+from ..personal.connections import PersonalAuthorizationHealthStore, PersonalConnectionStore
 from .personal_authorization_health import EncryptedPersonalAuthorizationHealthStore
 
-from ..personal_tools import PersonalToolAccessStore, PersonalToolPolicyStore
 from .personal_tool_access import EncryptedPersonalToolAccessStore
 from .personal_tool_policies import PersonalToolPolicyStoreService
 
-from ..personal_connections.runtime_ports import PersonalRuntimeAuthorizationStore
 from .personal_runtime_authorizations import EncryptedPersonalRuntimeAuthorizationStore
 
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationStore
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import EncryptedPersonalOAuthConfigurationStore
 
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthAttemptStore
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization import PersonalOAuthAttemptStore
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_attempts import EncryptedPersonalOAuthAttemptStore
 
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalConnectionStore
 from umbod.core.connectors.downstream_mcp.stores.personal_connections import DefinitionBoundPersonalConnectionStore
 
 from umbod.core.activation import ActivationStore, CAPABILITY_ACTIVATION_STATE_TABLE

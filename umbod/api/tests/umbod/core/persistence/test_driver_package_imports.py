@@ -335,7 +335,7 @@ def test_importing_neutral_capability_override_modules_does_not_load_drivers() -
         _assert_import_does_not_load_persistence_drivers(module_name)
 
 def test_personal_identity_policy_does_not_load_persistence_drivers() -> None:
-    _assert_import_does_not_load_persistence_drivers('umbod.core.connectors.downstream_mcp.personal_connections.principal')
+    _assert_import_does_not_load_persistence_drivers('umbod.core.connectors.downstream_mcp.personal.connections.principal')
 
 
 def test_infrastructure_contains_only_approved_io_composition_and_drivers() -> None:

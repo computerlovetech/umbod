@@ -1,6 +1,6 @@
 import pytest
 
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeAuthorizationQuery
 from umbod.rest.connectors.downstream_mcp.personal_connections.tools import get_personal_tool_discovery
 
 from .test_personal_connection_routes import PersonalApi, personal_api as personal_api

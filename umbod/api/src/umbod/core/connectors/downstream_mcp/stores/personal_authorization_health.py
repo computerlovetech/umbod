@@ -3,11 +3,10 @@ from .personal_oauth_applications import require_grant_application
 from umbod.core.persistence import Database, Equals, TransactionMode
 
 from ..models import uses_personal_oauth
-from ..personal_connections.authorization_models import ExpiringPersonalToken, PresentPersonalRefreshToken
-from ..personal_connections.health_models import RefreshingAuthorization
+from ..personal.oauth.grants import ExpiringPersonalToken, PresentPersonalRefreshToken, validated_bound_grant
+from ..personal.connections.health_models import RefreshingAuthorization
 from .personal_refresh_records import matching_refresh
-from ..personal_connections.grant_binding import validated_bound_grant
-from ..personal_connections.health_models import (
+from ..personal.connections.health_models import (
     ExpiredAuthorization,
     LocallyAuthorized,
     NotAuthorized,
@@ -17,7 +16,7 @@ from ..personal_connections.health_models import (
     ReconnectRequired,
     UnsupportedAuthorization,
 )
-from ..personal_connections.models import Authorized, PersonalConnection
+from ..personal.connections import Authorized, PersonalConnection
 from .personal_authorization_rejection_records import matching_rejection
 from .personal_connection_records import load_personal_connection
 from .personal_oauth_configurations import load_personal_oauth_configuration

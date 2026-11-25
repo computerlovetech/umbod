@@ -8,11 +8,11 @@ import httpcore2
 import pytest
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import FastMCPPersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_ports import PersonalMcpTransport
 from pydantic import SecretStr
 
-from umbod.core.connectors.downstream_mcp.personal_connections.models import CanonicalPrincipal, PersonalConnectionKey
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget
+from umbod.core.connectors.downstream_mcp.personal.connections.models import CanonicalPrincipal, PersonalConnectionKey
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget
 
 
 class ScriptedResolver:

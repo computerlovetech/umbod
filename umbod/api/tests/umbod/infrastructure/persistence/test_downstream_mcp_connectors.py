@@ -7,7 +7,7 @@ import pytest
 from pydantic import SecretStr
 
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
-from umbod.core.connectors.downstream_mcp.personal_connections import (
+from umbod.core.connectors.downstream_mcp.personal.connections import (
     Authorized, CanonicalPrincipal, PersonalConnection, PersonalConnectionKey,
     ReplacePersonalAuthorization, SetPersonalConnectionEnabled,
 )

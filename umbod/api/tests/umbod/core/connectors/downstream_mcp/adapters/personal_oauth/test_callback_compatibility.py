@@ -3,18 +3,18 @@ from tests.support.personal_oauth_applications import InMemoryPersonalOAuthAppli
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import PresentCallbackIssuer
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import PresentCallbackIssuer
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy, validate_callback_url
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.validation import AuthorizationServer, validated_url
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported, PreparePersonalOAuth
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthProvider
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration.models import PersonalOAuthClient
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import DynamicPublicOAuthClient, PersonalOAuthPolicy, PreconfiguredConfidentialOAuthClient, PreconfiguredPublicOAuthClient
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported, PreparePersonalOAuth
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.ports import PersonalOAuthProvider
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration.models import PersonalOAuthClient
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import DynamicPublicOAuthClient, PersonalOAuthPolicy, PreconfiguredConfidentialOAuthClient, PreconfiguredPublicOAuthClient
 
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import issuer_callback_uri
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import issuer_callback_uri
 
 from .conftest import ProviderCase, exchange_command, response
 

@@ -8,8 +8,8 @@ from tests.umbod.mcp.connectors.downstream_mcp.personal_runtime_support import e
 from tests.umbod.mcp.connectors.downstream_mcp.test_personal_execution_pipeline import InvocationLog, provider_for
 from umbod.core.activation import ActivationStatus, CapabilityRef
 from umbod.core.connectors.downstream_mcp.models import ToolCatalogSnapshot
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_tools.service import PersonalToolDiscoveryService
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.tools.service import PersonalToolDiscoveryService
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, ReplaceToolCatalog, SaveConnectorDefinition
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.permissions.stores.schema import CAPABILITY_PERMISSION_TABLE

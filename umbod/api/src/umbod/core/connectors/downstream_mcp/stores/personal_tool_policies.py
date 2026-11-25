@@ -12,7 +12,7 @@ from umbod.core.capabilities.tools.names import PublicToolIdentity, PublicToolNa
 from umbod.core.persistence import Database, DatabaseSession, DeleteQuery, Equals, NoFilter, TransactionMode, UpsertCommand
 
 from ..models import ToolCatalogSnapshot, uses_personal_oauth
-from ..personal_tools import (
+from ..personal.tools import (
     PersonalToolPolicy,
     PersonalToolPolicyConflict,
     PersonalToolPolicyInvalid,

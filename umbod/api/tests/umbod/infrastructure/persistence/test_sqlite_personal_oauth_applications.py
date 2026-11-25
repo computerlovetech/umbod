@@ -6,7 +6,7 @@ import pytest
 from tests.persistence_runtime import prepared_sqlite_runtime
 from tests.support.personal_oauth_applications import application_clock, application_credentials, install_application_policy
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
-from umbod.core.connectors.downstream_mcp.personal_oauth_applications.models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.applications.models import (
     ClaimedOAuthApplication, CompleteOAuthApplication, OAuthApplicationUnavailable,
     RegisteredApplicationReference, ResolveOAuthApplication,
 )

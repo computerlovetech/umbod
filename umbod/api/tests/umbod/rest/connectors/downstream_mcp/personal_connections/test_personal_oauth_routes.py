@@ -20,9 +20,9 @@ from umbod.core.persistence import PersistenceRuntime
 from umbod.infrastructure import AppPersistenceRuntime
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_policy import PersonalOAuthPolicy, get_personal_oauth_policy
-from umbod.core.connectors.downstream_mcp.personal_connections.models import Authorized
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericBinding, IssuerBinding, issuer_callback_uri, issuer_route_key
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+from umbod.core.connectors.downstream_mcp.personal.connections.models import Authorized
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import GenericBinding, IssuerBinding, issuer_callback_uri, issuer_route_key
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import (
     ExchangePersonalOAuth, PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported,
     PreparePersonalOAuth, PreparedPersonalOAuth,
 )

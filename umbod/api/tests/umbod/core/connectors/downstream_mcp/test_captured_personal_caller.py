@@ -7,16 +7,16 @@ from pydantic import ValidationError
 import pytest
 
 from umbod.core.callers import AuthenticationProvenance, CallerContext, GroupMembership, UnavailableSubject
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, MissingCanonicalPrincipal, PersonalConnectionService
-from umbod.core.connectors.downstream_mcp.personal_connections.caller import PersonalCaller, UnavailablePersonalCaller
-from umbod.core.connectors.downstream_mcp.personal_connections.ports import PersonalConnectionStore
-from umbod.core.connectors.downstream_mcp.personal_connections.inventory_ports import PersonalConnectorInventory
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthAttemptStore, PersonalOAuthProvider
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthService
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_ports import PersonalRefreshStore
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_provider_ports import PersonalOAuthRefreshProvider
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_service import PersonalRefreshService
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, MissingCanonicalPrincipal, PersonalConnectionService
+from umbod.core.connectors.downstream_mcp.personal.connections.caller import PersonalCaller, UnavailablePersonalCaller
+from umbod.core.connectors.downstream_mcp.personal.connections.ports import PersonalConnectionStore
+from umbod.core.connectors.downstream_mcp.personal.connections.inventory_ports import PersonalConnectorInventory
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.ports import PersonalOAuthAttemptStore, PersonalOAuthProvider
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.service import PersonalOAuthService
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.ports import PersonalRefreshStore
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.provider_ports import PersonalOAuthRefreshProvider
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.service import PersonalRefreshService
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationStore
 from umbod.core.connectors.downstream_mcp.stores.ports import ConnectorDefinitionStore
 
 

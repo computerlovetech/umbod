@@ -18,10 +18,10 @@ from tests.umbod.mcp.connectors.downstream_mcp.personal_runtime_support import E
 from tests.umbod.mcp.connectors.downstream_mcp.test_personal_execution_pipeline import InvocationLog, provider_for
 from tests.umbod.mcp.test_personal_caller import _settings
 from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey, SetPersonalConnectionEnabled
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import authorize_personal_grant
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory
-from umbod.core.connectors.downstream_mcp.personal_tools.service import PersonalToolDiscoveryService
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalConnectionKey, SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import authorize_personal_grant
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalToolInventory
+from umbod.core.connectors.downstream_mcp.personal.tools.service import PersonalToolDiscoveryService
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCallerProvider, McpPersonalToolRuntime, PersonalDiscoveryMiddleware, PersonalToolReservationMiddleware, personal_tool_permission_check
 from umbod.mcp.connectors.native.tools import RuntimeConnectorToolRegistry, register_connector_tools

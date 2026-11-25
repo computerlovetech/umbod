@@ -4,13 +4,13 @@ from pydantic import BaseModel, ValidationError
 
 import pytest
 
-from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import (
+from umbod.core.connectors.downstream_mcp.personal.connections.identity_models import (
     AbsentIssuer, DeclaredIssuer, MalformedIssuer, ObservedIdentityString,
     UnavailableIdentityString, PersonalIdentityFacts, PersonalIdentityPolicy,
     PersonalIdentityRejection, ResolvedPersonalIdentity, UnresolvedPersonalIdentity,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
-from umbod.core.connectors.downstream_mcp.personal_connections.identity_ports import PersonalIdentityResolver
+from umbod.core.connectors.downstream_mcp.personal.connections.principal import canonical_principal
+from umbod.core.connectors.downstream_mcp.personal.connections.identity_ports import PersonalIdentityResolver
 
 resolver: PersonalIdentityResolver = canonical_principal
 IdentityModel = TypeVar("IdentityModel", bound=BaseModel)

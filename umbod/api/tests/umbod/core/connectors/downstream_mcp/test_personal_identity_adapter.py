@@ -1,7 +1,7 @@
 import pytest
 
 from umbod.core.connectors.downstream_mcp.adapters.identity import personal_group_membership, personal_identity_facts
-from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import AbsentIssuer, DeclaredIssuer, MalformedIssuer
+from umbod.core.connectors.downstream_mcp.personal.connections.identity_models import AbsentIssuer, DeclaredIssuer, MalformedIssuer
 
 
 @pytest.mark.parametrize("claims", [

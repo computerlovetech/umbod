@@ -13,7 +13,7 @@ from umbod.core.connectors.downstream_mcp.endpoint_access import (
     AnonymousInitializationResult,
     CheckMcpEndpointAccess,
 )
-from umbod.core.connectors.downstream_mcp.personal_oauth_metadata import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.metadata import (
     DiscoveredPersonalOAuthMetadata,
 )
 from umbod.rest.connectors.downstream_mcp.endpoint_access import (

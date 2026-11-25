@@ -15,17 +15,26 @@ from umbod.config.app import AppConfig
 from umbod.core.connectors.downstream_mcp.adapters.identity import authenticated_personal_mcp_claims, personal_identity_facts, personal_group_membership
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.core.callers import AuthenticationProvenance
-from umbod.core.connectors.downstream_mcp.personal_connections.caller import PersonalCaller, PersonalCallerProvider, UnavailablePersonalCaller
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRequired, PersonalInventoryRefreshRequired, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.connections import (
+    PersonalCaller,
+    PersonalCallerProvider,
+    ResolvedPersonalIdentity,
+    UnavailablePersonalCaller,
+    canonical_principal,
+)
+from umbod.core.connectors.downstream_mcp.personal.tools import (
+    InvokePersonalTool,
+    PersonalAuthorizationRequired,
+    PersonalInventoryRefreshRequired,
+    PersonalMcpTransport,
+    PersonalToolAccessStore,
+    PersonalToolResult,
+    PersonalToolRuntimeService,
+)
 from umbod.mcp.signals.diagnostics import invocation_failure
 
 from .personal_recovery import personal_authorization_failure, personal_inventory_failure, validate_recovery_origin
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRuntimeService
-from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolAccessStore
-from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import ResolvedPersonalIdentity
 from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
-from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
 
 from .namespaces import PersonalToolNameMatcher, PersonalToolNamespace
 from .tool_invocation import AuthorizedPersonalTool

@@ -2,7 +2,7 @@ import pytest
 
 from tests.support.personal_discovery_events import assert_notification, events, reject_events, rollback_snapshot
 from tests.support.personal_oauth_cases import AttemptCase, claim_command, completion, pending
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthUnavailable
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import PersonalOAuthUnavailable
 
 @pytest.mark.asyncio
 async def test_oauth_direct_connection_completion_emits_one_notification(oauth_completion_case: AttemptCase) -> None:

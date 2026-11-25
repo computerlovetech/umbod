@@ -13,16 +13,16 @@ from umbod.core.connectors.downstream_mcp.endpoint_access import (
     OAuthNotChecked,
     OAuthNotConfirmed,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import (
     PersonalOAuthProviderFailure,
     PersonalOAuthProviderUnsupported,
 )
-from umbod.core.connectors.downstream_mcp.personal_oauth_metadata import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.metadata import (
     DiscoverPersonalOAuthMetadata,
     PersonalOAuthIssuerSelectionRequired,
     PersonalOAuthMetadataResult,
 )
-from umbod.core.connectors.downstream_mcp.personal_oauth_metadata.models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.metadata.models import (
     AutomaticIssuerSelection,
 )
 

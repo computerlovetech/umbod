@@ -10,7 +10,7 @@ from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
     ConnectorOAuth,
     require_sign_in,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import (
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import (
     PersonalRuntimeUnavailable,
 )
 from umbod.core.invocation.diagnostics import (

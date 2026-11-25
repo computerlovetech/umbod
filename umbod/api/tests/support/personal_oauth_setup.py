@@ -3,10 +3,10 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.models import DiscoverPersonalOAuthSetup, PersonalOAuthSetupDiscovery, PersonalOAuthSetupValidation, ValidatePersonalOAuthSetup, ValidatedPersonalOAuthSetup
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import CompletePersonalOAuthSetup, PersonalOAuthSetupQuery, SetupValidated, StartPersonalOAuthSetup
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup.models import DiscoverPersonalOAuthSetup, PersonalOAuthSetupDiscovery, PersonalOAuthSetupValidation, ValidatePersonalOAuthSetup, ValidatedPersonalOAuthSetup
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup.state import CompletePersonalOAuthSetup, PersonalOAuthSetupQuery, SetupValidated, StartPersonalOAuthSetup
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.ports import PersonalOAuthSetupStore
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup.ports import PersonalOAuthSetupStore
 from umbod.rest.connectors.downstream_mcp.personal_oauth_setup import get_setup_provider
 
 

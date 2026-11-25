@@ -7,8 +7,8 @@ import pytest
 
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithoutOutputSchema, ToolIdentity
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolObservation
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalConnectionKey
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolObservation
 from umbod.core.connectors.downstream_mcp.stores.personal_tools_schema import (
     PERSONAL_TOOL_OBSERVATION_SUBJECT, PERSONAL_TOOL_OBSERVATION_TABLE,
     PersonalToolObservationRecord, PersonalToolObservationRecordKey,

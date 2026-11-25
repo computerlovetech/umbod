@@ -6,7 +6,7 @@ import pytest_asyncio
 
 from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
-from umbod.core.connectors.downstream_mcp.personal_connections import (
+from umbod.core.connectors.downstream_mcp.personal.connections import (
     Authorized,
     CanonicalPrincipal,
     PersonalConnection,

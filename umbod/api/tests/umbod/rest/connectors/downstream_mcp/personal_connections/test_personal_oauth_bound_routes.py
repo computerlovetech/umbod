@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import MissingCallbackIssuer, issuer_route_key
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import MissingCallbackIssuer, issuer_route_key
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback import CALLBACK_PATH
 
 from .test_personal_oauth_routes import OAuthApi, oauth_api as oauth_api

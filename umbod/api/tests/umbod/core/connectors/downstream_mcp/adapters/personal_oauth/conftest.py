@@ -7,14 +7,14 @@ import anyio
 import pytest
 from pydantic import SecretStr
 
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, IssuerBinding, IssuerRoute, PresentCallbackIssuer
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import GenericRoute, IssuerBinding, IssuerRoute, PresentCallbackIssuer
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import OAuthHttpResponse
-from umbod.core.connectors.downstream_mcp.personal_connections.models import (
+from umbod.core.connectors.downstream_mcp.personal.connections.models import (
     CanonicalPrincipal,
     PersonalConnectionKey,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import (
     ClaimedPersonalOAuthAttempt,
     ExchangePersonalOAuth,
     PersonalOAuthAttemptQuery,

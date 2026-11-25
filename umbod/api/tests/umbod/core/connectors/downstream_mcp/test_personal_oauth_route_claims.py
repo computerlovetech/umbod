@@ -1,8 +1,8 @@
 import pytest
 from pydantic import SecretStr
 
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import CallbackIssuer, GenericRoute, IssuerBinding, IssuerRoute, MissingCallbackIssuer, PresentCallbackIssuer, issuer_callback_uri, issuer_route_key
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import ClaimPersonalOAuthAttempt, PersonalOAuthUnavailable, PublishPersonalOAuthAttempt
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import CallbackIssuer, GenericRoute, IssuerBinding, IssuerRoute, MissingCallbackIssuer, PresentCallbackIssuer, issuer_callback_uri, issuer_route_key
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import ClaimPersonalOAuthAttempt, PersonalOAuthUnavailable, PublishPersonalOAuthAttempt
 from umbod.core.connectors.downstream_mcp.stores import create_downstream_mcp_stores
 
 from .test_personal_oauth_attempt_persistence import AttemptCase, case as case, publication

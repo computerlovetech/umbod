@@ -19,7 +19,7 @@ from pydantic.types import JsonValue
 
 from umbod.core.capabilities.descriptions.domain import CapabilityDescription
 from umbod.core.capabilities.tools.names import ToolNamePrefix, normalize_tool_name_prefix
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import (
     PersonalOAuthSettings,
     legacy_personal_oauth_settings,
 )

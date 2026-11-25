@@ -1,7 +1,7 @@
 import pytest
 
 from tests.umbod.rest.connectors.downstream_mcp.personal_connections.test_personal_connection_routes import PersonalApi, personal_api
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_models import PersonalRefreshChanged, PersonalRefreshConflict, PersonalRefreshReconnectRequired, PersonalRefreshUnsupported
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.models import PersonalRefreshChanged, PersonalRefreshConflict, PersonalRefreshReconnectRequired, PersonalRefreshUnsupported
 from umbod.rest.connectors.downstream_mcp.personal_connections.refresh_dependencies import get_personal_refresh_service
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_dependencies import require_personal_oauth
 

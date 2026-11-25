@@ -5,15 +5,17 @@ from fastapi import Depends
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.factory import configured_personal_oauth_refresh_provider
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, PersonalConnectorInventory
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_provider_ports import PersonalOAuthRefreshProvider
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_service import PersonalRefreshService
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCaller, PersonalConnectorInventory
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh import (
+    PersonalOAuthRefreshProvider,
+    PersonalRefreshService,
+)
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
 
 from .dependencies import get_personal_connector_inventory, get_personal_caller
 from .oauth_diagnostics import get_oauth_failure_observer
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_diagnostics import PersonalOAuthFailureObserver
+from umbod.core.connectors.downstream_mcp.personal.oauth.diagnostics import PersonalOAuthFailureObserver
 from .oauth_dependencies import get_personal_callback_policy, oauth_clock, require_personal_oauth
 
 

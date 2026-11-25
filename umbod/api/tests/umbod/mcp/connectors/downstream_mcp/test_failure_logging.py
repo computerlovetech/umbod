@@ -17,8 +17,8 @@ from umbod.core.invocation.failure_evidence import current_invocation_failure
 from tests.umbod.mcp.connectors.downstream_mcp.personal_runtime_support import execution_case
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from tests.umbod.mcp.connectors.downstream_mcp.test_personal_execution_pipeline import provider_for
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import PersonalAuthorizationHealthUnavailable
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolResult
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 from umbod.logging import OpenTelemetryJsonFormatter, configure_logging

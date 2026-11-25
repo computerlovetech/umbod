@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from tests.umbod.core.connectors.downstream_mcp.personal_discovery_audit import DiscoveryReadAudit, RowT, KeyT, ResultT
 from umbod.core.persistence import ReadSession, Table
-from umbod.core.connectors.downstream_mcp.personal_connections import SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.connections import SetPersonalConnectionEnabled
 
 import pytest
 from pydantic import ValidationError
@@ -14,8 +14,8 @@ from tests.umbod.core.connectors.downstream_mcp.personal_discovery_support impor
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from tests.umbod.core.connectors.downstream_mcp.test_personal_tools_s3_contracts import approved_tool, replace_policy, save_matches
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
-from umbod.core.connectors.downstream_mcp.personal_connections.models import CanonicalPrincipal, PersonalConnectionKey
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryQuery
+from umbod.core.connectors.downstream_mcp.personal.connections.models import CanonicalPrincipal, PersonalConnectionKey
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolDiscoveryQuery
 from umbod.core.connectors.downstream_mcp.stores.personal_discovery_schema import PERSONAL_DISCOVERY_TABLE
 from umbod.core.connectors.downstream_mcp.stores.personal_tool_discovery import PersonalToolDiscoveryStore
 from umbod.core.connectors.downstream_mcp.stores.personal_tools_schema import PERSONAL_TOOL_OBSERVATION_TABLE
@@ -131,11 +131,11 @@ class InterleavedDatabase(AuditedDatabase):
 
 async def second_connector(case: RuntimeCase) -> PersonalConnectionKey:
     from umbod.core.connectors.downstream_mcp.stores import SaveConnectorDefinition
-    from umbod.core.connectors.downstream_mcp.personal_connections import ReplacePersonalAuthorization
-    from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import authorize_personal_grant
+    from umbod.core.connectors.downstream_mcp.personal.connections import ReplacePersonalAuthorization
+    from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import authorize_personal_grant
     from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import install_personal_oauth_configuration
-    from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthSettings, PreconfiguredPublicOAuthClient
-    from umbod.core.connectors.downstream_mcp.personal_tools import MissingInventoryRevision, SavePersonalToolObservation
+    from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthSettings, PreconfiguredPublicOAuthClient
+    from umbod.core.connectors.downstream_mcp.personal.tools import MissingInventoryRevision, SavePersonalToolObservation
     from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE, GroupConnectorPermissionKey, GroupConnectorPermissionRecord
 
     definition = (await case.bundle.definitions.list()).definitions[0].model_copy(update={"connector_id": "second", "public_path": "/mcp/proxies/second", "display_name": "Second", "tool_name_prefix": "Second"})

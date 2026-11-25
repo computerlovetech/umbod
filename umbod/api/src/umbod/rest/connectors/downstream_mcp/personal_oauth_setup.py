@@ -9,11 +9,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.factory import configured_personal_oauth_setup_provider
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_diagnostics import PersonalOAuthFailureObserver
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationUnavailable
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.ports import PersonalOAuthSetupProvider
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.service import PersonalOAuthSetupService
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import PersonalOAuthSetupConflict, PersonalOAuthSetupQuery, PersonalOAuthSetupStatus, StartPersonalOAuthSetup
+from umbod.core.connectors.downstream_mcp.personal.oauth.diagnostics import PersonalOAuthFailureObserver
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationUnavailable
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup import (
+    PersonalOAuthSetupConflict,
+    PersonalOAuthSetupProvider,
+    PersonalOAuthSetupQuery,
+    PersonalOAuthSetupService,
+    PersonalOAuthSetupStatus,
+    StartPersonalOAuthSetup,
+)
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup import setup_clock
 from .dependencies import Factories, get_downstream_stores

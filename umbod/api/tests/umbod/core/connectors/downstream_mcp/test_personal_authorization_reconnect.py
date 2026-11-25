@@ -6,11 +6,11 @@ from pydantic import SecretStr
 
 from tests.umbod.core.connectors.downstream_mcp.test_personal_oauth_attempt_persistence import AttemptCase, CompletionWriteFailureCipher, case, claim_command, publication
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_attempts import EncryptedPersonalOAuthAttemptStore
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import AbsentPersonalRefreshToken, ExpiringPersonalToken, PersonalOAuthGrant, authorize_personal_grant
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthQuery, RejectPersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.models import ReplacePersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import CompletePersonalOAuthAttempt, FailPersonalOAuthAttempt
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import AbsentPersonalRefreshToken, ExpiringPersonalToken, PersonalOAuthGrant, authorize_personal_grant
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import PersonalAuthorizationHealthQuery, RejectPersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.connections.models import ReplacePersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import CompletePersonalOAuthAttempt, FailPersonalOAuthAttempt
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeAuthorizationQuery
 
 __all__ = ["case"]
 

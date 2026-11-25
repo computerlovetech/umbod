@@ -13,10 +13,10 @@ from pydantic import SecretStr
 from umbod.config import AppConfig
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import InMemoryPersonalMcpTransport
 from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithoutOutputSchema, ToolIdentity
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey, ReplacePersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import AbsentPersonalRefreshToken, ExpiringPersonalToken, PersonalOAuthGrant, authorize_personal_grant
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalToolInventory
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationQuery
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalConnectionKey, ReplacePersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import AbsentPersonalRefreshToken, ExpiringPersonalToken, PersonalOAuthGrant, authorize_personal_grant
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalToolInventory
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationQuery
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, DownstreamMcpStores, create_downstream_mcp_stores
 from tests.persistence_runtime import create_inmemory_runtime
 from tests.support.personal_oauth import create_personal_oauth_app

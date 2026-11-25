@@ -13,7 +13,7 @@ from umbod.core.connectors.downstream_mcp.models import (
     default_tool_name_prefix,
     validate_custom_header_name,
 )
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import (
     OAuthIssuer,
     PersonalOAuthSettings,
     legacy_personal_oauth_settings,

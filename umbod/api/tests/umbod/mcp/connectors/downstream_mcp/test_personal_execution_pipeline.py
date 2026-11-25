@@ -16,11 +16,11 @@ from tests.umbod.mcp.connectors.downstream_mcp.personal_runtime_support import E
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from umbod.core.capabilities.descriptions import SystemConnectorCapabilityDescriptionOverrideStore
 from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithOutputSchema
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_tools.service import PersonalToolDiscoveryService
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.tools.service import PersonalToolDiscoveryService
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, ReplaceToolCatalog
 from tests.umbod.mcp.connectors.downstream_mcp.test_provider import RecordingInvocationPolicy, _downstream, _provider
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, SetPersonalConnectionEnabled
 from umbod.core.invocation import ConnectorInvocation, ConnectorInvocationPolicy, PermitAllConnectorInvocationPolicy
 from umbod.mcp.connectors.native.tools import ConnectorToolSearchCandidate
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode.sandbox import FastMcpMontyCodeModeAdapter, OpenApiCodeModeInvocation

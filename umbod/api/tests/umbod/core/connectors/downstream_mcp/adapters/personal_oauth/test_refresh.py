@@ -11,7 +11,7 @@ import pytest
 from pydantic import SecretStr
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import issuer_callback_uri
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import issuer_callback_uri
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import SafeOAuthHttpTransport
 from umbod.core.network import PublicAddressNetworkBackend
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.refresh import StoredPersonalOAuthRefreshProvider
@@ -21,21 +21,21 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport impo
     OAuthHttpRequest,
     OAuthHttpResponse,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import (
     AbsentPersonalRefreshToken,
     ExpiringPersonalToken,
     PersonalOAuthGrant,
     PresentPersonalRefreshToken,
     UnknownPersonalTokenLifetime,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.models import CanonicalPrincipal, PersonalConnectionKey
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_provider_models import (
+from umbod.core.connectors.downstream_mcp.personal.connections.models import CanonicalPrincipal, PersonalConnectionKey
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.provider_models import (
     PersonalOAuthRefreshDenied,
     PersonalOAuthRefreshUncertain,
     RefreshPersonalOAuth,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_provider_ports import PersonalOAuthRefreshProvider
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration.models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.provider_ports import PersonalOAuthRefreshProvider
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration.models import (
     PersonalOAuthPolicy,
     PreconfiguredConfidentialOAuthClient,
     PreconfiguredPublicOAuthClient,

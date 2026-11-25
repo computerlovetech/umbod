@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, PresentCallbackIssuer
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import GenericRoute, PresentCallbackIssuer
 
 from pydantic import BaseModel
 
@@ -29,7 +29,7 @@ from umbod.core.connectors.downstream_mcp.management import (
     DeleteDownstreamConnectorAggregate,
 )
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import (
     PersonalOAuthSettings, DynamicPublicOAuthClient, PreconfiguredConfidentialOAuthClient,
     PersonalOAuthConfigurationQuery, ReplacePersonalOAuthConfiguration,
     PersonalOAuthConfigurationConflict, PersonalOAuthConfigurationUnavailable,
@@ -39,13 +39,13 @@ from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configuration_sc
     PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID,
     PersonalOAuthConfigurationKey, PersonalOAuthConfigurationRecord,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.models import (
+from umbod.core.connectors.downstream_mcp.personal.connections.models import (
     Authorized,
     PersonalConnection,
     ReplacePersonalAuthorization,
     SetPersonalConnectionEnabled,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import (
     ClaimPersonalOAuthAttempt,
     FailPersonalOAuthAttempt,
     PersonalOAuthAttemptView,
@@ -53,7 +53,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models impo
     PersonalOAuthUnavailable,
     PreparePersonalOAuth,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.ports import (
     PersonalOAuthAttemptStore,
 )
 from umbod.core.connectors.downstream_mcp.stores import (

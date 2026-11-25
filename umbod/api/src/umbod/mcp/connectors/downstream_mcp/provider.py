@@ -44,7 +44,7 @@ from umbod.mcp.connectors.native.tools import (
 )
 from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedDownstreamProxyTool, AuthorizedPersonalTool
 from umbod.mcp.connectors.downstream_mcp.tool_projection import tool_descriptor_options
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRuntime, PersonalToolRecord
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolRuntime, PersonalToolRecord
 from umbod.mcp.signals import McpSignals, McpToolExecutionPipelineFactory, McpToolIdentity, ToolInventoryObserved
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryRuntime, DownstreamDiscoverySnapshot
 from umbod.mcp.connectors.downstream_mcp.inventory import shared_tool_inventory

@@ -5,26 +5,26 @@ from pydantic import SecretStr
 
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import (
     AbsentPersonalRefreshToken,
     ExpiringPersonalToken,
     PersonalOAuthGrant,
     authorize_personal_grant,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.models import (
+from umbod.core.connectors.downstream_mcp.personal.connections.models import (
     Authorized,
     CanonicalPrincipal,
     PersonalConnectionKey,
     ReplacePersonalAuthorization,
     SetPersonalConnectionEnabled,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import (
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import (
     PersonalRuntimeAuthorizationQuery,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import (
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_ports import (
     PersonalRuntimeAuthorizationStore,
 )
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import (
     PersonalOAuthSettings,
     PreconfiguredPublicOAuthClient,
 )

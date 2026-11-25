@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
 
-from umbod.core.connectors.downstream_mcp.personal_oauth_metadata.models import MetadataEndpoint
+from umbod.core.connectors.downstream_mcp.personal.oauth.metadata import MetadataEndpoint
 
 
 def _validate_concrete_endpoint(value: str) -> str:

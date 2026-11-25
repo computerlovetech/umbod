@@ -13,7 +13,7 @@ from umbod.core.invocation.failure_evidence import (
     current_invocation_failure,
 )
 
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalRuntimeUnavailable
 
 from .operation import OperationState
 from .wire_parsing import ProtocolInputValidator, ValidatedProtocolStream

@@ -13,8 +13,8 @@ from pydantic import SecretStr
 
 from umbod.core.configuration.persistence import TextCipher
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
-from umbod.core.connectors.downstream_mcp.personal_connections.models import PersonalConnection, Unauthorized
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalConnection, Unauthorized
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import (
     PersonalOAuthConfiguration, PersonalOAuthConfigurationConflict,
     PersonalOAuthConfigurationQuery, PersonalOAuthConfigurationUnavailable,
     PersonalOAuthPolicy, PersonalOAuthSettings,

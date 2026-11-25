@@ -29,7 +29,7 @@ from umbod.core.connectors.downstream_mcp.management import (
     UpdatePublishedConnectorPrefix,
 )
 from umbod.core.connectors.downstream_mcp.models import ConnectorHealthy, OAuthConnectorDefinition
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolPolicyInvalid, ReplacePersonalToolPolicy
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolPolicyInvalid, ReplacePersonalToolPolicy
 from umbod.core.connectors.downstream_mcp.publishing.service import DownstreamConnectorPublisher
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, SaveConnectorDefinition, ToolCatalogFound, create_downstream_mcp_stores
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
@@ -176,7 +176,7 @@ async def test_personal_publication_does_not_require_catalogue(aggregate: Aggreg
 @pytest.mark.parametrize("failed", (False, True), ids=("pending", "failed"))
 async def test_revalidation_blocks_repeat_publication_without_revoking_existing_publication(aggregate: AggregateHarness, failed: bool) -> None:
     from datetime import UTC, datetime
-    from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import CompletePersonalOAuthSetup, PersonalOAuthSetupQuery, PersonalOAuthSetupRequired, SetupFailed, StartPersonalOAuthSetup
+    from umbod.core.connectors.downstream_mcp.personal.oauth.setup.state import CompletePersonalOAuthSetup, PersonalOAuthSetupQuery, PersonalOAuthSetupRequired, SetupFailed, StartPersonalOAuthSetup
 
     await aggregate.definitions.save(SaveConnectorDefinition(definition=OAuthConnectorDefinition(connector_id="personal", display_name="Personal", endpoint_url="https://personal.test/mcp", authorization_mode="personal")))
     await install_store_setup_validation(aggregate.personal_oauth_setup, "personal")

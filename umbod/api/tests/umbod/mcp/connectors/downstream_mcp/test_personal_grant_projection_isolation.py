@@ -35,27 +35,27 @@ from tests.umbod.mcp.connectors.downstream_mcp.test_personal_oauth_guards import
 from umbod.core.capabilities.descriptions import (
     SystemConnectorCapabilityDescriptionOverrideStore,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections import (
+from umbod.core.connectors.downstream_mcp.personal.connections import (
     CanonicalPrincipal,
     PersonalConnectionKey,
     SetPersonalConnectionEnabled,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import (
     authorize_personal_grant,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import (
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import (
     PersonalRuntimeUnavailable,
     PersonalRuntimeTarget,
     PersonalToolCall,
     PersonalToolInventory,
     PersonalToolResult,
 )
-from umbod.core.connectors.downstream_mcp.personal_tools.models import (
+from umbod.core.connectors.downstream_mcp.personal.tools.models import (
     PersonalToolDiscoveryQuery,
     PersonalToolRecord,
 )
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery
-from umbod.core.connectors.downstream_mcp.personal_tools.service import (
+from umbod.core.connectors.downstream_mcp.personal.tools.service import (
     PersonalToolDiscoveryService,
 )
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import InMemoryPersonalMcpTransport

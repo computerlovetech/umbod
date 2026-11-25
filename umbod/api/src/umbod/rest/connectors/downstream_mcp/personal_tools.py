@@ -5,8 +5,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from umbod.core.capabilities.tools.names import PublicToolIdentitySource
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolPolicy, PersonalToolPolicyConflict, PersonalToolPolicyStore, PersonalToolPolicyUnavailable, ReplacePersonalToolPolicy
-from umbod.core.connectors.downstream_mcp.personal_tools.models import UnconfiguredPersonalToolPolicy
+from umbod.core.connectors.downstream_mcp.personal.tools import (
+    PersonalToolPolicy,
+    PersonalToolPolicyConflict,
+    PersonalToolPolicyStore,
+    PersonalToolPolicyUnavailable,
+    ReplacePersonalToolPolicy,
+    UnconfiguredPersonalToolPolicy,
+)
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores, get_public_tool_identity_source
 from umbod.rest.connectors.downstream_mcp.personal_validation import PersonalConfigurationValidationRoute

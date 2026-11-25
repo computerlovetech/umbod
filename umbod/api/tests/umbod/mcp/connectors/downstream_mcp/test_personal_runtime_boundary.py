@@ -8,9 +8,9 @@ from tests.umbod.mcp.connectors.downstream_mcp.test_personal_execution_pipeline 
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from dataclasses import replace
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCallerProvider, UnavailablePersonalCaller
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRuntime
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCallerProvider, UnavailablePersonalCaller
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeUnavailable
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalToolRuntime
 
 __all__ = ["runtime_case"]

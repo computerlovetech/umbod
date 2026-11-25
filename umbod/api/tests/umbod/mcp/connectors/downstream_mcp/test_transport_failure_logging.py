@@ -17,7 +17,7 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import FastM
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.http import PersonalHttpTransport
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool
 from mcp import types
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeLimits
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.logging import configure_logging
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalToolRuntime

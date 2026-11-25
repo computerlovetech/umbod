@@ -12,11 +12,11 @@ from tests.support.personal_discovery_events import (
     rollback_snapshot as snapshot,
 )
 from umbod.core.connectors.downstream_mcp.management import DeleteDownstreamConnectorAggregate
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthQuery, PersonalAuthorizationHealthUnavailable, RejectPersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.models import Authorized, ReplacePersonalAuthorization, SetPersonalConnectionEnabled
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationQuery, PersonalOAuthSettings, ReplacePersonalOAuthConfiguration
-from umbod.core.connectors.downstream_mcp.personal_tools import MissingInventoryRevision, ReplacePersonalToolPolicy, SavePersonalToolObservation
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import PersonalAuthorizationHealthQuery, PersonalAuthorizationHealthUnavailable, RejectPersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.connections.models import Authorized, ReplacePersonalAuthorization, SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeUnavailable
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationQuery, PersonalOAuthSettings, ReplacePersonalOAuthConfiguration
+from umbod.core.connectors.downstream_mcp.personal.tools import MissingInventoryRevision, ReplacePersonalToolPolicy, SavePersonalToolObservation
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery
 
 __all__ = ["snapshot"]

@@ -7,9 +7,8 @@ from umbod.core.configuration.exceptions import ConnectorConfigurationDecryption
 from umbod.core.persistence import AllOf, DatabaseSession, Equals, UpsertCommand
 
 from ..models import DomainModel, uses_personal_oauth
-from ..personal_connections.models import Authorized, PersonalConnection, PersonalConnectionKey
-from ..personal_connections.authorization_models import PersonalOAuthGrant, ExpiringPersonalToken
-from ..personal_connections.grant_binding import validated_bound_grant
+from ..personal.connections import Authorized, PersonalConnection, PersonalConnectionKey
+from ..personal.oauth.grants import ExpiringPersonalToken, PersonalOAuthGrant, validated_bound_grant
 from .personal_discovery_schema import PERSONAL_DISCOVERY_TABLE, PERSONAL_DISCOVERY_NAMESPACE, PERSONAL_DISCOVERY_SUBJECT, PERSONAL_DISCOVERY_CONNECTOR_ID
 from .queries import query_all
 from .schema import PersonalConnectionRecord, PersonalConnectionRecordKey, CONNECTOR_DEFINITION_TABLE, CONNECTOR_DEFINITION_CONNECTOR_ID
@@ -19,7 +18,7 @@ from .personal_oauth_configurations import load_personal_oauth_configuration
 from .personal_refresh_records import load_refresh
 from .ports import CONNECTOR_DEFINITION_ADAPTER
 from .personal_tools_schema import PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_OBSERVATION_NAMESPACE, PERSONAL_TOOL_OBSERVATION_SUBJECT, PERSONAL_TOOL_OBSERVATION_CONNECTOR_ID
-from ..personal_tools.models import PersonalToolObservation
+from ..personal.tools import PersonalToolObservation
 
 
 class AvailableRefresh(DomainModel):

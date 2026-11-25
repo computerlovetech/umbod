@@ -9,9 +9,11 @@ from umbod.core.capabilities.tools.names import mangle_public_tool_name
 from umbod.core.capabilities.catalog import CapabilityCatalog, InMemoryCapabilityCatalog
 from umbod.core.connectors.downstream_mcp.catalog.capability_catalog import DownstreamCapabilityRecord
 from umbod.core.connectors.downstream_mcp.models import ConnectorDefinitionModel, uses_personal_oauth
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryQuery
-from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolDiscoveryReader
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal
+from umbod.core.connectors.downstream_mcp.personal.tools import (
+    PersonalToolDiscoveryQuery,
+    PersonalToolDiscoveryReader,
+)
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, CredentialFound, EncryptedCredentialStore
 from umbod.core.user_catalogue import CatalogueConnector, CatalogueToolCapability
 

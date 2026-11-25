@@ -6,8 +6,8 @@ from typing import Protocol, runtime_checkable
 
 from .transport import OAuthHttpRequest, OAuthHttpResponse, OAuthHttpTransport
 
-from ...personal_connections.oauth_failure_models import OAuthEvidenceError, OAuthFailureEvidence, OAuthFailureStage, oauth_failure_evidence
-from ...personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
+from ...personal.oauth.failures import OAuthEvidenceError, OAuthFailureEvidence, OAuthFailureStage, oauth_failure_evidence
+from ...personal.oauth.authorization import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, DownstreamResponseEvidence, NoDownstreamResponse
 
 

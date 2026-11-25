@@ -1,17 +1,17 @@
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
 from dataclasses import dataclass
-from umbod.core.connectors.downstream_mcp.personal_tools.models import PersonalToolDiscoveryQuery
+from umbod.core.connectors.downstream_mcp.personal.tools.models import PersonalToolDiscoveryQuery
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery
 
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, UnavailablePersonalCaller
+from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCaller, UnavailablePersonalCaller
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalToolRuntime
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase
 from tests.umbod.core.connectors.downstream_mcp.test_personal_tools_s3_contracts import approved_tool
 from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import InMemoryPersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRuntime
-from umbod.core.connectors.downstream_mcp.personal_tools.service import PersonalToolDiscoveryService
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.tools import InvokePersonalTool, PersonalToolRuntime
+from umbod.core.connectors.downstream_mcp.personal.tools.service import PersonalToolDiscoveryService
 
 
 class CurrentContext:

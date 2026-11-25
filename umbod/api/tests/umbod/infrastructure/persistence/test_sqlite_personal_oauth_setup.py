@@ -6,7 +6,7 @@ from tests.persistence_runtime import create_sqlite_runtime
 from tests.support.personal_oauth_setup import SETUP_CALLBACK, install_setup_validation
 from umbod.core.connectors.downstream_mcp.management import PublishDownstreamConnectorAggregate
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import PersonalOAuthSetupQuery, SetupValidated
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup.state import PersonalOAuthSetupQuery, SetupValidated
 from umbod.core.connectors.downstream_mcp.stores import SaveConnectorDefinition, create_downstream_mcp_stores
 
 

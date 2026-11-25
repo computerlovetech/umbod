@@ -9,7 +9,12 @@ import httpx2
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoDownstreamResponse, DownstreamResponseEvidence
 from umbod.core.invocation.failure_evidence import InvocationFailureOrigin, capture_invocation_exception, current_invocation_failure
 
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall
+from umbod.core.connectors.downstream_mcp.personal.tools import (
+    PersonalRuntimeLimits,
+    PersonalRuntimeTarget,
+    PersonalRuntimeUnavailable,
+    PersonalToolCall,
+)
 
 
 class OperationState:

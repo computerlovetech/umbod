@@ -3,9 +3,9 @@ import pytest
 from tests.umbod.core.connectors.downstream_mcp.test_personal_discovery_event_transactions import Mutation, assert_notification, events, reject_events, snapshot
 from tests.umbod.core.connectors.downstream_mcp.test_personal_refresh import command, completion, refresh_store, reservation
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, install_authorization, runtime_case
-from umbod.core.connectors.downstream_mcp.personal_connections.models import Authorized
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_models import FailPersonalRefresh, PersonalRefreshChanged, PersonalRefreshConflict
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_ports import PersonalRefreshStore
+from umbod.core.connectors.downstream_mcp.personal.connections.models import Authorized
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.models import FailPersonalRefresh, PersonalRefreshChanged, PersonalRefreshConflict
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.ports import PersonalRefreshStore
 
 __all__ = ["runtime_case", "refresh_store"]
 OPERATIONS = ("reserve", "exchange", "release", "fail", "complete", "uncertain")

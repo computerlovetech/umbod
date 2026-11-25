@@ -6,18 +6,18 @@ from uuid import uuid4
 
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
-from umbod.core.connectors.downstream_mcp.personal_connections.models import (
+from umbod.core.connectors.downstream_mcp.personal.connections.models import (
     Authorized,
     CanonicalPrincipal,
     PersonalConnection,
     PersonalConnectionKey,
     SetPersonalConnectionEnabled,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import (
     GenericRoute,
     PresentCallbackIssuer,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import (
     ClaimPersonalOAuthAttempt,
     CompletePersonalOAuthAttempt,
     PersonalOAuthAttemptQuery,
@@ -26,7 +26,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models impo
     PublishPersonalOAuthAttempt,
     ReservePersonalOAuthAttempt,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.ports import (
     PersonalOAuthAttemptStore,
 )
 from umbod.core.connectors.downstream_mcp.stores import (

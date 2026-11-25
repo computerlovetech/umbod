@@ -6,11 +6,11 @@ from pydantic import SecretStr
 from umbod.core.persistence import Database, TransactionMode
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthSettings, DynamicConfidentialOAuthClient
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthSettings, DynamicConfidentialOAuthClient
 from umbod.core.connectors.downstream_mcp.stores import SaveConnectorDefinition, create_downstream_mcp_stores
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import install_personal_oauth_configuration
 
-from umbod.core.connectors.downstream_mcp.personal_oauth_applications.models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.applications.models import (
     ClaimedOAuthApplication, CompleteOAuthApplication, ExpiringApplicationSecret,
     OAuthApplicationBinding, OAuthApplicationUnavailable, ReadyOAuthApplication, ResolveOAuthApplication,
     OAuthApplicationCredentials, NonexpiringApplicationSecret,

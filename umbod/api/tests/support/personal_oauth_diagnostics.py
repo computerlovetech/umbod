@@ -1,4 +1,4 @@
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthFailureEvidence
+from umbod.core.connectors.downstream_mcp.personal.oauth.failures import OAuthFailureEvidence
 
 
 class RecordingOAuthFailureObserver:

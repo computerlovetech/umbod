@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from umbod.core.identity import ConnectorIdentityConflictError
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import PersonalOAuthSetupRequired
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup import PersonalOAuthSetupRequired
 from umbod.core.capabilities.tools.names import PublicToolNameConflictError
 from umbod.core.connectors.downstream_mcp.errors import (
     DownstreamConnectorConflictError,

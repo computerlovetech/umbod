@@ -1,12 +1,12 @@
-from ...personal_oauth_configuration.models import DynamicPublicOAuthClient, DynamicConfidentialOAuthClient
-from ...personal_oauth_metadata.models import UnavailableAutomaticOAuthClient
-from .discovery import authorization_server_metadata, protected_resource_metadata, unsupported_metadata
-from ...personal_oauth_metadata import (
+from ...personal.oauth.configuration import DynamicConfidentialOAuthClient, DynamicPublicOAuthClient
+from ...personal.oauth.metadata import (
     DiscoverPersonalOAuthMetadata,
     DiscoveredPersonalOAuthMetadata,
     PersonalOAuthIssuerSelectionRequired,
     PersonalOAuthMetadataResult,
+    UnavailableAutomaticOAuthClient,
 )
+from .discovery import authorization_server_metadata, protected_resource_metadata, unsupported_metadata
 from .failure import OAuthOperationProgress, oauth_failure_boundary
 from .setup import bounded_setup_operation
 from .transport import OAuthDestination, OAuthHttpTransport

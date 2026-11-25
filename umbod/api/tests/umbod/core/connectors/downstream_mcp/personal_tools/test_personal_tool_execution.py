@@ -8,10 +8,10 @@ from pydantic import SecretStr
 
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, install_authorization, runtime_case
 from tests.umbod.core.connectors.downstream_mcp.test_personal_tools_s3_contracts import approved_tool, replace_policy, save_matches
-from umbod.core.connectors.downstream_mcp.personal_connections import Authorized, CanonicalPrincipal, UnavailablePersonalCaller, PersonalConnectionKey, SetPersonalConnectionEnabled
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import UnknownPersonalTokenLifetime, authorize_personal_grant
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolDiscoveryService, PersonalToolRuntimeService
+from umbod.core.connectors.downstream_mcp.personal.connections import Authorized, CanonicalPrincipal, UnavailablePersonalCaller, PersonalConnectionKey, SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import UnknownPersonalTokenLifetime, authorize_personal_grant
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeUnavailable, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.tools import DisabledPersonalToolRuntime, PersonalToolDiscoveryService, PersonalToolRuntimeService
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, create_downstream_mcp_stores
 from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE
 from umbod.core.persistence import DeleteQuery, NoFilter, TransactionMode

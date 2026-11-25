@@ -8,12 +8,12 @@ from tests.umbod.core.connectors.downstream_mcp.test_personal_refresh import com
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from tests.umbod.core.connectors.downstream_mcp.test_personal_tools_s3_contracts import approved_tool, replace_policy, save_matches
 from umbod.core.configuration.persistence import AuthenticatedTextCipher, TextCipher
-from umbod.core.connectors.downstream_mcp.personal_connections import SetPersonalConnectionEnabled
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import PersonalOAuthGrant, authorize_personal_grant
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import RejectPersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_models import CompletePersonalRefresh, FailPersonalRefresh, PersonalRefreshChanged
-from umbod.core.connectors.downstream_mcp.personal_connections.refresh_ports import PersonalRefreshStore
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationQuery, PersonalOAuthSettings, PreconfiguredPublicOAuthClient, ReplacePersonalOAuthConfiguration
+from umbod.core.connectors.downstream_mcp.personal.connections import SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import PersonalOAuthGrant, authorize_personal_grant
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import RejectPersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.models import CompletePersonalRefresh, FailPersonalRefresh, PersonalRefreshChanged
+from umbod.core.connectors.downstream_mcp.personal.oauth.refresh.ports import PersonalRefreshStore
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationQuery, PersonalOAuthSettings, PreconfiguredPublicOAuthClient, ReplacePersonalOAuthConfiguration
 from umbod.core.connectors.downstream_mcp.stores.personal_connections import DefinitionBoundPersonalConnectionStore
 
 __all__ = ["runtime_case", "refresh_store"]

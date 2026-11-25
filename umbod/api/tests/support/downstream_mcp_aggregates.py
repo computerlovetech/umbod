@@ -22,10 +22,10 @@ from umbod.core.connectors.downstream_mcp.models import (
     StaticBearerCredentialState,
     ToolCatalogSnapshot,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections import (
+from umbod.core.connectors.downstream_mcp.personal.connections import (
     PersonalConnectionStore,
 )
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.ports import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.setup.ports import (
     PersonalOAuthSetupStore,
 )
 from umbod.core.connectors.downstream_mcp.stores import (

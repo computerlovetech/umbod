@@ -22,12 +22,12 @@ from tests.umbod.rest.user_catalogue.test_catalogue_query_budget import (
 from umbod.config.defaults import LOCAL_DOWNSTREAM_MCP_CREDENTIAL_SECRET
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import InMemoryPersonalMcpTransport
 from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithoutOutputSchema, ToolIdentity
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey, ReplacePersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import (
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalConnectionKey, ReplacePersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import (
     AbsentPersonalRefreshToken, ExpiringPersonalToken, PersonalOAuthGrant, authorize_personal_grant,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationQuery
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalToolInventory
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationQuery
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.personal_connections.tools import get_personal_tool_transport
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_policy import PersonalOAuthPolicy, get_personal_oauth_policy

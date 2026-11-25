@@ -5,10 +5,10 @@ import anyio
 from pydantic import TypeAdapter
 
 from umbod.core.invocation.diagnostics import NoDownstreamResponse
-from ...personal_connections.oauth_failure_models import OAuthFailureEvidence
-from ...personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
-from ...personal_oauth_configuration.models import OAuthScopes
-from ...personal_oauth_setup.models import (
+from ...personal.oauth.failures import OAuthFailureEvidence
+from ...personal.oauth.authorization import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
+from ...personal.oauth.configuration import OAuthScopes
+from ...personal.oauth.setup import (
     DiscoverPersonalOAuthSetup,
     PersonalOAuthSetupDiscovery,
     PersonalOAuthSetupValidation,

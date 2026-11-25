@@ -8,9 +8,9 @@ from pydantic import SecretStr
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import CallbackIssuer, GenericRoute, IssuerBinding, IssuerRoute, MissingCallbackIssuer, PresentCallbackIssuer, issuer_callback_uri, issuer_route_key
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure, PreparedPersonalOAuth
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthProvider
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import CallbackIssuer, GenericRoute, IssuerBinding, IssuerRoute, MissingCallbackIssuer, PresentCallbackIssuer, issuer_callback_uri, issuer_route_key
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import PersonalOAuthProviderFailure, PreparedPersonalOAuth
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.ports import PersonalOAuthProvider
 
 from .conftest import ProviderCase, exchange_command, response
 

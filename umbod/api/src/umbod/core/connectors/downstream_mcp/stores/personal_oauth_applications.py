@@ -8,9 +8,14 @@ from pydantic import Field, SecretStr, TypeAdapter
 
 from umbod.core.configuration.persistence import TextCipher
 from umbod.core.persistence import Database, DatabaseSession, Equals, TransactionMode, UpsertCommand
-from ..personal_oauth_applications.models import (
-    ClaimedOAuthApplication, CompleteOAuthApplication, ExpiringApplicationSecret,
-    OAuthApplicationBinding, OAuthApplicationUnavailable, ReadyOAuthApplication, ResolveOAuthApplication,
+from ..personal.oauth.applications import (
+    ClaimedOAuthApplication,
+    CompleteOAuthApplication,
+    ExpiringApplicationSecret,
+    OAuthApplicationBinding,
+    OAuthApplicationUnavailable,
+    ReadyOAuthApplication,
+    ResolveOAuthApplication,
 )
 from .personal_oauth_application_schema import (
     PERSONAL_OAUTH_APPLICATION_TABLE, PERSONAL_OAUTH_APPLICATION_CONNECTOR_ID,
@@ -20,7 +25,7 @@ from .personal_oauth_configurations import load_personal_oauth_configuration
 from .queries import query_all
 from .schema import CONNECTOR_DEFINITION_TABLE, CONNECTOR_DEFINITION_CONNECTOR_ID
 from .ports import CONNECTOR_DEFINITION_ADAPTER
-from ..personal_connections.authorization_models import PersonalOAuthGrant
+from ..personal.oauth.grants import PersonalOAuthGrant
 
 _APPLICATION = TypeAdapter(Annotated[ClaimedOAuthApplication | ReadyOAuthApplication, Field(discriminator="kind")])
 

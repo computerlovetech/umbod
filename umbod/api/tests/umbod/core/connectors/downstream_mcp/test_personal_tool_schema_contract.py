@@ -1,8 +1,8 @@
 import pytest
 
 from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithoutOutputSchema, ToolIdentity, ValidatedJsonObject
-from umbod.core.connectors.downstream_mcp.personal_tools import ReplacePersonalToolPolicy
-from umbod.core.connectors.downstream_mcp.personal_tools.contract_validation import validate_arguments
+from umbod.core.connectors.downstream_mcp.personal.tools import ReplacePersonalToolPolicy
+from umbod.core.connectors.downstream_mcp.personal.tools.contract_validation import validate_arguments
 
 
 def approved(schema: ValidatedJsonObject) -> ReplacePersonalToolPolicy:

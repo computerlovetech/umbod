@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 
-from umbod.core.connectors.downstream_mcp.personal_connections.caller import UnavailablePersonalCaller
-from umbod.core.connectors.downstream_mcp.personal_tools.models import PersonalToolDiscoveryQuery, PersonalToolRecord
+from umbod.core.connectors.downstream_mcp.personal.connections.caller import UnavailablePersonalCaller
+from umbod.core.connectors.downstream_mcp.personal.tools.models import PersonalToolDiscoveryQuery, PersonalToolRecord
 from umbod.mcp.connectors.downstream_mcp.permissions import DownstreamToolPermissionPolicySource, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperations
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryRuntime

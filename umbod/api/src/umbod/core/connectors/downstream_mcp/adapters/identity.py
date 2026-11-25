@@ -3,11 +3,16 @@ from collections.abc import Mapping
 from umbod.config.app import AppConfig
 from umbod.core.callers import GroupMembership
 
-from ..personal_connections.development_identity import local_personal_identity_enabled
-from ..personal_connections.development_identity_models import SimulatedUserIdentity
-from ..personal_connections.identity_models import (
-    AbsentIssuer, DeclaredIssuer, MalformedIssuer, ObservedIdentityString,
-    PersonalIdentityFacts, PersonalIdentityPolicy, UnavailableIdentityString,
+from ..personal.connections.development_identity import local_personal_identity_enabled
+from ..personal.connections.development_identity_models import SimulatedUserIdentity
+from ..personal.connections import (
+    AbsentIssuer,
+    DeclaredIssuer,
+    MalformedIssuer,
+    ObservedIdentityString,
+    PersonalIdentityFacts,
+    PersonalIdentityPolicy,
+    UnavailableIdentityString,
 )
 
 

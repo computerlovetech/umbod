@@ -1,6 +1,6 @@
 from .personal_discovery_projection import update_personal_discovery
 
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationUnavailable
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthConfigurationUnavailable
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import load_personal_oauth_configuration
 
 from uuid import uuid4
@@ -21,14 +21,14 @@ from pydantic import AwareDatetime, BaseModel, Field, SecretStr, TypeAdapter
 
 from umbod.core.configuration.persistence import TextCipher
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
-from umbod.core.connectors.downstream_mcp.personal_connections.models import (
+from umbod.core.connectors.downstream_mcp.personal.connections.models import (
     PersonalConnection,
     PersonalConnectionKey,
     ReplacePersonalAuthorization,
     replace_authorization,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import validate_callback_binding
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import validate_callback_binding
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization import (
     ClaimPersonalOAuthAttempt,
     ClaimedPersonalOAuthAttempt,
     CompletePersonalOAuthAttempt,

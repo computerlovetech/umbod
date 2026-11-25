@@ -3,13 +3,13 @@ from collections.abc import Awaitable, Callable
 import pytest
 
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable, RejectPersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeAuthorizationQuery, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_tools import AdmitPersonalTool, PersonalInventoryRevision, PersonalToolAccessStore, PersonalToolAdmission, PersonalToolRuntimeService, SavePersonalToolObservation
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import PersonalAuthorizationHealthUnavailable, RejectPersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeAuthorizationQuery, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_ports import PersonalMcpTransport
+from umbod.core.connectors.downstream_mcp.personal.tools import AdmitPersonalTool, PersonalInventoryRevision, PersonalToolAccessStore, PersonalToolAdmission, PersonalToolRuntimeService, SavePersonalToolObservation
 
 from .runtime_support import execution_case, runtime_for_caller
-from umbod.core.connectors.downstream_mcp.personal_connections import UnavailablePersonalCaller
+from umbod.core.connectors.downstream_mcp.personal.connections import UnavailablePersonalCaller
 from umbod.core.invocation.failure_evidence import (
     InvocationExceptionEvidence,
     InvocationFailureOrigin,

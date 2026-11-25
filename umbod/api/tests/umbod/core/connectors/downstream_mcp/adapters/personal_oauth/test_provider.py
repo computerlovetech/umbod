@@ -3,11 +3,11 @@ from tests.support.personal_oauth_applications import InMemoryPersonalOAuthAppli
 from datetime import timedelta
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import PersonalOAuthGrant, ExpiringPersonalToken
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import PersonalOAuthGrant, ExpiringPersonalToken
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import PresentCallbackIssuer
+from umbod.core.connectors.downstream_mcp.personal.oauth.callback import PresentCallbackIssuer
 from pydantic import SecretStr
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
@@ -16,12 +16,12 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport impo
     OAuthHttpResponse,
     OAuthHttpTransport,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.models import (
     PersonalOAuthProviderFailure,
     PersonalOAuthProviderUnsupported,
     PreparePersonalOAuth,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthProvider
+from umbod.core.connectors.downstream_mcp.personal.oauth.authorization.ports import PersonalOAuthProvider
 
 from .conftest import exchange_command, response
 

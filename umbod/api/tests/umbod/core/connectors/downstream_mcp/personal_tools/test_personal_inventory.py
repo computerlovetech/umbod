@@ -11,9 +11,9 @@ from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizat
 from tests.umbod.core.connectors.downstream_mcp.test_personal_tools_s3_contracts import InventoryTransport, approved_tool, replace_policy
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool, DiscoveredToolWithOutputSchema, ToolIdentity
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolInventory
-from umbod.core.connectors.downstream_mcp.personal_tools import MissingInventoryRevision, PersonalToolDiscoveryService, PersonalToolObservation, PresentInventoryRevision, SavePersonalToolObservation
+from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalConnectionKey
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolInventory
+from umbod.core.connectors.downstream_mcp.personal.tools import MissingInventoryRevision, PersonalToolDiscoveryService, PersonalToolObservation, PresentInventoryRevision, SavePersonalToolObservation
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery
 from umbod.core.connectors.downstream_mcp.stores.personal_tools_schema import PERSONAL_TOOL_OBSERVATION_TABLE, PersonalToolObservationRecord, PersonalToolObservationRecordKey
 from umbod.core.persistence import AllFields, NoFilter, Query, TransactionMode, Unordered, UpsertCommand

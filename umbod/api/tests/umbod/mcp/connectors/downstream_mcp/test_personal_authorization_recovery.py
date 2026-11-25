@@ -8,12 +8,12 @@ from fastmcp.server.middleware import AuthMiddleware
 from pydantic import SecretStr
 
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, install_authorization, runtime_case
-from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import authorize_personal_grant
+from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import authorize_personal_grant
 from tests.umbod.mcp.connectors.downstream_mcp.personal_runtime_support import execution_case
 from tests.umbod.mcp.connectors.downstream_mcp.test_personal_execution_pipeline import InvocationLog, ProviderGateway, RejectingOpenApiExecutor, provider_for
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode.sandbox import FastMcpMontyCodeModeAdapter, FailedNestedConnectorCall
 from umbod.mcp.connectors.native.tools.infrastructure.authorization import UnrestrictedConnectorTools
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import RejectPersonalAuthorization
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import RejectPersonalAuthorization
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalToolRuntime, PersonalDiscoveryMiddleware, PersonalToolReservationMiddleware, personal_tool_permission_check
 from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
@@ -99,7 +99,7 @@ def test_recovery_origin_rejects_unsafe_destinations(origin: str) -> None:
 
 
 def test_recovery_selector_is_encoded_as_data() -> None:
-    from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRequired
+    from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalAuthorizationRequired
     from umbod.mcp.connectors.downstream_mcp.personal_recovery import personal_authorization_failure
 
     result = personal_authorization_failure("https://workspace.example", "private&next=https://evil.example/#fragment", PersonalAuthorizationRequired("expired"))

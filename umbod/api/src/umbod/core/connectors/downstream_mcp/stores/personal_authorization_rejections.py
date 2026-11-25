@@ -8,8 +8,12 @@ from umbod.core.messaging.stores.event_stream import append_event_in_session
 from umbod.core.persistence import Database, Equals, TransactionMode, UpsertCommand
 
 from ..models import uses_personal_oauth
-from ..personal_connections.health_models import PersonalAuthorizationHealthUnavailable, RejectPersonalAuthorization
-from ..personal_connections.models import Authorized, PersonalConnection
+from ..personal.connections import (
+    Authorized,
+    PersonalAuthorizationHealthUnavailable,
+    PersonalConnection,
+    RejectPersonalAuthorization,
+)
 from .personal_connection_records import load_personal_connection
 from .personal_authorization_health_schema import (
     PERSONAL_AUTHORIZATION_REJECTION_TABLE,

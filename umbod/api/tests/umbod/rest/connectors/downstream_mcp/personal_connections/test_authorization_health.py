@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from tests.umbod.rest.connectors.downstream_mcp.personal_connections.test_personal_connection_routes import PersonalApi, personal_api
-from umbod.core.connectors.downstream_mcp.personal_connections.health_models import LocallyAuthorized, PersonalAuthorizationHealth, PersonalAuthorizationHealthQuery
+from umbod.core.connectors.downstream_mcp.personal.connections.health_models import LocallyAuthorized, PersonalAuthorizationHealth, PersonalAuthorizationHealthQuery
 from umbod.rest.connectors.downstream_mcp.personal_connections.authorization import get_personal_authorization_health
 
 __all__ = ["personal_api"]

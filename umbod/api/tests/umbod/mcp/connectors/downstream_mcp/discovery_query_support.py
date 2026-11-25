@@ -10,7 +10,7 @@ from umbod.core.activation import ActivationStatus, CapabilityRef, create_capabi
 from umbod.core.capabilities.descriptions import SystemConnectorCapabilityDescriptionOverrideStore
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithoutOutputSchema, NoAuthConnectorDefinition, NoAuthCredentialState, ToolCatalogSnapshot, ToolIdentity
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
+from umbod.core.connectors.downstream_mcp.personal.tools import DisabledPersonalToolRuntime
 from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_DEFINITION_TABLE, TOOL_CATALOG_TABLE, ConnectorDefinitionStore, ConnectorDefinitionStoreService, EncryptedCredentialStore, EncryptedCredentialStoreService, ReplaceToolCatalog, SaveConnectorDefinition, SaveCredential, ToolCatalogStore, ToolCatalogStoreService
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.publishing import ConnectorPublishingStore

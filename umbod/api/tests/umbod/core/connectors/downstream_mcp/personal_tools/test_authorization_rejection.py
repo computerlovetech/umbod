@@ -4,9 +4,9 @@ import pytest
 
 from tests.umbod.core.connectors.downstream_mcp.test_personal_authorization_health import health_query
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalAuthorizationRequired, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryService, PersonalToolRuntimeService
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalAuthorizationRejected, PersonalAuthorizationRequired, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal.tools.runtime_ports import PersonalMcpTransport
+from umbod.core.connectors.downstream_mcp.personal.tools import PersonalToolDiscoveryService, PersonalToolRuntimeService
 
 from .runtime_support import execution_case
 

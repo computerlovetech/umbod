@@ -1,7 +1,7 @@
 from typing import Callable, Literal, Protocol
 
 from umbod.core.capabilities.tools.names import PublicToolIdentity
-from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthSettings
+from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import PersonalOAuthSettings
 from umbod.core.connectors.downstream_mcp.models import (
     ConnectorDefinition,
     DiscoveryAdmission,
