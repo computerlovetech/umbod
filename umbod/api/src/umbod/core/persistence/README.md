@@ -11,3 +11,7 @@ description: "Backend-neutral persistence contracts and deferred read planning f
 - [ports.py](./ports.py) — Read snapshots, primary write transactions, and fail-fast serialized writes with explicit contention errors.
 - [query.py](./query.py) — Typed queries, strict range predicates for indexed retention, and explicit non-reusing integer-key schemas.
 - [runtime.py](./runtime.py) — Runtime readiness and lifecycle.
+
+# Related decisions
+
+- [ADR-009: Explicit deferred read planning](../../../../../project/architecture-records/ADR-009-deferred-read-planning.md) — Request-scoped persistence read plans.

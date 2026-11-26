@@ -4,87 +4,87 @@
     "agent-browser-ui-check": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "e86cf7f10c039ebed4e08ca3e0bd391a63df2ef0c868cdacea95c7f4c3c7f52c"
+      "computedHash": "de786b66f38f2f859ec3985be655aa32cd6f6167f14c6db461cdd438e79bb4e8"
     },
     "api-client-architecture": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "5d11889c902cde1290e48da55b461dd4de35a71a83e6849ddc66e78098ea9c9e"
+      "computedHash": "8afbeac9ac2d7a64444cb754666fbdb8d5a90e5692cbc6391f53a3bc74f2d2b0"
     },
     "choose-design-pattern": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "6a4ff4244478fcbe940a31800554dd182a346f674b4ef61911f5a9401944ae84"
+      "computedHash": "ae5e29124f7a02b5d18d4bbb82b6040c532578c6392667e17bdfb07df90e1e18"
     },
     "create-state-class": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "a838a0ec561204b657e490f25e151e46714eef40256cd7603f8c4c6e7ebbbf88"
+      "computedHash": "952828a1b5dfe23e9423a773fd0f096e6045e111dc3b719656398a01ef0da182"
     },
     "effect-usage-guard": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "11ef580aec0d0cb38e9e5139ea673eeea745eb260e0de17908c94e3cbf4e08b7"
+      "computedHash": "0c3824028479ee82095e69ec1d4df5589126c9e180933d88ead6f596d5591722"
     },
     "fastapi-dependency-lifetime": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "d55b52373f63d1c5f67f30df5d8afae4dd6200263e2541165d1b5b5b871bd5c8"
+      "computedHash": "321ae33f2a2730b6c8364246639676310b2fd20e5b3674e9ae807afa0bfc6ff4"
     },
     "frontend-package-manager": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "381892a8b04fd1116f47634aa809c094fb066cfe211ef98886f88bb7b993a80b"
+      "computedHash": "35fdf4afc8377ec82f538539761d2c9f4fc46f13e5028f19562257fe9b8bd87a"
     },
     "improve-testability": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "2c2d0f8ce191c8ec9d3b772e984cf40b62be3c0e3eabe449d4f5213faf6a435a"
+      "computedHash": "5fae0e0610b9e765701d843445389612377a473f9c5b38d8f40bbcf8bb0a0d1a"
     },
     "ports-adapters-io": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "d1e6a0112c1a818498e72c8abcc8254d11388bc0c61ed8fb4a2d9c590e9eed91"
+      "computedHash": "1a9870d98ec9c26300260c668b43c679951f5875c138ac6f763969bf75c497be"
     },
     "python-domain-model-none-design": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "5b29fd0c8009e4563cbd81159e596b4f730cde396262acccb095e8202f622b64"
+      "computedHash": "d1ac9dbfbe1cd3dc80281529dd7c48754c2025ed54aafc4624d47a80a633d6ed"
     },
     "release-umbod": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "7a9d385703a0117a7cf482b5d16cb5a4e81070eeb2b07541ee29b9e8d4667f6f"
+      "computedHash": "9b1428bc50f79444dbaa616806719923d8357fab16a291228f07decfd029463f"
     },
     "reusable-components": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": ""
+      "computedHash": "37aae3b269d85102a9aa89d5c4a9d5dac06a96fd51be192426d37f45b5f00ff5"
     },
     "svelte-docs-best-practices": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "56f7f84597e658433b97a5df552a0047ef8c4c6c5a96cfdb09c39663c0d6e565"
+      "computedHash": "546210dfdd1136647658355d29f8d3e881fe71fca165b5986b24e8a2c80626fa"
     },
     "test-writing": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "884cacc2ea91f8c8ff558b497c29a7be90bdafd6564a3c419e9045e7144f8e97"
+      "computedHash": "448ce18dbb68f8468e29095c8b9e7ce3a72901c02f5af0f0d4e7f6975b220d17"
     },
     "write-adr": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "4d0c6ae98378089a6654fe83e4dbcfe5ebab92b482b6db41437bbf0ff3863810"
+      "computedHash": "9d17d290d71f5234e5e58fd43c1f8ed39bb32e3506035f3311285d4ac86ca91a"
     },
     "write-module-readme": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "e83dc67839378e7a798eb755a77a3b6421333b2c7d9428b90614ebc81ce28dc7"
+      "computedHash": "f629700ed5a7283938788798f0f75a7fe4f6bb5348f834de1b0ad30a6da135c5"
     },
     "write-skill": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "d27425ea955df7966841880eea25c0fdf7949036460bfee4653006defe9a260d"
+      "computedHash": "6fd15ad57a7ace41b4511a8e8fa905fa498c9e74595ad6452ddd09145775406b"
     }
   }
 }

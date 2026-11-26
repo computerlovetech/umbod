@@ -6,48 +6,18 @@ Paths and commands below are relative to the repository root unless a working di
 
 Use Vercel's [skills.sh](https://skills.sh/) to install agent skills. Repository skill sources live in `skills/`; edit those, not installed copies in `.agents/skills/`.
 
-## Release branches
+## Releases
 
-- Use the manual [release-umbod skill](skills/development/release-umbod/SKILL.md) for release preparation and publication.
-- Never push to, force-update, or delete `production` directly. Only the successful release workflow may advance it to the verified release commit.
-- Update committed `release-metadata.json` on `main` before tagging; tag-derived metadata validation must pass before publication.
-- Follow [website deployment](website/deployment.md) for branch protection and identity requirements. A project policy alone is not server-enforced workflow-only access.
+For Umbod release work, follow the manual [release-umbod skill](skills/development/release-umbod/SKILL.md).
 
 ## UI Components
 
 Read the [component index](umbod/frontend/COMPONENT_INDEX.md) when working with UI Svelte components.
 
-## Application side effects
-
-- Follow ADR-013: use the existing application-local typed signals by default for optional application side effects such as logging, metrics, and audit observation. Operations publish facts; registered receivers own those effects.
-- Inject publishing ports and compose receivers explicitly per application. Do not introduce a global event bus or create implicit default channels inside producers.
-- Capture immutable, sanitized diagnostic snapshots before publication. No receiver should receive raw exceptions, credentials, payloads, or unapproved metadata.
-- Publish ordinary receiver failures to the separate application-failure channel. Only its terminal dispatch-failure handler, or bootstrap code before signals exist, may use minimal nonrecursive direct logging.
-- Do not replace primary I/O, acknowledged telemetry delivery, or required durable writes with best-effort signals. Preserve their failure and transaction semantics.
-- Follow [safe application diagnostics](umbod/docs/operations/application-diagnostics.md) for field contracts, privacy boundaries, and verification.
-
 ## Architecture decisions
 
-Architecture decision records live in [`umbod/project/architecture-records/`](umbod/project/architecture-records/). Read the applicable accepted ADRs before changing architecture; document intentional changes there rather than introducing a parallel pattern.
-
-Never write an ADR unless explicitly asked to do so by the user.
-
-- [ADR-001: Backend-Neutral Persistence Module Boundaries](umbod/project/architecture-records/ADR-001-backend-neutral-persistence.md) — Read for database boundaries, migrations, or runtime lifetimes.
-- [ADR-002: Client-Owned Credentials for Multi-Provider MCP Tool Authentication](umbod/project/architecture-records/ADR-002-client-side-credential-storage.md) (Proposed) — Read for MCP credential ownership and authentication.
-- [ADR-003: Umbod-Specific Connector Development CLI](umbod/project/architecture-records/ADR-003-umbod-specific-connector-cli.md) — Read before adding SDK CLI commands.
-- [ADR-004: One Backend API and a Thin Desktop Boundary](umbod/project/architecture-records/ADR-004-single-backend-api-and-desktop-boundary.md) — Read for backend APIs or Desktop integration.
-- [ADR-005: One Workspace and Only Usable Controls](umbod/project/architecture-records/ADR-005-unified-workspace-and-usable-controls.md) — Read for navigation or control eligibility.
-- [ADR-006: Filesystem Storage Infrastructure Boundary](umbod/project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Read for file storage, namespaces, or ownership persistence.
-- [ADR-007: Actor-Specific Composition of Shared UI Components](umbod/project/architecture-records/ADR-007-actor-specific-ui-composition.md) — Read for shared components and actor-owned views.
-- [ADR-008: Event-Synchronized In-Memory Tool Runtime](umbod/project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Read before tool registration, discovery, routing, synchronization, or invocation changes.
-- [ADR-009: Explicit Deferred Read Planning](umbod/project/architecture-records/ADR-009-deferred-read-planning.md) — Read for deferred persistence reads and request-scoped read plans.
-- [ADR-009: Transport-Neutral File Upload Sessions](umbod/project/architecture-records/ADR-009-transport-neutral-upload-sessions.md) — Read for upload sessions, transfer instructions, or file publication.
-- [ADR-010: Key-Value Storage Drivers Below Request Cache Policy](umbod/project/architecture-records/ADR-010-key-value-storage-drivers.md) — Read for key-value drivers and request-cache policy boundaries.
-- [ADR-011: State Ownership and Rendering Boundaries](umbod/project/architecture-records/ADR-011-state-ownership-and-rendering-boundaries.md) — Read before changing UI state, derived values, component event handling, or state lifetimes.
-- [ADR-012: Show Only MCP Tools With an Authorized Operation](umbod/project/architecture-records/ADR-012-permission-aware-mcp-tool-visibility.md) (Proposed) — Read for caller-specific tool visibility and partially authorized tools.
-- [ADR-013: Signal-Owned Application Logging and Side Effects](umbod/project/architecture-records/ADR-013-signal-owned-application-logging.md) — Read before adding application logs, diagnostic events, observational side effects, or signal failure handling.
-- [ADR-014: Built-In MCP Responses With Explicit Agent Guidance](umbod/project/architecture-records/ADR-014-built-in-mcp-response-guidance.md) — Read before creating built-in MCP tools or changing response DTOs, content/metadata separation, extensions, or confirmation and elicitation.
-- [ADR-015: Self-Describing Built-In MCP Tool Contracts](umbod/project/architecture-records/ADR-015-self-describing-built-in-mcp-tool-contracts.md) — Read for built-in tool input schemas, discovery descriptions, and agent-visible rendering compatibility.
+Use the [ADR index](umbod/project/architecture-records/index.md) to find and read relevant accepted decisions before changing architecture. If in doubt, consult the ADRs.
+Do not write an ADR unless the user asks for it.
 
 ## Source code index
 
@@ -65,7 +35,7 @@ Run the checks applicable to the changed area.
 ### API/MCP runtime
 
 - For API or MCP application changes, run `bash umbod/tests/kind-runtime/run.sh` to verify running services in a disposable Kind cluster.
-- If Kind service integration tests fail, inspect the runner's pod diagnostics, report the failing assertions, and do not describe the integration suite as passing. The connector fixture and test-only values under `umbod/tests/kind-runtime/` must not enter the published chart or application images.
+- If Kind service integration tests fail, inspect the runner's pod diagnostics, inspect the failing assertions resolve issues. The connector fixture and test-only values under `umbod/tests/kind-runtime/` must not enter the published chart or application images.
 
 ### Tests and static checks
 
@@ -86,7 +56,10 @@ Run the checks applicable to the changed area.
 
 ### Semgrep
 
-- Run all shared app Semgrep rules with `cd umbod && uv run semgrep scan --config ../.semgrep.yml --config ../.semgrep/production-design.yml --config ../.semgrep/test-correctness.yml --no-rewrite-rule-ids .`.
-- `.semgrep.yml` contains cross-cutting rules. `.semgrep/production-design.yml` targets source code and excludes test paths; `.semgrep/test-correctness.yml` targets test files and support trees. Scope is path-based, not class-name-based.
-- After each Semgrep run, resolve the reported issues, including pre-existing findings, and rerun the scan to verify the fixes.
-- Keep shared rules in the root `.semgrep.yml` and `.semgrep/` directory. Do not add app-local Semgrep configs without an explicitly documented exception.
+- Final check: `bash umbod/scripts/run_semgrep.sh`
+- Quick check: `bash umbod/scripts/run_semgrep.sh <path> [more paths]`
+- Run from the repo root. Add `--json` for JSON output. Fix reported errors and warnings.
+
+## Review
+
+After work is done, review the changes against the specification (if created) and relevant ADRs

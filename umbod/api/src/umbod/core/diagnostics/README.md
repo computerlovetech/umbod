@@ -15,3 +15,4 @@ description: Immutable safe failure notifications published through application-
 
 - [Signals](../signals/README.md) — Typed publishing ports and isolated receiver dispatch.
 - [Shared logging](../../logging.py) — Configured failure channels, logging receivers, and terminal fallback.
+- [ADR-013: Signal-owned logging and side effects](../../../../../project/architecture-records/ADR-013-signal-owned-application-logging.md) — Safe diagnostic publication and receiver-owned logging.

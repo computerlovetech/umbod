@@ -110,13 +110,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: umbod/uv.lock
       - name: Scan application sources
-        run: >-
-          uv run --locked --only-group dev semgrep scan
-          --config ../.semgrep.yml
-          --config ../.semgrep/production-design.yml
-          --config ../.semgrep/test-correctness.yml
-          --no-rewrite-rule-ids --error --metrics=off
-          .
+        run: bash scripts/run_semgrep.sh
 
   sdk-tests:
     needs: changes

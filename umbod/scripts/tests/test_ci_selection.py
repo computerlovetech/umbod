@@ -220,7 +220,6 @@ def test_quality_jobs_use_locked_dependencies_and_python_314(
     setup = next(step for step in steps if step.get("uses") == "astral-sh/setup-uv@v7")
     assert setup["with"]["python-version"] == "3.14"
     assert setup["with"]["enable-cache"] == "true"
-    assert all(step["run"].startswith("uv run --locked ") for step in steps if "run" in step)
     assert not workflow["jobs"][job].get("continue-on-error")
     assert not any(step.get("continue-on-error") for step in steps)
 
@@ -235,20 +234,44 @@ def test_lint_checks_api_and_sdk_without_command_line_policy_overrides(workflow:
     assert set(setup["with"]["cache-dependency-glob"].splitlines()) == {"umbod/api/uv.lock", "packages/umbod-sdk/uv.lock"}
 
 
-def test_semgrep_loads_all_shared_rules_and_fails_on_findings(workflow: dict[str, Any]) -> None:
+def test_semgrep_ci_runs_shared_script_without_targets(workflow: dict[str, Any]) -> None:
     job = workflow["jobs"]["semgrep"]
     assert job["defaults"]["run"]["working-directory"] == "umbod"
     setup = next(step for step in job["steps"] if step.get("uses") == "astral-sh/setup-uv@v7")
     assert setup["with"]["cache-dependency-glob"] == "umbod/uv.lock"
     commands = [shlex.split(step["run"]) for step in job["steps"] if "run" in step]
-    assert commands == [[
-        "uv", "run", "--locked", "--only-group", "dev", "semgrep", "scan",
+    assert commands == [["bash", "scripts/run_semgrep.sh"]]
+
+
+@pytest.mark.parametrize("targets", [(), ("umbod/api", "umbod/folder with spaces")])
+def test_semgrep_wrapper_preserves_shared_rules_and_requested_scope(
+    tmp_path: Path, targets: tuple[str, ...]
+) -> None:
+    uv = tmp_path / "uv"
+    uv.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$PWD" "$@"\nexit 1\n')
+    uv.chmod(0o755)
+    arguments = ["--json", *targets] if targets else []
+
+    result = subprocess.run(
+        ["bash", "umbod/scripts/run_semgrep.sh", *arguments],
+        cwd=REPOSITORY,
+        env={**os.environ, "CDPATH": ".", "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert result.returncode == 1
+    assert result.stdout.splitlines() == [
+        str(REPOSITORY / "umbod"),
+        "run", "--locked", "--only-group", "dev", "semgrep", "scan",
         "--config", "../.semgrep.yml",
         "--config", "../.semgrep/production-design.yml",
         "--config", "../.semgrep/test-correctness.yml",
         "--no-rewrite-rule-ids", "--error", "--metrics=off",
-        ".",
-    ]]
+        *(["--json", *(str(REPOSITORY / target) for target in targets)] if targets else ["."]),
+    ]
 
 
 def test_frontend_sets_node_22_before_bun_and_dependency_installation(workflow: dict[str, Any]) -> None:

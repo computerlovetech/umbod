@@ -16,3 +16,7 @@ description: Shared administrator tool composition and the dedicated administrat
 - [operation_inputs.py](./operation_inputs.py) — Typed administrator operation requests.
 - [operation_results.py](./operation_results.py) — Operation-tagged MCP result payloads.
 - [operation_registration.py](./operation_registration.py) — Observed registration, authorization and agent-visible operation guidance.
+
+# Related decisions
+
+- [ADR-015: Self-describing built-in MCP tool contracts](../../../../../project/architecture-records/ADR-015-self-describing-built-in-mcp-tool-contracts.md) — Administrator tool input schemas and agent-visible descriptions.

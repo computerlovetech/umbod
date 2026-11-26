@@ -28,8 +28,8 @@ description: "MCP adapters for namespace-aware browsing, content, updates, file 
 
 # Related links
 
-
-- [ADR-012](../../../../../project/architecture-records/ADR-012-permission-aware-mcp-tool-visibility.md) — At-least-one-authorized-operation visibility with independent invocation authorization.
+- [ADR-012: Permission-aware MCP tool visibility](../../../../../project/architecture-records/ADR-012-permission-aware-mcp-tool-visibility.md) — Proposed: caller-specific tool visibility and independent invocation authorization.
+- [ADR-015: Self-describing built-in MCP tool contracts](../../../../../project/architecture-records/ADR-015-self-describing-built-in-mcp-tool-contracts.md) — Filesystem tool input schemas and operation descriptions.
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem ownership and storage boundary.
 - [Shared namespace administration](../../rest/filesystem_administration/README.md) — Administrator-managed shared namespaces and registered group read or read/write access.
 - [Filesystem HTTP boundary](../../rest/filesystem/README.md) — REST session transfers and downloads remain separate from the one-shot MCP upload contract.
