@@ -18,8 +18,8 @@ description: Dashboard charts, insights, file previews, connector and tool prese
 ## Insights presentation
 
 - [AnalyticsWorkspace](../src/lib/components/shared/analytics/AnalyticsWorkspace.svelte) — Log queries, aggregate results, and session drill-down; callers inject state with the correct data scope.
-- [ReportsView](../src/lib/components/shared/agent-behaviour/ReportsView.svelte) — Diagnostic report filters and linked results for personal and admin Insights.
-- [ReportDetailView](../src/lib/components/shared/agent-behaviour/ReportDetailView.svelte) — Indexed diagnostic report with saved evidence and criteria; callers provide read state and permitted actions.
+- [ReportsView](../src/lib/components/shared/agent-behaviour/ReportsView.svelte) — Diagnostic report filters and linked results with agent-reported triggers for personal and admin Insights.
+- [ReportDetailView](../src/lib/components/shared/agent-behaviour/ReportDetailView.svelte) — Diagnostic report with saved evidence, criteria, and agent-reported trigger; callers provide read state and actions.
 
 ## Files presentation
 
@@ -61,7 +61,7 @@ description: Dashboard charts, insights, file previews, connector and tool prese
 ## Scope and composition
 
 - [Namespace administration composition](../src/lib/components/admin/filesystem/README.md) — Feature-owned namespace inventory, metadata dialogs, and a separate group access editor; reuse the indexed controls, not the workflows.
-- [Agent behaviour composition](../src/lib/components/admin/agent-behaviour/README.md) — Feature-owned pattern editing, reporting settings, and report inspection; reuse its canonical controls, not these administrator workflows.
+- [Agent behaviour composition](../src/lib/components/admin/agent-behaviour/README.md) — Feature-owned pattern editing, global reporting switch, and report inspection; reuse the indexed controls, not the administrator workflows.
 - [Dashboard composition](../src/lib/components/dashboard/README.md) — Separate feature-owned usage and connector pages; reuse indexed controls, not either page workflow.
 - [Getting started composition](../src/lib/components/getting-started/README.md) — Feature-owned harness installer wizard and optional private script preparation.
 - [Account settings composition](../src/lib/components/settings/README.md) — Feature-owned profile and personal access navigation, token management, and telemetry setup.

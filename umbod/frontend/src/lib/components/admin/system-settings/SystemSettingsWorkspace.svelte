@@ -2,7 +2,8 @@
   import type { Snippet } from 'svelte';
   import { agentDiagnosticsReportingHref, systemSettingsHref } from '#lib/workspace/navigation.js';
   import AdminSplitWorkspace from '../shared/AdminSplitWorkspace.svelte';
-  import AdminToggle from '../shared/AdminToggle.svelte';
+  import AdminSettingsActions from '../shared/AdminSettingsActions.svelte';
+  import AdminToggleSetting from '../shared/AdminToggleSetting.svelte';
   import Button from '../shared/Button.svelte';
   import type { FilesystemSettingsState } from './filesystem-settings-state.svelte';
 
@@ -13,10 +14,6 @@
     diagnostics: Snippet;
   } = $props();
   const approvalLabel = 'Require approval for MCP file deletion';
-
-  function changeApproval(event: Event): void {
-    if (event.currentTarget instanceof HTMLInputElement) state.change(event.currentTarget.checked);
-  }
 </script>
 
 {#snippet folderIcon()}
@@ -27,23 +24,22 @@
   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-7 4 14 3-7h4" /></svg>
 {/snippet}
 
+{#snippet sectionLink(href: string, title: string, count: number, current: 'page' | 'location' | undefined, icon: Snippet)}
+  <li>
+    <a class="section-row" {href} aria-current={current}>
+      <span class="section-marker">{@render icon()}</span>
+      <span class="section-copy"><strong>{title}</strong><small>{count} {count === 1 ? 'setting' : 'settings'}</small></span>
+    </a>
+  </li>
+{/snippet}
+
 <AdminSplitWorkspace ariaLabel="System settings workspace" sidebarLabel="Settings sections" sidebarHeading="Settings sections" count={diagnosticsAllowed ? 2 : 1} detailLabel={section === 'agent-diagnostics' ? 'Agent diagnostics settings' : 'Filesystem settings'}>
   {#snippet sidebar()}
     <nav aria-label="Available sections">
       <ul class="sections">
-        <li>
-          <a class="section-row" href={systemSettingsHref} aria-current={section === 'filesystem' ? 'page' : undefined}>
-            <span class="section-marker">{@render folderIcon()}</span>
-            <span class="section-copy"><strong>Filesystem</strong><small>1 setting</small></span>
-          </a>
-        </li>
+        {@render sectionLink(systemSettingsHref, 'Filesystem', 1, section === 'filesystem' ? 'page' : undefined, folderIcon)}
         {#if diagnosticsAllowed}
-          <li>
-            <a class="section-row" href={agentDiagnosticsReportingHref} aria-current={section === 'agent-diagnostics' ? 'location' : undefined}>
-              <span class="section-marker">{@render diagnosticsIcon()}</span>
-              <span class="section-copy"><strong>Agent diagnostics</strong><small>Reporting settings</small></span>
-            </a>
-          </li>
+          {@render sectionLink(agentDiagnosticsReportingHref, 'Agent diagnostics', 2, section === 'agent-diagnostics' ? 'location' : undefined, diagnosticsIcon)}
         {/if}
       </ul>
     </nav>
@@ -51,21 +47,26 @@
 
   {#snippet detail()}
     {#if section === 'agent-diagnostics'}
+      {@render detailHeader('Agent diagnostics', 'Controls for diagnostic reporting on this instance.', diagnosticsIcon)}
       {@render diagnostics()}
     {:else}
+      {@render detailHeader('Filesystem', 'Controls for file operations on this instance.', folderIcon)}
       {@render filesystem()}
     {/if}
   {/snippet}
 </AdminSplitWorkspace>
 
+{#snippet detailHeader(title: string, description: string, icon: Snippet)}
+  <header class="detail-header">
+    <span class="detail-icon">{@render icon()}</span>
+    <div>
+      <h2>{title}</h2>
+      <p>{description}</p>
+    </div>
+  </header>
+{/snippet}
+
 {#snippet filesystem()}
-    <header class="detail-header">
-      <span class="folder-icon">{@render folderIcon()}</span>
-      <div>
-        <h2>Filesystem</h2>
-        <p>Controls for file operations on this instance.</p>
-      </div>
-    </header>
 
     {#if state.loading}
       <p role="status">Loading filesystem settings…</p>
@@ -78,41 +79,27 @@
     {/if}
 
     {#if state.ready}
-      <div class="setting">
-        <div class="setting-row">
-          <div>
-            <h3>{approvalLabel}</h3>
-            <p>Ask for human confirmation before an MCP tool deletes a file. Turning this off doesn’t grant delete permission or change the browser’s confirmation dialog.</p>
-            <div class="source-line">
-              <span class="source">{state.sourceLabel}</span>
-              {#if state.canReset}
-                <Button variant="quiet" size="compact" disabled={state.busy} onclick={state.reset}>Reset to default</Button>
-              {/if}
-            </div>
+      <AdminToggleSetting title={approvalLabel} description="Ask for human confirmation before an MCP tool deletes a file. Turning this off doesn’t grant delete permission or change the browser’s confirmation dialog." checked={state.checked} disabled={state.busy || state.resetting} onChange={(checked): void => state.change(checked)} children={state.resetting || !state.checked ? approvalDetails : undefined}>
+        {#snippet metadata()}
+          <div class="source-line">
+            <span class="source">{state.sourceLabel}</span>
+            {#if state.canReset}
+              <Button variant="quiet" size="compact" disabled={state.busy} onclick={state.reset}>Reset to default</Button>
+            {/if}
           </div>
-          <div class="toggle">
-            <AdminToggle checked={state.checked} disabled={state.busy || state.resetting} ariaLabel={approvalLabel} onchange={changeApproval} />
-            <span aria-hidden="true">{state.checked ? 'On' : 'Off'}</span>
-          </div>
-        </div>
-        {#if state.resetting}
-          <p role="status">Save changes to restore the instance default. The current value is shown until then.</p>
-        {/if}
-        {#if !state.checked}
-          <p class="notice">With approval off, new MCP file deletion requests won’t ask for confirmation. Approvals already in progress still need a response.</p>
-        {/if}
-      </div>
-
-      <div class="actions">
-        <p role="status">{state.busy ? 'Saving changes…' : state.dirty ? 'Unsaved changes' : 'No unsaved changes'}</p>
-        <div class="buttons">
-          {#if state.dirty}
-            <Button variant="secondary" disabled={state.busy} onclick={state.discard}>Discard</Button>
-          {/if}
-          <Button disabled={!state.dirty || state.busy} onclick={state.save}>Save changes</Button>
-        </div>
-      </div>
+        {/snippet}
+      </AdminToggleSetting>
+      <AdminSettingsActions busy={state.busy} dirty={state.dirty} onDiscard={state.discard} onSave={state.save} />
     {/if}
+{/snippet}
+
+{#snippet approvalDetails()}
+  {#if state.resetting}
+    <p role="status">Save changes to restore the instance default. The current value is shown until then.</p>
+  {/if}
+  {#if !state.checked}
+    <p class="notice">With approval off, new MCP file deletion requests won’t ask for confirmation. Approvals already in progress still need a response.</p>
+  {/if}
 {/snippet}
 
 <style>
@@ -125,21 +112,13 @@
   .section-copy { display: grid; font-size: 13px; gap: 0.25rem; }
   .section-copy strong { font-weight: 600; }
   .section-copy small { color: var(--admin-muted); font-size: 11px; }
-  .folder-icon { align-items: center; background: var(--admin-action); border-radius: 50%; color: var(--admin-panel); display: inline-flex; flex: 0 0 auto; height: 20px; justify-content: center; width: 20px; }
+  .detail-icon { align-items: center; background: var(--admin-action); border-radius: 50%; color: var(--admin-panel); display: inline-flex; flex: 0 0 36px; height: 36px; justify-content: center; }
   .detail-header { align-items: center; display: flex; gap: 0.75rem; margin-bottom: 24px; }
-  .detail-header .folder-icon { height: 36px; width: 36px; }
-  h2, h3, p { margin: 0; }
-  h2 { font-size: 20px; }
-  h3 { font-size: 15px; }
-  p { color: var(--admin-muted); font-size: 13px; line-height: 1.5; margin-top: 0.375rem; }
-  .setting { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 16px; }
-  .setting-row, .actions { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; }
-  .source-line, .toggle, .buttons { align-items: center; display: flex; flex-wrap: wrap; gap: 0.5rem; }
-  .source-line { margin-top: 0.875rem; }
+  h2 { font-size: 20px; margin: 0; }
+  p { color: var(--admin-muted); font-size: 13px; line-height: 1.5; margin: 0; }
+  .detail-header p { margin-top: 0.375rem; }
+  .source-line { align-items: center; display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .source { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 999px; color: var(--admin-muted); font-size: 11px; padding: 3px 8px; }
-  .toggle { flex-shrink: 0; font-size: 13px; }
   .notice { background: var(--admin-warning-bg); border: 1px solid var(--admin-warning-border); border-radius: var(--admin-radius); color: var(--admin-warning-text); padding: 10px 12px; }
-  .setting .notice { margin-top: 1rem; }
   .notice[role='alert'] { margin-bottom: 1rem; }
-  .actions { align-items: center; flex-wrap: wrap; margin-top: 1rem; }
 </style>

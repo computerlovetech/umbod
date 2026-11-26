@@ -6,10 +6,10 @@ const text = (maximum: number): z.ZodString => bounded(maximum).trim().min(1);
 const identifiers = (maximum: number): z.ZodArray<typeof identifierSchema> => z.array(identifierSchema).max(maximum).refine((values): boolean => new Set(values).size === values.length);
 export const patternCategoryLimit = 10;
 export const patternSchema = z.strictObject({ id: identifierSchema, name: text(120), description: text(2000), assessment_prompt: text(4000), inclusion_criteria: bounded(4000), exclusion_criteria: bounded(4000), categories: identifiers(patternCategoryLimit), polarity: z.enum(['positive', 'negative', 'neutral']), enabled: z.boolean() });
-export const playbookSchema = z.strictObject({ id: identifierSchema, name: text(120), collection_instructions: text(8000), pattern_ids: identifiers(20).min(1), enabled: z.boolean(), allow_proactive: z.boolean() });
-const collections = { patterns: z.array(patternSchema).max(50), playbooks: z.array(playbookSchema).max(20) };
-export const configurationSchema = z.strictObject({ revision: z.number().int().nonnegative(), ...collections });
-export const publishSchema = z.strictObject({ expected_revision: z.number().int().nonnegative(), ...collections }).superRefine((value, context): void => {
+export const playbookSchema = z.strictObject({ id: identifierSchema, name: text(120), collection_instructions: text(8000), pattern_ids: identifiers(20).min(1), enabled: z.boolean() });
+const configurationFields = { reporting_enabled: z.boolean(), patterns: z.array(patternSchema).max(50), playbooks: z.array(playbookSchema).max(20) };
+export const configurationSchema = z.strictObject({ revision: z.number().int().nonnegative(), ...configurationFields });
+export const publishSchema = z.strictObject({ expected_revision: z.number().int().nonnegative(), ...configurationFields }).superRefine((value, context): void => {
   for (const key of ['patterns', 'playbooks'] as const) {
     if (new Set(value[key].map((item): string => item.id)).size !== value[key].length) context.addIssue({ code: 'custom', path: [key], message: 'IDs must be unique' });
   }

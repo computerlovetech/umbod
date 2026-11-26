@@ -5,6 +5,7 @@ from umbod.core.publishing.factories import create_connector_publishing_store
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from umbod.core.invocation.tools.database_configuration_mutation import DatabaseConnectorToolConfigurationMutationAdapter
+from umbod.core.agent_behaviour import PublishConfiguration, create_agent_behaviour_service
 from umbod.core.activation import CapabilityRef, create_capability_activation_store
 from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_DEFINITION_TABLE, ConnectorDefinitionStoreService, EncryptedCredentialStoreService, TOOL_CATALOG_TABLE, ToolCatalogStoreService
 from umbod.core.persistence import Database
@@ -87,6 +88,11 @@ async def _post(client: httpx.AsyncClient, path: str, payload: dict[str, Any]) -
 async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(monkeypatch: pytest.MonkeyPatch) -> None:
     persistence_runtime = await prepared_inmemory_runtime()
     await _persist_catalog(persistence_runtime.database)
+    diagnostics = create_agent_behaviour_service(persistence_runtime.database)
+    defaults = diagnostics.get_defaults()
+    await diagnostics.publish_configuration(PublishConfiguration(
+        expected_revision=defaults.revision, reporting_enabled=True, patterns=defaults.patterns, playbooks=defaults.playbooks,
+    ))
     settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False, connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, stateless_http=True, _env_file=None), connector_store=ConnectorStoreConfig(type='inmemory'), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
     runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(persistence_runtime.database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
     config = PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime)

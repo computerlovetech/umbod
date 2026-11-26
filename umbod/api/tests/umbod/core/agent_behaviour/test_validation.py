@@ -38,9 +38,9 @@ def test_report_query_rejects_unbounded_or_unknown_inputs(filters: dict[str, obj
         ReportQuery.model_validate(filters)
 
 
-def test_playbooks_require_explicit_proactive_policy(publication: PublishConfiguration) -> None:
+def test_playbooks_reject_the_retired_proactive_flag(publication: PublishConfiguration) -> None:
     payload = publication.playbooks[0].model_dump()
-    del payload["allow_proactive"]
+    payload["allow_proactive"] = True
     with pytest.raises(ValidationError):
         DiagnosticPlaybook.model_validate(payload)
 

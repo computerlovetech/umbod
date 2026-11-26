@@ -48,12 +48,13 @@ test('lists both settings sections and displays only Filesystem by default', asy
 
   const sidebar = document.querySelector('aside[aria-label="Settings sections"]');
   expect(sidebar?.querySelectorAll('li')).toHaveLength(2);
-  expect(sidebar?.querySelector('a[aria-current="page"]')?.textContent).toContain('Filesystem');
-  expect(sidebar?.querySelector('a[href="/admin/system-settings?section=agent-diagnostics"]')?.textContent).toContain('Agent diagnostics');
+  expect(sidebar?.querySelector('a[aria-current="page"]')?.textContent).toMatch(/Filesystem\s*1 setting/);
+  expect(sidebar?.querySelector('a[href="/admin/system-settings?section=agent-diagnostics"]')?.textContent).toMatch(/Agent diagnostics\s*2 settings/);
   expect(document.querySelector('section[aria-label="Agent diagnostics settings"]')).toBeNull();
   expect(document.querySelector('input[type="search"], [role="searchbox"]')).toBeNull();
   expect(document.body.textContent).not.toMatch(/Retention|Integrations/);
-  expect(document.body.textContent).toContain('doesn’t grant delete permission or change the browser’s confirmation dialog');
+  const descriptionId = toggle().getAttribute('aria-describedby') ?? '';
+  expect(document.getElementById(descriptionId)?.textContent).toContain('doesn’t grant delete permission or change the browser’s confirmation dialog');
   expect(button('Save changes').disabled).toBe(true);
 });
 
@@ -66,7 +67,7 @@ test('discards a toggle draft and sends an explicit false value only when saved'
   await tick();
   expect(document.body.textContent).toContain('new MCP file deletion requests won’t ask for confirmation');
   expect(update).not.toHaveBeenCalled();
-  button('Discard').click();
+  button('Discard changes').click();
   await tick();
   expect(toggle().checked).toBe(true);
   expect(button('Save changes').disabled).toBe(true);
@@ -133,7 +134,7 @@ test('prevents duplicate saves in flight and preserves an unconfirmed draft for 
   button('Save changes').click();
   await tick();
   expect(button('Save changes').disabled).toBe(true);
-  expect(button('Discard').disabled).toBe(true);
+  expect(button('Discard changes').disabled).toBe(true);
   expect(toggle().disabled).toBe(true);
   button('Save changes').click();
   expect(update).toHaveBeenCalledTimes(1);

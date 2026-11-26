@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from tests.persistence_runtime import create_inmemory_runtime
 from umbod.config import AppConfig
-from umbod.core.agent_behaviour import PatternAssessment, SubmitDiagnosticReport, create_agent_behaviour_service
+from umbod.core.agent_behaviour import PatternAssessment, PublishConfiguration, SubmitDiagnosticReport, create_agent_behaviour_service
 from umbod.core.callers import LOCAL_DEVELOPMENT_ISSUER, AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity
 from umbod.core.persistence import Database
 from umbod.rest.authentication.verifiers import ProductionJwksJwtVerifier
@@ -43,6 +43,14 @@ def headers(key: rsa.RSAPrivateKey, subject: str) -> dict[str, str]:
         key, algorithm="RS256", headers={"kid": "reports-key"},
     )
     return {"Authorization": "Bearer " + token}
+
+
+async def set_reporting(database: Database, enabled: bool) -> None:
+    service = create_agent_behaviour_service(database)
+    current = await service.get_configuration()
+    await service.publish_configuration(PublishConfiguration(
+        expected_revision=current.revision, reporting_enabled=enabled, patterns=current.patterns, playbooks=current.playbooks,
+    ))
 
 
 async def seed_report(
@@ -89,9 +97,11 @@ def api(signing_key: rsa.RSAPrivateKey, tmp_path: Path, monkeypatch: pytest.Monk
     app = create_app_with_dependency_factories(factories, admin_verifier=verifier, user_verifier=verifier)
     with TestClient(app) as client:
         assert client.portal is not None
+        client.portal.call(set_reporting, runtime.database, True)
         own_report = client.portal.call(seed_report, runtime.database, ISSUER, "alice")
         other_user_report = client.portal.call(seed_report, runtime.database, ISSUER, "bob")
         client.portal.call(seed_report, runtime.database, "https://another.identity.test/", "alice")
+        client.portal.call(set_reporting, runtime.database, False)
         yield ReportsApi(client, headers(signing_key, "alice"), headers(signing_key, "bob"), own_report, other_user_report)
 
 
@@ -106,6 +116,7 @@ def test_default_local_rest_user_can_read_existing_mcp_report(
     factories = ConnectorApiDependencyFactories.from_settings(settings, runtime, ())
     with TestClient(create_app_with_dependency_factories(factories)) as client:
         assert client.portal is not None
+        client.portal.call(set_reporting, runtime.database, True)
         report_id = str(client.portal.call(
             seed_report, runtime.database, LOCAL_DEVELOPMENT_ISSUER, "local-test-user", AuthenticationProvenance.LOCAL_TEST,
         ))

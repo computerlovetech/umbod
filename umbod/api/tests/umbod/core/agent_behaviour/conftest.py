@@ -47,8 +47,8 @@ def caller() -> CallerContext:
 @pytest.fixture
 def publication() -> PublishConfiguration:
     pattern = BehaviourPattern(id="missing-context", name="Missing context", description="Necessary context is missing", assessment_prompt="Assess whether task context is missing", inclusion_criteria="Blocked on unavailable information", exclusion_criteria="Ordinary clarification", categories=("quality",), polarity="negative", enabled=True)
-    playbook = DiagnosticPlaybook(id="task-review", name="Task review", collection_instructions="Review authorized context and report facts", pattern_ids=(pattern.id,), enabled=True, allow_proactive=False)
-    return PublishConfiguration(expected_revision=1, patterns=(pattern,), playbooks=(playbook,))
+    playbook = DiagnosticPlaybook(id="task-review", name="Task review", collection_instructions="Review authorized context and report facts", pattern_ids=(pattern.id,), enabled=True)
+    return PublishConfiguration(reporting_enabled=True, expected_revision=1, patterns=(pattern,), playbooks=(playbook,))
 
 
 @pytest.fixture

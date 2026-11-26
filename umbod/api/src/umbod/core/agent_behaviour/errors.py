@@ -49,8 +49,8 @@ class StaleConfiguration(ReportInvalid):
     code = "stale_configuration"
 
 
-class ProactiveDisabled(ReportInvalid):
-    code = "proactive_disabled"
+class ReportingDisabled(AgentBehaviourError):
+    code = "reporting_disabled"
 
 
 class IdempotencyConflict(AgentBehaviourError):

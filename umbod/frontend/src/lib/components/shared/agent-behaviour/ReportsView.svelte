@@ -25,7 +25,7 @@
   {:else}
     <div class="insight-result-meta"><span>{state.page.total} {state.page.total === 1 ? 'entry' : 'entries'}</span></div>
     {#each state.page.items as report (report.report_id)}
-      <a class="report-row" href={`${listHref}?report=${encodeURIComponent(report.report_id)}`}><strong>{state.reportingName(report.playbook_id)}</strong><span>{report.observed_pattern_ids.map(state.patternName).join(', ') || 'No patterns observed'}</span><DateTimeView value={report.received_at} /><span>{report.trigger === 'proactive' ? 'Proactive' : 'User requested'}</span></a>
+      <a class="report-row" href={`${listHref}?report=${encodeURIComponent(report.report_id)}`}><strong>{state.reportingName(report.playbook_id)}</strong><span>{report.observed_pattern_ids.map(state.patternName).join(', ') || 'No patterns observed'}</span><DateTimeView value={report.received_at} /><span>Agent-reported trigger: {report.trigger === 'proactive' ? 'proactive' : 'user requested'}</span></a>
     {:else}<p class="insight-caption">No entries match this query.</p>{/each}
     <div class="insight-pagination"><Button disabled={state.query.offset === 0} onclick={(): void => state.paginate(-1)}>Previous</Button><span>Page {state.pageNumber}</span><Button disabled={!state.hasNext} onclick={(): void => state.paginate(1)}>Next</Button></div>
   {/if}

@@ -15,8 +15,9 @@ from .authorization import DiagnosticCallerPolicy
 
 REPORT_DESCRIPTION = (
     "Submit a durable agent self-report, not independently verified evidence. First read current instructions from "
-    "umbod://agent-behaviour/playbooks/{playbook_id} or invoke run_diagnostics for the user-requested path. "
-    "Proactive reporting requires the playbook's allow_proactive=true and user/client authority; respect refusals. "
+    "umbod://agent-behaviour/playbooks/{playbook_id} or use run_diagnostics to start the flow. "
+    "Use only authorized context, respect user and client policy and refusals, and describe how diagnostics began "
+    "in trigger; it is caller-reported metadata, not permission. "
     "Use configuration_revision and playbook_id from those instructions and assess every selected pattern exactly once. "
     "Generate one UUID idempotency_key before submission. After storage failure or a lost response, retry only the "
     "identical payload with that same UUID, never a new key. Do not claim success until a receipt returns. "
@@ -27,7 +28,7 @@ REPORT_DESCRIPTION = (
 EXACT_RETRY = "If a response was lost or persistence may have committed, retry only the identical payload with the same idempotency_key. Never generate a replacement key; deduplication makes this exact retry safe."
 CORRECTIONS = {
     "stale_configuration": "Reload current instructions and reassess; never silently relabel old evidence with a new revision.",
-    "proactive_disabled": "Do not submit proactively. Respect user/client policy; only a genuine user request permits user_requested.",
+    "reporting_disabled": "Reporting is disabled. Do not submit reports while it is off; rediscover the tool after an administrator re-enables it.",
     "idempotency_conflict": "This key belongs to a different submission. Do not change or replay it; reconcile the original submission first.",
     "report_gone": "The report was deleted. Do not attempt to resurrect it or generate a replacement key.",
     "unauthorized": "Authenticate with an eligible MCP identity before requesting diagnostics.",
@@ -38,11 +39,12 @@ CORRECTIONS = {
 
 def diagnostic_failure(code: str, uncertain: bool) -> BuiltinToolResult:
     instruction = EXACT_RETRY if uncertain else CORRECTIONS.get(code, "Correct the submission before retrying.")
+    known_retry = RetryAdvice.NEVER if code == "reporting_disabled" else RetryAdvice.AFTER_CORRECTION
     metadata = ToolResponseMetadataFactory(UMBOD_RELEASE, UMBOD_REVISION).failure(
         current_request_id() or "diagnostic-report",
         error=ToolErrorDetails(code=code, message="Diagnostic report was not acknowledged.", issues=()),
         operation_state=OperationState.UNKNOWN if uncertain else OperationState.NOT_STARTED,
-        retry=RetryAdvice.INSPECT_BEFORE_RETRY if uncertain else RetryAdvice.AFTER_CORRECTION,
+        retry=RetryAdvice.INSPECT_BEFORE_RETRY if uncertain else known_retry,
         instructions=(instruction,), notices=(),
     )
     return BuiltinToolResult(content=render_failure_guidance(metadata), is_error=True,
@@ -55,7 +57,7 @@ def report_input_schema() -> dict[str, Any]:
         "idempotency_key": "Generate one UUID before submission; preserve it and the identical payload on any uncertain retry.",
         "configuration_revision": "Use the current instruction revision. Stale instructions require reloading and reassessment, not relabeling evidence.",
         "playbook_id": "Enabled playbook ID from the current diagnostic instruction resource.",
-        "trigger": "Caller assertion: user_requested follows a genuine user request; proactive additionally requires administrator opt-in and user/client authority.",
+        "trigger": "Caller-reported metadata: user_requested when requested by the user, or proactive when initiated without a user request. This field does not grant permission.",
         "assessments": "Every selected pattern exactly once, with unique pattern IDs; assessment order is insignificant for idempotency.",
     }
     for name, description in descriptions.items():

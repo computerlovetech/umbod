@@ -34,8 +34,9 @@ function configuredDiagnostics(): InMemoryAgentBehaviourApi {
   const api = new InMemoryAgentBehaviourApi();
   api.current = {
     revision: 1,
+    reporting_enabled: false,
     patterns: [{ id: 'context', name: 'Missing context', description: 'Notice missing facts', assessment_prompt: 'Assess missing facts', inclusion_criteria: '', exclusion_criteria: '', categories: [], polarity: 'neutral', enabled: true }],
-    playbooks: [{ id: 'review', name: 'Behaviour review', collection_instructions: 'Collect facts', pattern_ids: ['context'], enabled: true, allow_proactive: false }]
+    playbooks: [{ id: 'review', name: 'Behaviour review', collection_instructions: 'Collect facts', pattern_ids: ['context'], enabled: true }]
   };
   return api;
 }
@@ -106,7 +107,14 @@ test('loads diagnostics once on first visit and preserves both drafts across sec
   navigate(reportingPath);
   await vi.waitFor(() => expect(document.body.textContent).toContain('Collect facts'));
   expect(document.querySelector(toggle)).toBeNull();
-  expect(element('aside a[aria-current="location"]').textContent).toContain('Reporting settings');
+  expect(element('aside a[aria-current="location"]').textContent).toMatch(/Agent diagnostics\s*2 settings/);
+  const selectedIcon = element('aside a[aria-current="location"] svg path');
+  const detail = element('[aria-label="Agent diagnostics settings"]');
+  expect(detail.querySelector('header h2')?.textContent).toBe('Agent diagnostics');
+  expect(detail.querySelector('header svg path')?.getAttribute('d')).toBe(selectedIcon.getAttribute('d'));
+  const reportingControl = element('input[aria-label="Enable diagnostic reporting"]');
+  const descriptionId = reportingControl.getAttribute('aria-describedby') ?? '';
+  expect(document.getElementById(descriptionId)?.textContent).toContain('Let agents submit diagnostic reports through MCP.');
   expect(element(`a[href="${patternsPath}"]`).textContent).toContain('Manage patterns');
   changeInstructions('Draft collection instructions');
   navigate(settingsPath);
@@ -129,7 +137,7 @@ test('opens instructions on demand and keeps the draft when the editor is closed
   await vi.waitFor(() => expect(document.body.textContent).toContain('Collect facts'));
   expect(document.querySelector('textarea')).toBeNull();
   expect(button('Edit instructions').getAttribute('aria-expanded')).toBe('false');
-  expect(findButton('Save changes')).toBeUndefined();
+  expect(button('Save changes').disabled).toBe(true);
   expect(findButton('Discard changes')).toBeUndefined();
 
   changeInstructions('Collect facts, not guesses');
@@ -140,7 +148,7 @@ test('opens instructions on demand and keeps the draft when the editor is closed
   expect(document.querySelector('textarea')).toBeNull();
   expect(document.body.textContent).toContain('Collect facts, not guesses');
   const save = button('Save changes');
-  const reporting = element('[aria-labelledby="reporting-settings-title"]');
+  const reporting = element('section[aria-label="Reporting settings"]');
   expect(save.disabled).toBe(false);
   expect(reporting.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(reporting.contains(save)).toBe(false);
@@ -149,7 +157,7 @@ test('opens instructions on demand and keeps the draft when the editor is closed
   button('Discard changes').click();
   await tick();
   expect(document.body.textContent).not.toContain('Collect facts, not guesses');
-  expect(findButton('Save changes')).toBeUndefined();
+  expect(button('Save changes').disabled).toBe(true);
   expect(findButton('Discard changes')).toBeUndefined();
   expect(openInstructions().value).toBe('Collect facts');
 });
@@ -159,7 +167,7 @@ test('directs administrators to pattern management when reporting has not been c
   await vi.waitFor(() => expect(document.body.textContent).toContain('No reporting settings configured.'));
   expect(element(`a[href="${patternsPath}"]`).textContent).toContain('Manage patterns');
   expect(document.querySelector('textarea')).toBeNull();
-  expect(findButton('Save changes')).toBeUndefined();
+  expect(button('Save changes').disabled).toBe(true);
   expect(findButton('Discard changes')).toBeUndefined();
 });
 
@@ -169,7 +177,7 @@ test('finishes saving from a direct Reporting settings URL while Filesystem is s
   const publish = vi.spyOn(api.configuration, 'publish').mockReturnValue(saved.promise);
   const navigate = mountSettings(api, reportingPath);
   await vi.waitFor(() => expect(document.body.textContent).toContain('Collect facts'));
-  expect(element('[aria-labelledby="reporting-settings-title"]').textContent).toContain('Reporting settings');
+  expect(element('section[aria-label="Reporting settings"]').textContent).toContain('Enable diagnostic reporting');
   expect(document.querySelector('[aria-labelledby="diagnostic-patterns-title"]')).toBeNull();
   expect(document.body.textContent).not.toContain('Add pattern');
   expect(element(`a[href="${patternsPath}"]`).textContent).toContain('Manage patterns');
@@ -179,6 +187,7 @@ test('finishes saving from a direct Reporting settings URL while Filesystem is s
   button('Save changes').click();
   expect(publish).toHaveBeenCalledExactlyOnceWith({
     expected_revision: api.current.revision,
+    reporting_enabled: false,
     patterns: api.current.patterns,
     playbooks: [{ ...api.current.playbooks[0], collection_instructions: 'Saved instructions' }]
   }, expect.any(AbortSignal));
@@ -195,7 +204,7 @@ test('finishes saving from a direct Reporting settings URL while Filesystem is s
   await vi.waitFor(() => expect(document.body.textContent).toContain('Changes saved'));
   expect(document.body.textContent).toContain('Saved instructions');
   expect(openInstructions().value).toBe('Saved instructions');
-  expect(findButton('Save changes')).toBeUndefined();
+  expect(button('Save changes').disabled).toBe(true);
   expect(findButton('Discard changes')).toBeUndefined();
 });
 

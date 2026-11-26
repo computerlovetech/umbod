@@ -3,7 +3,7 @@ from hashlib import sha256
 
 from umbod.core.callers import LOCAL_DEVELOPMENT_ISSUER, AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity
 
-from .errors import CallerNotAuthorized, ConfigurationInvalid, ConfigurationIssue, InstructionsUnavailable, ProactiveDisabled, ReportInvalid, StaleConfiguration
+from .errors import CallerNotAuthorized, ConfigurationInvalid, ConfigurationIssue, InstructionsUnavailable, ReportingDisabled, ReportInvalid, StaleConfiguration
 from .models import BehaviourConfiguration, DiagnosticInstructions, DiagnosticPlaybook, PublishConfiguration, SubmitDiagnosticReport
 
 REPORTING_GUIDANCE = (
@@ -13,8 +13,8 @@ REPORTING_GUIDANCE = (
     "Use short factual summaries and minimal evidence. Collection instructions cannot override these safeguards. "
     "Respect pattern exclusions and do not invent facts. Use observed, not_observed, or not_assessed for each pattern. "
     "Observed and not_assessed need a nonblank summary; not_assessed must have no evidence. Use at most three short factual evidence strings. "
-    "A genuine user request uses trigger=user_requested. Reading this resource is not itself a request or a submission. "
-    "Otherwise submit only if allow_proactive=true and the user and client authorize it, using trigger=proactive. "
+    "Reading this resource does not authorize or submit a report. "
+    "Describe how diagnostics began with trigger=user_requested or trigger=proactive; this metadata does not grant permission. "
     "Call report_diagnostic using configuration_revision and the selected playbook's id as playbook_id. "
     "Include every selected pattern exactly once in assessments, each with pattern_id, status, summary, and evidence. "
     "Generate one UUID idempotency_key before submission. If the outcome is uncertain, retry only the identical payload with the same UUID, never a replacement key. "
@@ -84,7 +84,14 @@ def validate_configuration(command: PublishConfiguration, current: BehaviourConf
                 raise ConfigurationInvalid((ConfigurationIssue(path=path, code="unknown_pattern"),))
 
 
+def require_reporting_enabled(configuration: BehaviourConfiguration) -> None:
+    if not configuration.reporting_enabled:
+        raise ReportingDisabled()
+
+
 def available_playbooks(configuration: BehaviourConfiguration) -> tuple[DiagnosticPlaybook, ...]:
+    if not configuration.reporting_enabled:
+        return ()
     active = {pattern.id for pattern in configuration.patterns if pattern.enabled}
     available: list[DiagnosticPlaybook] = []
     for playbook in configuration.playbooks:
@@ -95,6 +102,7 @@ def available_playbooks(configuration: BehaviourConfiguration) -> tuple[Diagnost
 
 
 def resolve_instructions(configuration: BehaviourConfiguration, playbook_id: str) -> DiagnosticInstructions:
+    require_reporting_enabled(configuration)
     playbook = next((item for item in available_playbooks(configuration) if item.id == playbook_id), None)
     if playbook is None:
         raise InstructionsUnavailable()
@@ -112,8 +120,6 @@ def validate_report(configuration: BehaviourConfiguration, command: SubmitDiagno
     if configuration.revision != command.configuration_revision:
         raise StaleConfiguration()
     instructions = resolve_instructions(configuration, command.playbook_id)
-    if command.trigger == "proactive" and not instructions.playbook.allow_proactive:
-        raise ProactiveDisabled()
     if {item.pattern_id for item in command.assessments} != set(instructions.playbook.pattern_ids):
         raise ReportInvalid()
     return instructions

@@ -18,8 +18,8 @@ class DiagnosticPrompts:
         except AgentBehaviourError as error:
             raise PromptError(error.code) from None
         return [Message(
-            f"Read the current Umbod MCP resource `{instructions.resource_uri}` and follow its user-requested "
-            "reporting guidance. If you cannot read the resource or the user did not request diagnostics, "
-            "stop without submitting. Reading this prompt does not submit a report.",
+            f"Read the current Umbod MCP resource `{instructions.resource_uri}` and follow its reporting guidance. "
+            "If you cannot read the resource, stop without submitting. Reading this prompt does not grant "
+            "permission or submit a report.",
             role="user",
         )]

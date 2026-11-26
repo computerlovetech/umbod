@@ -80,7 +80,7 @@ test('Agent diagnostics owns its findings link and leaves the workspace-owned dr
   try {
     expect(target.querySelector('h1')?.textContent).toBe('Agent diagnostics');
     expect(target.querySelector('a[href="/admin/system-settings?section=agent-diagnostics"]')?.textContent).toBe('Reporting settings');
-    expect(target.querySelector('section[aria-labelledby="reporting-settings-title"]')).toBeNull();
+    expect(target.querySelector('section[aria-label="Reporting settings"]')).toBeNull();
     expect(target.querySelector('a[href="/admin/insights/agent-behaviour"]')?.textContent).toContain('View findings');
     expect(target.querySelector('dialog')).not.toBeNull();
     expect(target.textContent).toContain('Add pattern');

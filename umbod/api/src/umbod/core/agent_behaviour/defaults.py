@@ -1,8 +1,16 @@
 from .models import BehaviourConfiguration, BehaviourPattern, DiagnosticPlaybook
 
 
+DEFAULT_PLAYBOOK_ID = "behaviour-review"
+DEFAULT_COLLECTION_INSTRUCTIONS = (
+    "Review only the current task context and tool results you are authorized to use. Assess every selected pattern. "
+    "Record a short factual summary and up to three minimal observations for each observed pattern. "
+    "Use not_assessed when context is insufficient. Never collect full transcripts, credentials, personal data, or hidden reasoning."
+)
+
 DEFAULT_CONFIGURATION = BehaviourConfiguration(
     revision=1,
+    reporting_enabled=False,
     patterns=(
         BehaviourPattern(
             id="missing-context",
@@ -51,12 +59,11 @@ DEFAULT_CONFIGURATION = BehaviourConfiguration(
     ),
     playbooks=(
         DiagnosticPlaybook(
-            id="behaviour-review",
+            id=DEFAULT_PLAYBOOK_ID,
             name="Behaviour review",
-            collection_instructions="Review only the current task context and tool results you are authorized to use. Assess every selected pattern. Record a short factual summary and up to three minimal observations for each observed pattern. Use not_assessed when context is insufficient. Never collect full transcripts, credentials, personal data, or hidden reasoning. Report only when requested unless automatic reporting is explicitly allowed and the user and client permit it.",
+            collection_instructions=DEFAULT_COLLECTION_INSTRUCTIONS,
             pattern_ids=("missing-context", "tool-problems", "task-blocked", "user-correction"),
             enabled=True,
-            allow_proactive=False,
         ),
     ),
 )

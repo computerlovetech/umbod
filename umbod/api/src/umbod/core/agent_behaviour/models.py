@@ -1,7 +1,7 @@
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
 
 from umbod.core.callers import CallerContext
 
@@ -38,7 +38,6 @@ class DiagnosticPlaybook(BehaviourModel):
     collection_instructions: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=8000)]
     pattern_ids: tuple[Identifier, ...] = Field(min_length=1, max_length=20)
     enabled: bool
-    allow_proactive: bool
 
     @model_validator(mode="after")
     def unique_patterns(self) -> Self:
@@ -49,12 +48,14 @@ class DiagnosticPlaybook(BehaviourModel):
 
 class BehaviourConfiguration(BehaviourModel):
     revision: int = Field(ge=0)
+    reporting_enabled: StrictBool
     patterns: tuple[BehaviourPattern, ...] = Field(max_length=50)
     playbooks: tuple[DiagnosticPlaybook, ...] = Field(max_length=20)
 
 
 class PublishConfiguration(BehaviourModel):
     expected_revision: int = Field(ge=0)
+    reporting_enabled: StrictBool
     patterns: tuple[BehaviourPattern, ...] = Field(max_length=50)
     playbooks: tuple[DiagnosticPlaybook, ...] = Field(max_length=20)
 
@@ -86,7 +87,7 @@ class SubmitDiagnosticReport(BehaviourModel):
     idempotency_key: UUID = Field(description="Generate one UUID before submission. After a lost receipt, retry only the identical payload with this same key. Keys are scoped to the authenticated caller.")
     configuration_revision: int = Field(ge=1, description="Current revision returned by the playbook resource. Stale reports require reloading and reassessing, never relabeling old evidence.")
     playbook_id: Identifier = Field(description="Enabled playbook ID from umbod://agent-behaviour/playbooks. Read its current instructions before collecting a report.")
-    trigger: Literal["user_requested", "proactive"] = Field(description="Use user_requested only for a genuine user-invoked flow. proactive requires administrator allow_proactive=true plus user/client permission; respect refusals.")
+    trigger: Literal["user_requested", "proactive"] = Field(description="Caller-reported metadata: whether diagnostics were user-requested or initiated proactively. This field does not grant permission.")
     assessments: tuple[PatternAssessment, ...] = Field(min_length=1, max_length=20, description="Exactly one assessment for every selected pattern, including not_assessed when context is unavailable. Combined compact UTF-8 submission must not exceed 32 KiB.")
 
     @model_validator(mode="after")

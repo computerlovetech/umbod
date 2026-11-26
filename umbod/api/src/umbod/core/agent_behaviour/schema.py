@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from umbod.core.persistence import BooleanCodec, Field, IntegerCodec, KeyCodec, PydanticJsonCodec, RowCodec, Table, TableIdentity, TextCodec
 
+from .legacy import StoredConfigurationCodec, StoredReportCodec
 from .models import AssessmentStatus, BehaviourConfiguration, BehaviourModel, DiagnosticReport, ReportSummary
 
 
@@ -53,14 +54,14 @@ class DedupeRow(DedupeKey):
 
 CONFIGURATION_IDENTITY = TableIdentity("agent_behaviour_configuration")
 CONFIGURATION_KEY = Field[ConfigurationRow, int](CONFIGURATION_IDENTITY, "singleton", IntegerCodec())
-CONFIGURATION_VALUE = Field[ConfigurationRow, BehaviourConfiguration](CONFIGURATION_IDENTITY, "configuration", PydanticJsonCodec(BehaviourConfiguration))
+CONFIGURATION_VALUE = Field[ConfigurationRow, BehaviourConfiguration](CONFIGURATION_IDENTITY, "configuration", StoredConfigurationCodec(BehaviourConfiguration))
 CONFIGURATION_FIELDS = cast(tuple[Field[ConfigurationRow, object], ...], (CONFIGURATION_KEY, CONFIGURATION_VALUE))
 CONFIGURATION_TABLE = Table(CONFIGURATION_IDENTITY, RowCodec(ConfigurationRow, CONFIGURATION_FIELDS), KeyCodec(ConfigurationKey, cast(tuple[Field[ConfigurationRow, object], ...], (CONFIGURATION_KEY,))))
 
 REPORT_IDENTITY = TableIdentity("agent_behaviour_reports")
 REPORT_ID = Field[ReportRow, str](REPORT_IDENTITY, "report_id", TextCodec())
 REPORT_EXPIRY = Field[ReportRow, int](REPORT_IDENTITY, "expires_at", IntegerCodec())
-REPORT_VALUE = Field[ReportRow, DiagnosticReport](REPORT_IDENTITY, "report", PydanticJsonCodec(DiagnosticReport))
+REPORT_VALUE = Field[ReportRow, DiagnosticReport](REPORT_IDENTITY, "report", StoredReportCodec(DiagnosticReport))
 REPORT_FIELDS = cast(tuple[Field[ReportRow, object], ...], (REPORT_ID, REPORT_EXPIRY, REPORT_VALUE))
 REPORT_KEY_FIELDS = cast(tuple[Field[ReportRow, object], ...], (REPORT_ID,))
 REPORT_TABLE = Table(REPORT_IDENTITY, RowCodec(ReportRow, REPORT_FIELDS), KeyCodec(ReportKey, REPORT_KEY_FIELDS))

@@ -2,7 +2,7 @@
 
 Use this plugin to connect Codex CLI to an existing Umbod deployment. Before directing users to **Getting started**, check that the page advertises the intended public MCP endpoint and that sign-in is configured for that origin. The plugin installs per user through a local marketplace; it does not install the server or copy credentials into Codex.
 
-The package includes the remote MCP connection and skills for connected-app access, user-requested diagnostics, and proactive reporting of obstacles. Both reporting paths use the current Umbod playbook. Only proactive reporting requires the playbook's proactive setting and user/client authorization.
+The package includes the remote MCP connection and skills for connected-app access, user-requested diagnostics, and obstacle reporting. Both reporting paths require the administrator to enable diagnostic reporting and use the live Umbod playbook. Agents must follow the collection instructions and respect user and client policy; Umbod does not verify whether the user requested a report.
 
 Local-marketplace installation was verified with Codex CLI 0.167.0. Update Codex if `codex plugin` is unavailable. An OpenAI public-directory submission and ChatGPT desktop are not required.
 

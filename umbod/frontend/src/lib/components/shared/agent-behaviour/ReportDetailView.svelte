@@ -25,7 +25,7 @@
   <section class="report" aria-labelledby="report-heading">
     <header>
       <h2 id="report-heading">{report.instructions.playbook.name}</h2>
-      <p class="meta"><DateTimeView value={report.received_at} /> · {report.submission.trigger === 'proactive' ? 'Proactive' : 'User requested'}</p>
+      <p class="meta"><DateTimeView value={report.received_at} /> · Agent-reported trigger: {report.submission.trigger === 'proactive' ? 'proactive' : 'user requested'}</p>
       <p class="provenance">Agent self-reported · Not independently verified</p>
       <ul class="counts" aria-label="Assessment summary">
         {#each statuses as status (status)}

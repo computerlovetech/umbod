@@ -2,6 +2,7 @@
   let {
     checked,
     ariaLabel,
+    ariaDescribedBy,
     disabled = false,
     inputName,
     inputValue,
@@ -10,6 +11,7 @@
   }: {
     checked: boolean;
     ariaLabel: string;
+    ariaDescribedBy?: string;
     disabled?: boolean;
     inputName?: string;
     inputValue?: string;
@@ -19,12 +21,12 @@
 </script>
 
 {#if submit}
-  <button type="submit" class:checked role="switch" aria-checked={checked} aria-label={ariaLabel} {disabled}>
+  <button type="submit" class:checked role="switch" aria-checked={checked} aria-label={ariaLabel} aria-describedby={ariaDescribedBy} {disabled}>
     <span class="track" aria-hidden="true"><span class="thumb"></span></span>
   </button>
 {:else}
   <label class="toggle" class:disabled>
-    <input type="checkbox" aria-label={ariaLabel} name={inputName} value={inputValue} {checked} {disabled} {onchange} />
+    <input type="checkbox" aria-label={ariaLabel} aria-describedby={ariaDescribedBy} name={inputName} value={inputValue} {checked} {disabled} {onchange} />
     <span class="track" aria-hidden="true"><span class="thumb"></span></span>
   </label>
 {/if}

@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from umbod.cli.main import app
 from umbod.config import SQLiteConnectorStoreConfig
-from umbod.core.agent_behaviour import AgentBehaviourService, PatternAssessment, SubmitDiagnosticReport
+from umbod.core.agent_behaviour import AgentBehaviourService, PatternAssessment, PublishConfiguration, SubmitDiagnosticReport
 from umbod.core.agent_behaviour.store import DatabaseAgentBehaviourStore
 from umbod.core.agent_behaviour.schema import DEDUPE_TABLE, REPORT_LIST_TABLE, REPORT_TABLE
 from umbod.core.callers import AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity
@@ -45,7 +45,10 @@ async def seed(path: Path, now: datetime) -> None:
         await usage.append_usage(UsageBatch(records=(record(now - timedelta(days=2)), record(now))))
         old_time = now - timedelta(days=61)
         behaviour = AgentBehaviourService(DatabaseAgentBehaviourStore(persistence.database), lambda: old_time, uuid4)
-        configuration = await behaviour.get_configuration()
+        defaults = behaviour.get_defaults()
+        configuration = await behaviour.publish_configuration(PublishConfiguration(
+            expected_revision=defaults.revision, reporting_enabled=True, patterns=defaults.patterns, playbooks=defaults.playbooks,
+        ))
         playbook = configuration.playbooks[0]
         caller = CallerContext(
             authentication=AuthenticationProvenance.UPSTREAM_VERIFIED,
@@ -55,6 +58,9 @@ async def seed(path: Path, now: datetime) -> None:
             idempotency_key=uuid4(), configuration_revision=configuration.revision,
             playbook_id=playbook.id, trigger="user_requested",
             assessments=tuple(PatternAssessment(pattern_id=pattern_id, status="not_assessed", summary="Required context was unavailable", evidence=()) for pattern_id in playbook.pattern_ids),
+        ))
+        await behaviour.publish_configuration(PublishConfiguration(
+            expected_revision=configuration.revision, reporting_enabled=False, patterns=configuration.patterns, playbooks=configuration.playbooks,
         ))
     finally:
         await persistence.shutdown()

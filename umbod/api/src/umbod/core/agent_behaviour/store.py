@@ -9,7 +9,7 @@ from umbod.core.persistence import AllFields, Database, DatabaseSession, DeleteQ
 from .defaults import get_default_configuration
 from .errors import AgentBehaviourError, IdempotencyConflict, ReportGone, ReportNotFound, RevisionConflict, StorageUnavailable
 from .models import BehaviourConfiguration, DiagnosticReceipt, DiagnosticReport, PublishConfiguration, ReportPage, ReportQuery, ReportSummary, SubmitDiagnosticReport
-from .policy import identity_key, request_hash, validate_configuration, validate_report
+from .policy import identity_key, request_hash, require_reporting_enabled, validate_configuration, validate_report
 from .schema import CONFIGURATION_KEY, CONFIGURATION_TABLE, DEDUPE_EXPIRY, DEDUPE_KEY, DEDUPE_REPORT, DEDUPE_TABLE, LIST_EXPIRY, LIST_ID, REPORT_EXPIRY, REPORT_ID, REPORT_KEY_FIELDS, REPORT_LIST_TABLE, REPORT_TABLE, AssessmentVerdict, ConfigurationKey, ConfigurationRow, DedupeKey, DedupeRow, ReportKey, ReportListing, ReportListRow, ReportRow
 
 
@@ -90,7 +90,10 @@ class DatabaseAgentBehaviourStore:
             if current.revision != command.expected_revision:
                 raise RevisionConflict(current)
             validate_configuration(command, current)
-            published = BehaviourConfiguration(revision=current.revision + 1, patterns=command.patterns, playbooks=command.playbooks)
+            published = BehaviourConfiguration(
+                revision=current.revision + 1, reporting_enabled=command.reporting_enabled,
+                patterns=command.patterns, playbooks=command.playbooks,
+            )
             await session.upsert(CONFIGURATION_TABLE, UpsertCommand(key=ConfigurationKey(singleton=1), row=ConfigurationRow(singleton=1, configuration=published)))
             return published
 
@@ -98,6 +101,8 @@ class DatabaseAgentBehaviourStore:
         key = identity_key(caller, command)
         digest = request_hash(command)
         async with self._write() as session:
+            configuration = await _ensure_configuration(session)
+            require_reporting_enabled(configuration)
             previous = await session.find_one(DEDUPE_TABLE, Query(Equals(DEDUPE_KEY, key), AllFields(), Unordered()))
             if previous is not None and previous.expires_at > _instant(now):
                 if previous.request_hash != digest:
@@ -105,7 +110,6 @@ class DatabaseAgentBehaviourStore:
                 if previous.deleted:
                     raise ReportGone()
                 return DiagnosticReceipt(report_id=UUID(previous.report_id), received_at=datetime.fromisoformat(previous.received_at), duplicate=True)
-            configuration = await _ensure_configuration(session)
             instructions = validate_report(configuration, command)
             report = DiagnosticReport(report_id=report_id, received_at=now, expires_at=now + timedelta(days=30), caller=caller, submission=command, instructions=instructions)
             listing = ReportListing(summary=_summary(report), assessments=tuple(AssessmentVerdict(pattern_id=item.pattern_id, status=item.status) for item in command.assessments))

@@ -46,6 +46,12 @@ SQLite is intended for development and evaluation. By default, persistence is of
 
 Umbod does not migrate SQLite schemas or stored documents between incompatible versions. Back up any data you need and reset persistent storage before installing an incompatible version. Schedule `umbod cleanup` against the same persistent database before rollout. The servers do not automatically purge usage history or agent-behaviour data; see [scheduled cleanup](cleanup.md).
 
+## Diagnostic reporting
+
+Use **System settings → Agent diagnostics → Enable diagnostic reporting** and save the change to make the diagnostic tool, prompt, and playbooks available to eligible MCP clients. Turning it off blocks submissions without deleting saved instructions, patterns, or report history. A client that caches tools may still display the old tool until it refreshes, but Umbod rejects calls while reporting is off. Reporting requires an enabled playbook with at least one enabled pattern. Collection instructions guide the agent; they do not verify user consent.
+
+New installations start with reporting off. Existing saved configurations are read as on if they had an enabled playbook, and off otherwise. Upgrade the API, MCP, and frontend together: older MCP workers do not honor the switch. Review it after upgrading if you relied on the former reporting mode.
+
 Signed-in users can list their own diagnostic reports at `GET /api/me/agent-behaviour/reports` and retrieve a report by ID. If reports accepted by MCP are missing in REST, check that the issuer and subject match. With `UMBOD_AUTH=dev`, both services use the `sub` from `UMBOD_MCP_TEST_BEARER_TOKEN` (default subject `local-test-user`). If you customize the token, use the same token in both services and omit `iss` or set it to `urn:umbod:local`. `UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_ID` is no longer used.
 
 ## Analytics backend

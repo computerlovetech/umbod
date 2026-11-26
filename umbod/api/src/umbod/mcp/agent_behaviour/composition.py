@@ -21,8 +21,8 @@ def register_agent_behaviour(
     tool = registrar.register_tool(DiagnosticReportTool(service, policy), result_is_error=tool_result_is_error,
                                    operation_names=frozenset(), builtin_response=True)
     register_resources(server, DiagnosticResources(service, policy), policy)
-    server.prompt(name="run_diagnostics", description="Run user-requested diagnostics using the selected live playbook resource. Slash-command presentation is client-dependent.", auth=policy.authorize)(DiagnosticPrompts(service, policy).run_diagnostics)
-    server.add_middleware(DiagnosticVisibilityMiddleware(policy, tool))
+    server.prompt(name="run_diagnostics", description="Start a diagnostics flow with the selected live playbook resource. Slash-command presentation is client-dependent.", auth=policy.authorize)(DiagnosticPrompts(service, policy).run_diagnostics)
+    server.add_middleware(DiagnosticVisibilityMiddleware(policy, tool, service))
 
 
 def register_configured_agent_behaviour(

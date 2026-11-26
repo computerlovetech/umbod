@@ -7,7 +7,7 @@ import { AdminReportsState } from './admin-reports-state.svelte';
 import { AgentBehaviourPageState } from './page-state.svelte';
 import type { Configuration, DiagnosticReport, ReportPage } from '../domain/schemas';
 
-const configuration: Configuration = { revision: 1, patterns: [{ id: 'fallback', name: 'Fallback', description: 'Description', assessment_prompt: 'Assess facts', inclusion_criteria: 'Include', exclusion_criteria: 'Exclude', categories: ['quality'], polarity: 'negative', enabled: true }], playbooks: [{ id: 'review', name: 'Review', collection_instructions: 'Collect facts', pattern_ids: ['fallback'], enabled: true, allow_proactive: false }] };
+const configuration: Configuration = { revision: 1, reporting_enabled: false, patterns: [{ id: 'fallback', name: 'Fallback', description: 'Description', assessment_prompt: 'Assess facts', inclusion_criteria: 'Include', exclusion_criteria: 'Exclude', categories: ['quality'], polarity: 'negative', enabled: true }], playbooks: [{ id: 'review', name: 'Review', collection_instructions: 'Collect facts', pattern_ids: ['fallback'], enabled: true }] };
 const report: DiagnosticReport = { report_id: '00000000-0000-4000-8000-000000000001', received_at: '2026-06-01T00:00:00Z', expires_at: '2026-07-01T00:00:00Z', caller: { authentication: 'local_test', subject: { issuer: { value: 'test' }, subject: 'admin' } }, submission: { idempotency_key: '00000000-0000-4000-8000-000000000002', configuration_revision: 1, playbook_id: 'review', trigger: 'user_requested', assessments: [{ pattern_id: 'fallback', status: 'observed', summary: '<script>unsafe</script>', evidence: ['<img src=x onerror=alert(1)>'] }] }, instructions: { configuration_revision: 1, playbook: configuration.playbooks[0], patterns: configuration.patterns, reporting_guidance: 'Only authorized facts', resource_uri: 'umbod://agent-behaviour/playbooks/review' } };
 
 describe('pattern editing', (): void => {
@@ -47,75 +47,96 @@ describe('pattern editing', (): void => {
     const { api, state } = setup();
     const second = { ...configuration.patterns[0], id: 'second', name: 'Second pattern' };
     api.current.patterns.push(second);
-    api.current.playbooks.push({ ...configuration.playbooks[0], id: 'custom-reporting', name: 'Custom reporting', pattern_ids: ['second'], allow_proactive: true });
+    api.current.playbooks.push({ ...configuration.playbooks[0], id: 'custom-reporting', name: 'Custom reporting', pattern_ids: ['second'] });
     const memberships = structuredClone(api.current.playbooks);
+    api.current.reporting_enabled = true;
     await state.load();
     state.updatePattern('fallback', 'enabled', false); state.updatePattern('second', 'enabled', false);
-    expect(state.reportingMode).toBe('Off'); await state.save();
+    expect(state.reportingNeedsUsablePlaybook).toBe(true); await state.save();
     expect(state.playbooks).toEqual(memberships); expect(state.playbooks).toEqual(api.current.playbooks); expect(state.dirty).toBe(false);
     state.dispose();
     const reloaded = new ConfigurationState(api.configuration, vi.fn()); await reloaded.load();
-    expect(reloaded.playbooks).toEqual(memberships); expect(reloaded.reportingMode).toBe('Off');
+    expect(reloaded.playbooks).toEqual(memberships); expect(reloaded.reportingNeedsUsablePlaybook).toBe(true);
     const defaults = vi.spyOn(api.configuration, 'defaults');
     reloaded.updatePattern('fallback', 'enabled', true);
-    expect(reloaded.reportingMode).toBe('When requested'); expect(defaults).not.toHaveBeenCalled();
+    expect(reloaded.reportingNeedsUsablePlaybook).toBe(false); expect(defaults).not.toHaveBeenCalled();
     await reloaded.save(); expect(reloaded.playbooks).toEqual(memberships);
     reloaded.removePattern('fallback'); reloaded.removePattern('second'); await reloaded.save();
     expect(api.current.patterns).toEqual([]); expect(api.current.playbooks).toEqual(memberships);
-    expect(reloaded.settings).toEqual(api.current.playbooks); expect(reloaded.reportingMode).toBe('Off'); expect(reloaded.dirty).toBe(false);
+    expect(reloaded.settings).toEqual(api.current.playbooks); expect(reloaded.reportingNeedsUsablePlaybook).toBe(true); expect(reloaded.dirty).toBe(false);
     reloaded.dispose();
     const afterRemoval = new ConfigurationState(api.configuration, vi.fn()); await afterRemoval.load();
     expect(afterRemoval.patterns).toEqual([]);
-    expect(afterRemoval.playbooks).toEqual(memberships); expect(afterRemoval.reportingMode).toBe('Off');
+    expect(afterRemoval.playbooks).toEqual(memberships); expect(afterRemoval.savedReportingEnabled).toBe(true); expect(afterRemoval.reportingNeedsUsablePlaybook).toBe(true);
     expect(afterRemoval.dirty).toBe(false); expect(defaults).not.toHaveBeenCalled();
   });
   test('never turns saved reporting Off back on when enabling or adding patterns after reload', async (): Promise<void> => {
     const { api, state } = setup();
-    api.current.playbooks.push({ ...configuration.playbooks[0], id: 'custom-reporting', name: 'Custom reporting' });
+    api.current.playbooks.push({ ...configuration.playbooks[0], id: 'custom-reporting', name: 'Custom reporting', enabled: false });
+    api.current.reporting_enabled = true;
     await state.load();
-    for (const setting of state.settings) {
-      state.updateSettings(setting.id, 'enabled', false); state.updateSettings(setting.id, 'allow_proactive', true);
-    }
+    state.setReportingEnabled(false);
+    const playbooks = structuredClone(api.current.playbooks);
     state.updatePattern('fallback', 'enabled', false); await state.save(); state.dispose();
     const reloaded = new ConfigurationState(api.configuration, vi.fn()); await reloaded.load();
     const defaults = vi.spyOn(api.configuration, 'defaults');
     reloaded.updatePattern('fallback', 'enabled', true); await reloaded.save();
-    expect(defaults).not.toHaveBeenCalled(); expect(reloaded.reportingMode).toBe('Off');
-    expect(api.current.playbooks.every((setting): boolean => !setting.enabled && setting.allow_proactive)).toBe(true);
+    expect(defaults).not.toHaveBeenCalled(); expect(reloaded.savedReportingEnabled).toBe(false);
+    expect(api.current.playbooks).toEqual(playbooks);
     reloaded.removePattern('fallback'); await reloaded.save(); reloaded.dispose();
     const afterRemoval = new ConfigurationState(api.configuration, vi.fn(), (): string => 'new-pattern'); await afterRemoval.load();
     afterRemoval.addPattern();
     afterRemoval.updatePattern('new-pattern', 'name', 'New pattern');
     afterRemoval.updatePattern('new-pattern', 'description', 'Notice new facts');
     await afterRemoval.savePatternEdit(); await afterRemoval.save();
-    expect(afterRemoval.reportingMode).toBe('Off');
+    expect(afterRemoval.savedReportingEnabled).toBe(false);
     expect(api.current.patterns.map((pattern): string => pattern.id)).toEqual(['new-pattern']);
-    expect(api.current.playbooks.every((setting): boolean => !setting.enabled && setting.allow_proactive && setting.pattern_ids.includes('fallback'))).toBe(true);
+    expect(api.current.playbooks[0]).toEqual({ ...playbooks[0], pattern_ids: ['fallback', 'new-pattern'] });
+    expect(api.current.playbooks[1]).toEqual(playbooks[1]);
     expect(defaults).not.toHaveBeenCalled();
   });
   test('keeps profiles and collection instructions authoritative when every referenced pattern is removed', async (): Promise<void> => {
-    const { api, state } = setup(); await state.load(); state.updateSettings('review', 'collection_instructions', 'Keep these instructions');
+    const { api, state } = setup(); await state.load(); state.updateCollectionInstructions('review', 'Keep these instructions');
     state.removePattern('fallback'); await state.save();
     expect(state.playbooks).toEqual(api.current.playbooks); expect(state.settings).toHaveLength(1);
     expect(state.settings[0]).toEqual(expect.objectContaining({ enabled: true, pattern_ids: ['fallback'], collection_instructions: 'Keep these instructions' }));
-    expect(state.reportingMode).toBe('Off'); expect(state.dirty).toBe(false);
+    expect(state.savedReportingEnabled).toBe(false); expect(state.dirty).toBe(false);
     await state.load();
     expect(state.patterns).toEqual([]);
     expect(state.settings[0].collection_instructions).toBe('Keep these instructions');
     expect(state.playbooks).toEqual(api.current.playbooks);
   });
-  test('bases reporting mode on enabled existing configured members rather than unrelated enabled patterns', async (): Promise<void> => {
+  test('warns only while enabled and requires an enabled playbook with an enabled member', async (): Promise<void> => {
     const { api, state } = setup();
     api.current.patterns[0].enabled = false;
     api.current.patterns.push({ ...configuration.patterns[0], id: 'unrelated' });
-    api.current.playbooks[0].allow_proactive = true;
-    await state.load(); expect(state.reportingMode).toBe('Off');
-    state.updatePattern('fallback', 'enabled', true); expect(state.reportingMode).toBe('Automatic reports allowed');
-    state.updateSettings('review', 'allow_proactive', false); expect(state.reportingMode).toBe('When requested');
-    state.removePattern('fallback'); expect(state.reportingMode).toBe('Off');
+    api.current.playbooks.push({ ...configuration.playbooks[0], id: 'disabled', enabled: false, pattern_ids: ['unrelated'] });
+    await state.load();
+    expect(state.reportingNeedsUsablePlaybook).toBe(false);
+    state.setReportingEnabled(true);
+    expect(state.reportingNeedsUsablePlaybook).toBe(true);
+    state.updatePattern('fallback', 'enabled', true);
+    expect(state.reportingNeedsUsablePlaybook).toBe(false);
+    state.removePattern('fallback');
+    expect(state.reportingNeedsUsablePlaybook).toBe(true);
+  });
+  test('restores a single excluded playbook only by explicit inclusion', async (): Promise<void> => {
+    const { api, state } = setup();
+    api.current.playbooks[0].enabled = false;
+    await state.load();
+    state.setReportingEnabled(true);
+    expect(state.reportingNeedsUsablePlaybook).toBe(true);
+    expect(state.playbooks[0].enabled).toBe(false);
+    state.setPlaybookIncluded('review', true);
+    expect(state.reportingNeedsUsablePlaybook).toBe(false);
+    state.setPlaybookIncluded('review', false);
+    expect(state.playbooks[0].enabled).toBe(true);
+    await state.save();
+    expect(api.current.reporting_enabled).toBe(true);
+    expect(api.current.playbooks).toEqual(configuration.playbooks);
   });
   test('initializes only reporting defaults when the first pattern is saved in the editor', async (): Promise<void> => {
-    const { api, state } = setup(); api.current = { revision: 1, patterns: [], playbooks: [] }; api.defaults.playbooks[0].allow_proactive = true;
+    const { api, state } = setup(); api.current = { revision: 1, reporting_enabled: false, patterns: [], playbooks: [] };
     const defaults = vi.spyOn(api.configuration, 'defaults');
     await state.load(); state.addPattern();
     state.updatePattern('pattern-stable', 'name', 'Abandoned pattern');
@@ -127,8 +148,8 @@ describe('pattern editing', (): void => {
     await state.savePatternEdit();
     expect(defaults).toHaveBeenCalledOnce();
     expect(state.patterns.map((pattern): string => pattern.id)).toEqual(['pattern-stable']);
-    expect(state.settings[0]).toEqual(expect.objectContaining({ pattern_ids: ['pattern-stable'], enabled: true, allow_proactive: false }));
-    await state.save(); expect(api.current.patterns).toHaveLength(1); expect(api.current.playbooks[0].pattern_ids).toEqual(['pattern-stable']);
+    expect(state.settings[0]).toEqual(expect.objectContaining({ pattern_ids: ['pattern-stable'], enabled: true }));
+    await state.save(); expect(api.current.reporting_enabled).toBe(false); expect(api.current.patterns).toHaveLength(1); expect(api.current.playbooks[0].pattern_ids).toEqual(['pattern-stable']);
   });
   test('uses pattern names and plain labels rather than internal validation paths', async (): Promise<void> => {
     const { state } = setup(); await state.load(); await state.updatePattern('fallback', 'categories', ['INVALID_CATEGORY']); await state.save();
@@ -140,31 +161,31 @@ describe('pattern editing', (): void => {
     expect(state.selected?.description).toBe('Notice facts'); expect(state.patterns).toHaveLength(1); expect(state.dirty).toBe(false);
   });
   test('does not repopulate a deliberately empty configuration on load', async (): Promise<void> => {
-    const { api, state } = setup(); api.current = { revision: 3, patterns: [], playbooks: [] };
+    const { api, state } = setup(); api.current = { revision: 3, reporting_enabled: false, patterns: [], playbooks: [] };
     const defaults = vi.spyOn(api.configuration, 'defaults'); await state.load();
     expect(state.patterns).toEqual([]); expect(state.settings).toEqual([]);
     expect(state.dirty).toBe(false); expect(defaults).not.toHaveBeenCalled();
   });
   test('preserves named custom reporting settings and configured references', async (): Promise<void> => {
-    const { api, state } = setup(); api.current.playbooks.push({ ...configuration.playbooks[0], id: 'custom-review', name: 'Custom reporting', allow_proactive: true });
+    const { api, state } = setup(); api.current.playbooks.push({ ...configuration.playbooks[0], id: 'custom-review', name: 'Custom reporting' });
     await state.load(); state.removePattern('fallback'); expect(state.playbooks).toHaveLength(2);
     expect(state.playbooks.every((setting): boolean => setting.pattern_ids.includes('fallback'))).toBe(true);
     await state.save();
     expect(api.current.patterns).toEqual([]);
-    expect(api.current.playbooks.find((setting): boolean => setting.id === 'custom-review')).toEqual(expect.objectContaining({ name: 'Custom reporting', allow_proactive: true, pattern_ids: ['fallback'] }));
+    expect(api.current.playbooks.find((setting): boolean => setting.id === 'custom-review')).toEqual(expect.objectContaining({ name: 'Custom reporting', pattern_ids: ['fallback'] }));
   });
   test('preserves edits on conflict until explicit discard', async (): Promise<void> => {
     const { api, state } = setup(); await state.load();
     state.updatePattern('fallback', 'name', 'Local edit');
-    api.current = { ...configuration, revision: 2, playbooks: [{ ...configuration.playbooks[0], allow_proactive: true }] };
+    api.current = { ...configuration, revision: 2, reporting_enabled: true };
     await state.save();
     expect(state.patterns[0].name).toBe('Local edit'); expect(state.conflict).toBe(true);
     state.addPattern(); state.closeEditor();
     expect(state.message).toContain('Another administrator saved changes');
-    expect(state.reportingMode).toBe('When requested');
-    expect(state.savedReportingMode).toBe('Automatic reports allowed');
+    expect(state.reportingEnabled).toBe(false);
+    expect(state.savedReportingEnabled).toBe(true);
     state.discard(); expect(state.revision).toBe(2); expect(state.patterns[0].name).toBe('Fallback');
-    expect(state.reportingMode).toBe(state.savedReportingMode);
+    expect(state.reportingEnabled).toBe(state.savedReportingEnabled);
   });
   test('discard resets the draft without a request', async (): Promise<void> => {
     const { state } = setup(); await state.load(); state.removePattern('fallback'); state.discard();
@@ -201,13 +222,13 @@ describe('pattern editing', (): void => {
     expect(state.patterns).toHaveLength(1); expect(state.message).toContain('removed patterns were cleared');
     await state.save();
     expect(api.current.playbooks[0]).toEqual({ ...settings, pattern_ids: ['pattern-stable'] });
-    expect(state.reportingMode).toBe('Off');
+    expect(state.savedReportingEnabled).toBe(false);
   });
   test('rejects newly invented unknown references at the historical persistence boundary', async (): Promise<void> => {
     const { api } = setup();
-    await expect(api.configuration.publish({ expected_revision: 1, patterns: [], playbooks: [{ ...configuration.playbooks[0], pattern_ids: ['invented'] }] })).rejects.toBeInstanceOf(HttpError);
+    await expect(api.configuration.publish({ expected_revision: 1, reporting_enabled: false, patterns: [], playbooks: [{ ...configuration.playbooks[0], pattern_ids: ['invented'] }] })).rejects.toBeInstanceOf(HttpError);
     expect(api.current.revision).toBe(1);
-    await expect(api.configuration.publish({ expected_revision: 1, patterns: [], playbooks: configuration.playbooks })).resolves.toEqual(expect.objectContaining({ patterns: [], playbooks: configuration.playbooks }));
+    await expect(api.configuration.publish({ expected_revision: 1, reporting_enabled: false, patterns: [], playbooks: configuration.playbooks })).resolves.toEqual(expect.objectContaining({ patterns: [], playbooks: configuration.playbooks }));
   });
   test('disposal fences configuration, pattern creation and save responses', async (): Promise<void> => {
     const { api, state } = setup(); const response = deferred<Configuration>(); vi.spyOn(api.configuration, 'get').mockReturnValue(response.promise);

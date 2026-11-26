@@ -60,6 +60,6 @@ async def default_diagnostic_mcp() -> AsyncIterator[DiagnosticMcp]:
 @pytest_asyncio.fixture
 async def diagnostic_mcp(default_diagnostic_mcp: DiagnosticMcp) -> DiagnosticMcp:
     pattern = BehaviourPattern(id="fallback", name="Fallback", description="Factual fallback", assessment_prompt="Assess fallback", inclusion_criteria="Unavailable context", exclusion_criteria="Normal clarification", categories=(), polarity="neutral", enabled=True)
-    playbook = DiagnosticPlaybook(id="review", name="Review", collection_instructions="Review available authorized facts", pattern_ids=(pattern.id,), enabled=True, allow_proactive=False)
-    await default_diagnostic_mcp.service.publish_configuration(PublishConfiguration(expected_revision=1, patterns=(pattern,), playbooks=(playbook,)))
+    playbook = DiagnosticPlaybook(id="review", name="Review", collection_instructions="Review available authorized facts", pattern_ids=(pattern.id,), enabled=True)
+    await default_diagnostic_mcp.service.publish_configuration(PublishConfiguration(reporting_enabled=True, expected_revision=1, patterns=(pattern,), playbooks=(playbook,)))
     return default_diagnostic_mcp

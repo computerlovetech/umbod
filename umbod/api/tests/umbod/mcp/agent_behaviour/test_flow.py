@@ -48,7 +48,7 @@ async def test_report_returns_durable_receipt_and_exact_retry_without_observing_
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("change,code", [({"trigger": "proactive"}, "proactive_disabled"), ({"configuration_revision": 3}, "stale_configuration"), ({"transcript": "forbidden"}, "report_invalid")])
+@pytest.mark.parametrize("change,code", [({"configuration_revision": 3}, "stale_configuration"), ({"transcript": "forbidden"}, "report_invalid")])
 async def test_rejected_report_is_not_started_and_creates_no_report(diagnostic_mcp: DiagnosticMcp, change: dict[str, object], code: str) -> None:
     async with Client(diagnostic_mcp.server) as client:
         result = await client.call_tool("report_diagnostic", {**submission(), **change}, raise_on_error=False)

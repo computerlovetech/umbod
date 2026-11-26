@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from umbod.core.agent_behaviour import AgentBehaviourService, BehaviourConfiguration, InstructionsUnavailable, PatternAssessment, ProactiveDisabled, PublishConfiguration, ReportQuery, RevisionConflict, StaleConfiguration, SubmitDiagnosticReport
+from umbod.core.agent_behaviour import AgentBehaviourService, BehaviourConfiguration, InstructionsUnavailable, ReportingDisabled, PublishConfiguration, ReportQuery, RevisionConflict, SubmitDiagnosticReport
 from umbod.core.agent_behaviour.schema import CONFIGURATION_TABLE, ConfigurationKey, ConfigurationRow
 from umbod.core.agent_behaviour.store import DatabaseAgentBehaviourStore
 from umbod.core.callers import CallerContext
@@ -86,7 +86,7 @@ async def test_reading_recommendations_does_not_initialize_configuration(databas
     assert counted.writes == 1
 
 
-async def test_first_reads_seed_enabled_requested_only_defaults_once(service: AgentBehaviourService, database: Database, clock: Clock) -> None:
+async def test_first_reads_seed_saved_default_settings_with_reporting_off(service: AgentBehaviourService, database: Database, clock: Clock) -> None:
     first = await service.get_configuration()
     second = AgentBehaviourService(DatabaseAgentBehaviourStore(database), clock, uuid4)
     assert await second.get_configuration() == first == service.get_defaults()
@@ -98,11 +98,9 @@ async def test_first_reads_seed_enabled_requested_only_defaults_once(service: Ag
     assert len(first.playbooks) == 1
     assert first.playbooks[0].id == "behaviour-review"
     assert first.playbooks[0].enabled is True
-    assert first.playbooks[0].allow_proactive is False
-    instructions = await second.get_instructions("behaviour-review")
-    assert instructions.configuration_revision == 1
-    assert instructions.patterns == first.patterns
-    assert instructions.playbook == first.playbooks[0]
+    assert first.reporting_enabled is False
+    with pytest.raises(ReportingDisabled):
+        await second.get_instructions("behaviour-review")
     assert (await second.list_reports(ReportQuery())).total == 0
 
 
@@ -113,7 +111,7 @@ async def test_default_catalog_is_immutable(service: AgentBehaviourService) -> N
     with pytest.raises(ValidationError):
         catalog.patterns[0].enabled = False
     with pytest.raises(ValidationError):
-        catalog.playbooks[0].allow_proactive = True
+        catalog.reporting_enabled = True
     assert service.get_defaults() == catalog
 
 
@@ -134,7 +132,7 @@ async def test_saved_default_customization_survives_new_store(service: AgentBeha
     else:
         patterns = ()
         playbooks = ()
-    saved = await service.publish_configuration(PublishConfiguration(expected_revision=1, patterns=patterns, playbooks=playbooks))
+    saved = await service.publish_configuration(PublishConfiguration(reporting_enabled=True, expected_revision=1, patterns=patterns, playbooks=playbooks))
     restarted = AgentBehaviourService(DatabaseAgentBehaviourStore(database), clock, uuid4)
     assert await restarted.get_configuration() == saved
     assert await restarted.get_configuration() == saved
@@ -152,17 +150,10 @@ async def test_first_publication_rejects_pre_default_revision(service: AgentBeha
     assert await service.get_configuration() == service.get_defaults()
 
 
-async def test_direct_first_submission_uses_default_instructions(service: AgentBehaviourService, caller: CallerContext) -> None:
-    command = SubmitDiagnosticReport(idempotency_key=uuid4(), configuration_revision=1, playbook_id="behaviour-review", trigger="user_requested", assessments=tuple(PatternAssessment(pattern_id=pattern.id, status="not_assessed", summary="Context is unavailable", evidence=()) for pattern in service.get_defaults().patterns))
-    receipt = await service.submit_report(caller, command)
-    assert (await service.get_report(receipt.report_id)).instructions.patterns == service.get_defaults().patterns
-    assert (await service.submit_report(caller, command)).duplicate is True
-
-
-@pytest.mark.parametrize("trigger,revision,error", [("proactive", 1, ProactiveDisabled), ("user_requested", 2, StaleConfiguration)])
-async def test_first_default_submission_rejects_proactive_and_stale_without_report(service: AgentBehaviourService, caller: CallerContext, trigger: str, revision: int, error: type[Exception]) -> None:
+@pytest.mark.parametrize("trigger,revision", [("proactive", 1), ("user_requested", 2)])
+async def test_first_default_submission_is_blocked_without_report(service: AgentBehaviourService, caller: CallerContext, trigger: str, revision: int) -> None:
     command = SubmitDiagnosticReport.model_validate({"idempotency_key": str(uuid4()), "configuration_revision": revision, "playbook_id": "behaviour-review", "trigger": trigger, "assessments": [{"pattern_id": pattern.id, "status": "not_assessed", "summary": "Context is unavailable", "evidence": []} for pattern in service.get_defaults().patterns]})
-    with pytest.raises(error):
+    with pytest.raises(ReportingDisabled):
         await service.submit_report(caller, command)
     assert (await service.list_reports(ReportQuery())).total == 0
     assert await service.get_configuration() == service.get_defaults()
@@ -170,7 +161,7 @@ async def test_first_default_submission_rejects_proactive_and_stale_without_repo
 
 @pytest.mark.parametrize("revision", [0, 1, 7])
 async def test_existing_empty_configuration_is_never_reseeded(database: Database, clock: Clock, revision: int) -> None:
-    persisted = BehaviourConfiguration(revision=revision, patterns=(), playbooks=())
+    persisted = BehaviourConfiguration(revision=revision, reporting_enabled=True, patterns=(), playbooks=())
     async with database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
         await session.upsert(CONFIGURATION_TABLE, UpsertCommand(key=ConfigurationKey(singleton=1), row=ConfigurationRow(singleton=1, configuration=persisted)))
     service = AgentBehaviourService(DatabaseAgentBehaviourStore(database), clock, uuid4)

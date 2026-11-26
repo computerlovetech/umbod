@@ -20,11 +20,15 @@ async def test_eligible_caller_discovers_nested_report_schema_and_json_resources
         assert set(tool.input_schema["required"]) == {"idempotency_key", "configuration_revision", "playbook_id", "trigger", "assessments"}
         assert tool.output_schema["properties"]["report_id"]["format"] == "uuid"
         assert "same UUID" in tool.description
+        assert "caller-reported metadata, not permission" in tool.description
+        trigger = tool.input_schema["properties"]["trigger"]
+        assert trigger["enum"] == ["user_requested", "proactive"]
+        assert "does not grant permission" in trigger["description"]
         assert [item.name for item in await client.list_prompts()] == ["run_diagnostics"]
         assert str((await client.list_resources())[0].uri) == "umbod://agent-behaviour/playbooks"
         assert (await client.list_resource_templates())[0].mime_type == "application/json"
         index = json.loads((await client.read_resource("umbod://agent-behaviour/playbooks"))[0].text)
-        assert index == {"configuration_revision": 2, "playbooks": [{"id": "review", "name": "Review", "allow_proactive": False, "resource_uri": "umbod://agent-behaviour/playbooks/review"}]}
+        assert index == {"configuration_revision": 2, "playbooks": [{"id": "review", "name": "Review", "resource_uri": "umbod://agent-behaviour/playbooks/review"}]}
 
 
 @pytest.mark.asyncio

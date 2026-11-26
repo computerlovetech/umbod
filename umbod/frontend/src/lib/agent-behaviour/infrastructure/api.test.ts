@@ -13,14 +13,14 @@ function fixture(): { api: AgentBehaviourApi; request: ReturnType<typeof vi.fn<t
 }
 
 test('publishes a validated atomic revision command and parses response', async (): Promise<void> => {
-  const { api, request } = fixture(); request.mockResolvedValue(new Response(JSON.stringify({ revision: 2, patterns: [], playbooks: [] })));
-  const command = { expected_revision: 1, patterns: [], playbooks: [] }; expect(await api.configuration.publish(command)).toEqual({ revision: 2, patterns: [], playbooks: [] });
+  const { api, request } = fixture(); request.mockResolvedValue(new Response(JSON.stringify({ revision: 2, reporting_enabled: true, patterns: [], playbooks: [] })));
+  const command = { expected_revision: 1, reporting_enabled: true, patterns: [], playbooks: [] }; expect(await api.configuration.publish(command)).toEqual({ revision: 2, reporting_enabled: true, patterns: [], playbooks: [] });
   expect(request).toHaveBeenCalledWith('/api/admin/agent-behaviour/configuration', expect.objectContaining({ method: 'PUT', body: JSON.stringify(command) }));
 });
 
 test('rejects invalid publication before network and malformed responses at boundary', async (): Promise<void> => {
-  const { api, request } = fixture(); await expect(api.configuration.publish({ expected_revision: -1, patterns: [], playbooks: [] })).rejects.toBeInstanceOf(SchemaValidationError); expect(request).not.toHaveBeenCalled();
-  request.mockResolvedValue(new Response(JSON.stringify({ revision: 'bad', patterns: [], playbooks: [] }))); await expect(api.configuration.get()).rejects.toBeInstanceOf(SchemaValidationError);
+  const { api, request } = fixture(); await expect(api.configuration.publish({ expected_revision: -1, reporting_enabled: false, patterns: [], playbooks: [] })).rejects.toBeInstanceOf(SchemaValidationError); expect(request).not.toHaveBeenCalled();
+  request.mockResolvedValue(new Response(JSON.stringify({ revision: 'bad', reporting_enabled: false, patterns: [], playbooks: [] }))); await expect(api.configuration.get()).rejects.toBeInstanceOf(SchemaValidationError);
 });
 
 test('encodes all report filters and handles empty deletion responses', async (): Promise<void> => {
@@ -56,15 +56,15 @@ test('loads backend-owned defaults through the validated configuration route', a
     request: async <T>(options: TransportRequest<T>): Promise<T> => {
       captured.push(options);
       if (!options.outputSchema) throw new Error('Response schema required');
-      return options.outputSchema.parse({ revision: 1, patterns: [], playbooks: [] });
+      return options.outputSchema.parse({ revision: 1, reporting_enabled: false, patterns: [], playbooks: [] });
     }
   };
-  expect(await new ConfigurationRoute(transport).defaults(signal)).toEqual({ revision: 1, patterns: [], playbooks: [] });
+  expect(await new ConfigurationRoute(transport).defaults(signal)).toEqual({ revision: 1, reporting_enabled: false, patterns: [], playbooks: [] });
   expect(captured).toEqual([{ method: 'GET', path: '/admin/agent-behaviour/defaults', outputSchema: configurationSchema, signal }]);
 });
 
 test('rejects malformed defaults at the HTTP boundary', async (): Promise<void> => {
   const { api, request } = fixture();
-  request.mockResolvedValue(new Response(JSON.stringify({ revision: 1, patterns: [{ id: 'invalid' }], playbooks: [] })));
+  request.mockResolvedValue(new Response(JSON.stringify({ revision: 1, reporting_enabled: false, patterns: [{ id: 'invalid' }], playbooks: [] })));
   await expect(api.configuration.defaults()).rejects.toBeInstanceOf(SchemaValidationError);
 });

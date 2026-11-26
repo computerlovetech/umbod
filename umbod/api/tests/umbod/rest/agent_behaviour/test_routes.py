@@ -51,8 +51,9 @@ def api(settings: AppConfig) -> Iterator[BehaviourApi]:
 def publication() -> dict[str, object]:
     return {
         "expected_revision": 1,
+        "reporting_enabled": True,
         "patterns": [{"id": identifier, "name": identifier, "description": "Description", "assessment_prompt": "Assess facts", "inclusion_criteria": "Include", "exclusion_criteria": "Exclude", "categories": ["quality"], "polarity": "neutral", "enabled": True} for identifier in ("fallback", "verification", "unassessed")],
-        "playbooks": [{"id": "review", "name": "Review", "collection_instructions": "Collect authorized facts", "pattern_ids": ["fallback", "verification", "unassessed"], "enabled": True, "allow_proactive": False}],
+        "playbooks": [{"id": "review", "name": "Review", "collection_instructions": "Collect authorized facts", "pattern_ids": ["fallback", "verification", "unassessed"], "enabled": True}],
     }
 
 
@@ -75,11 +76,13 @@ def seed_report(api: BehaviourApi) -> str:
 def test_initial_configuration_and_atomic_publication_conflict(api: BehaviourApi) -> None:
     initial = api.client.get(PATH + "/configuration")
     assert initial.status_code == 200
+    assert initial.json()["reporting_enabled"] is False
     assert initial.json() == api.service.get_defaults().model_dump(mode="json")
     assert initial.headers["cache-control"] == "no-store"
     saved = api.client.put(PATH + "/configuration", json=publication())
     assert saved.status_code == 200
     assert saved.json()["revision"] == 2
+    assert saved.json()["reporting_enabled"] is True
     assert saved.headers["cache-control"] == "no-store"
     conflict = api.client.put(PATH + "/configuration", json=publication())
     assert conflict.status_code == 409
@@ -91,6 +94,7 @@ def test_initial_configuration_and_atomic_publication_conflict(api: BehaviourApi
 def test_defaults_catalog_is_non_cacheable_and_does_not_replace_saved_configuration(api: BehaviourApi) -> None:
     catalog = api.client.get(PATH + "/defaults")
     assert catalog.status_code == 200
+    assert catalog.json()["reporting_enabled"] is False
     assert catalog.headers["cache-control"] == "no-store"
     assert catalog.json() == api.service.get_defaults().model_dump(mode="json")
     saved = api.client.put(PATH + "/configuration", json=publication())
@@ -103,15 +107,15 @@ def test_defaults_catalog_is_non_cacheable_and_does_not_replace_saved_configurat
 
 
 def test_defaults_catalog_preserves_intentionally_empty_saved_configuration(api: BehaviourApi) -> None:
-    saved = api.client.put(PATH + "/configuration", json={"expected_revision": 1, "patterns": [], "playbooks": []})
+    saved = api.client.put(PATH + "/configuration", json={"expected_revision": 1, "reporting_enabled": False, "patterns": [], "playbooks": []})
     assert saved.status_code == 200
     assert len(api.client.get(PATH + "/defaults").json()["patterns"]) == 4
     assert api.client.get(PATH + "/configuration").json() == saved.json()
-    assert saved.json() == {"revision": 2, "patterns": [], "playbooks": []}
+    assert saved.json() == {"revision": 2, "reporting_enabled": False, "patterns": [], "playbooks": []}
 
 
 def test_identical_successful_save_increments_revision(api: BehaviourApi) -> None:
-    payload = {"expected_revision": 1, "patterns": [], "playbooks": []}
+    payload = {"expected_revision": 1, "reporting_enabled": False, "patterns": [], "playbooks": []}
     assert api.client.put(PATH + "/configuration", json=payload).json()["revision"] == 2
     payload["expected_revision"] = 2
     response = api.client.put(PATH + "/configuration", json=payload)
@@ -155,7 +159,7 @@ def test_reports_filter_same_assessment_and_count_before_pagination(api: Behavio
 
 def test_report_detail_returns_original_snapshot_and_all_statuses(api: BehaviourApi) -> None:
     report_id = seed_report(api)
-    changed = api.client.put(PATH + "/configuration", json={"expected_revision": 2, "patterns": [], "playbooks": []})
+    changed = api.client.put(PATH + "/configuration", json={"expected_revision": 2, "reporting_enabled": False, "patterns": [], "playbooks": []})
     assert changed.status_code == 200
     assert changed.json()["revision"] == 3
     response = api.client.get(PATH + "/reports/" + report_id)
@@ -202,9 +206,9 @@ def test_existing_admin_boundary_denies_direct_access(settings: AppConfig, path:
 
 
 @pytest.mark.parametrize("payload", [
-    {"expected_revision": 1, "patterns": [], "playbooks": [], "private-extra-field": "private-value"},
-    {"expected_revision": -1, "patterns": [], "playbooks": []},
-    {"expected_revision": 1, "patterns": [{"id": "Invalid", "description": "private-value"}], "playbooks": []},
+    {"expected_revision": 1, "reporting_enabled": False, "patterns": [], "playbooks": [], "private-extra-field": "private-value"},
+    {"expected_revision": -1, "reporting_enabled": False, "patterns": [], "playbooks": []},
+    {"expected_revision": 1, "reporting_enabled": False, "patterns": [{"id": "Invalid", "description": "private-value"}], "playbooks": []},
 ])
 def test_invalid_publication_has_bounded_safe_field_issues(api: BehaviourApi, payload: dict[str, object]) -> None:
     response = api.client.put(PATH + "/configuration", json=payload)
@@ -265,6 +269,28 @@ def test_request_services_share_only_the_existing_database(api: BehaviourApi, mo
     assert api.client.get(PATH + path).status_code == 200
     assert services[0] is not services[1]
     assert databases[0] is databases[1]
+
+
+@pytest.mark.parametrize("payload", [
+    {"expected_revision": 1, "patterns": [], "playbooks": []},
+    {**publication(), "playbooks": [{
+        "id": "review", "name": "Review", "collection_instructions": "Collect authorized facts",
+        "pattern_ids": ["fallback"], "enabled": True, "allow_proactive": False,
+    }]},
+])
+def test_rest_rejects_legacy_configuration_payload(api: BehaviourApi, payload: dict[str, object]) -> None:
+    response = api.client.put(PATH + "/configuration", json=payload)
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "validation_error"
+    assert api.client.get(PATH + "/configuration").json()["reporting_enabled"] is False
+
+
+@pytest.mark.parametrize("non_boolean", ["yes", 1])
+def test_rest_rejects_non_boolean_reporting_gate(api: BehaviourApi, non_boolean: str | int) -> None:
+    original = api.client.get(PATH + "/configuration").json()
+    response = api.client.put(PATH + "/configuration", json={**publication(), "reporting_enabled": non_boolean})
+    assert response.status_code == 422
+    assert api.client.get(PATH + "/configuration").json() == original
 
 
 def test_no_rest_submission_endpoint_is_published(api: BehaviourApi) -> None:

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import '#lib/styles/form-fields.css';
+  import AdminSettingsActions from '#lib/components/admin/shared/AdminSettingsActions.svelte';
   import AdminRecordList from '#lib/components/admin/shared/AdminRecordList.svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
   import PlusIcon from '#lib/components/shared/PlusIcon.svelte';
@@ -75,9 +76,7 @@
 {:else}
   {#if section === 'reporting'}
     <ReportingSettings {state} />
-    {#if state.dirty || state.busy || state.conflict}
-      <div class="reporting-save-footer">{@render saveBar()}</div>
-    {/if}
+    <AdminSettingsActions busy={state.busy} dirty={state.dirty} conflict={state.conflict} onDiscard={state.discard} onSave={state.save} />
   {:else}
   {#if state.dirty || state.busy || state.conflict}
     {@render saveBar()}
@@ -220,7 +219,6 @@
   h2 { margin: 0; font-size: 1.15rem; }
   .actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
   .save-actions { justify-content: flex-end; }
-  .reporting-save-footer { margin-top: 1rem; }
   .section-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-bottom: .65rem; }
   .section-heading p { margin: .35rem 0 0; font-size: .9rem; color: var(--admin-muted); }
 </style>

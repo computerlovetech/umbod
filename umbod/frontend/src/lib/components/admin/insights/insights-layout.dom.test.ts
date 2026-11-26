@@ -236,7 +236,7 @@ test('findings offer setup when collection is unpublished and still show the que
   expect(required('.query-panel summary').textContent).toContain('Query');
 });
 
-test('findings show collection is off only after the disabling pattern draft is published', async (): Promise<void> => {
+test('findings show collection is unconfigured when the last usable pattern is disabled and published', async (): Promise<void> => {
   const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
   const state = new InsightsState(api, new InMemoryLogCounts());
   component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(diagnostics), createState: (): InsightsState => state } });
@@ -253,7 +253,18 @@ test('findings show collection is off only after the disabling pattern draft is 
   save.click();
   await vi.waitFor((): void => expect(document.body.textContent).toContain('Changes saved'));
   follow(findingsLink);
-  expect(required('.collection-notice').textContent).toContain('Collection is off');
+  expect(required('.collection-notice').textContent).toContain('Collection isn’t configured');
+  expect(api.current.reporting_enabled).toBe(true);
+  expect(required('.query-panel summary').textContent).toContain('Query');
+});
+
+test('findings show collection is off when saved reporting is off even with an excluded playbook', async (): Promise<void> => {
+  const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
+  api.current.reporting_enabled = false;
+  api.current.playbooks[0].enabled = false;
+  const state = new InsightsState(api, new InMemoryLogCounts());
+  component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: (): InsightsState => state } });
+  await vi.waitFor((): void => expect(document.querySelector('.collection-notice')?.textContent).toContain('Collection is off'));
   expect(required('.collection-notice').textContent).toContain('Existing entries remain available.');
   expect(required(`.collection-notice a[href="${reporting}"]`).textContent).toBe('Review collection settings');
   expect(required('.query-panel summary').textContent).toContain('Query');

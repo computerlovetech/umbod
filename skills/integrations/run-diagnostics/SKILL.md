@@ -26,7 +26,7 @@ Follow the current Umbod playbook for a user-requested diagnostic assessment.
 
 1. Read `umbod://agent-behaviour/playbooks` from the Umbod MCP server.
 2. Select the requested or sole enabled playbook; ask the user to choose if several are available and none was specified.
-3. Read the selected `resource_uri` from the index and follow its user-requested reporting guidance.
+3. Read the selected `resource_uri` from the index and follow its live guidance. Submit using `report_diagnostic` with `trigger=user_requested` only if the tool is available.
 4. Confirm whether the write returned a durable receipt before reporting success.
 
 ## Decisions
@@ -36,7 +36,7 @@ Follow the current Umbod playbook for a user-requested diagnostic assessment.
 | The user did not request diagnostics | Do not submit a report. |
 | The requested playbook is not enabled | Ask the user to choose an enabled playbook, if any are available. |
 | The server rejects the submission or the outcome is uncertain | Follow the live reporting guidance and the tool's corrective instructions. |
-| No playbook is available or the resource cannot be read | Stop without submitting and explain the blocker. |
+| The live tool, playbook, or resource is unavailable | Stop without submitting or using cached instructions; explain the blocker. |
 
 ## Output
 
@@ -47,7 +47,7 @@ Return:
 
 ## Completion criteria
 
-- The selected playbook was read live and its user-requested reporting guidance was followed.
+- The selected playbook was read live and its reporting guidance was followed.
 - No submission is described as successful without a durable receipt.
 
 ## References

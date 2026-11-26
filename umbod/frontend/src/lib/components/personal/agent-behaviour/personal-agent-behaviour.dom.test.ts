@@ -27,11 +27,13 @@ test('uses owned report snapshots to filter and inspect entries without admin co
     await vi.waitFor((): void => expect(target.querySelector('.report-row')?.textContent).toContain('review'));
     expect(target.textContent).not.toContain('Collection settings');
     const reportLink = target.querySelector<HTMLAnchorElement>('a.report-row');
+    expect(reportLink?.textContent).toContain('Agent-reported trigger: user requested');
     expect(reportLink?.getAttribute('href')).toBe(`/insights/agent-behaviour?report=${api.rows[0].report_id}`);
     const reportId = new URL(reportLink!.href).searchParams.get('report');
     await unmount(component);
     component = mount(PersonalAgentBehaviourView, { target, props: { state, reportId } });
     await vi.waitFor((): void => expect(target.querySelector('article')?.textContent).toContain('The agent retried with a different tool'));
+    expect(target.textContent).toContain('Agent-reported trigger: user requested');
     expect(target.textContent).not.toContain('Delete entry');
     expect(target.querySelector('dialog')).toBeNull();
     expect(target.querySelector('a.admin-back-link')?.getAttribute('href')).toBe('/insights/agent-behaviour');

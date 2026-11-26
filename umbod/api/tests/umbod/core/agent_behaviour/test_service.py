@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from umbod.core.agent_behaviour import AgentBehaviourService, CallerNotAuthorized, ConfigurationInvalid, IdempotencyConflict, InstructionsUnavailable, ProactiveDisabled, PublishConfiguration, ReportGone, ReportInvalid, ReportNotFound, ReportQuery, RevisionConflict, StaleConfiguration, SubmitDiagnosticReport
+from umbod.core.agent_behaviour import AgentBehaviourService, CallerNotAuthorized, ConfigurationInvalid, IdempotencyConflict, InstructionsUnavailable, ReportingDisabled, PublishConfiguration, ReportGone, ReportInvalid, ReportNotFound, ReportQuery, RevisionConflict, StaleConfiguration, SubmitDiagnosticReport
 from umbod.core.callers import AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity, UnavailableSubject
 from umbod.core.persistence import AllFields, Database, NoFilter, Query, Unordered
 from umbod.core.agent_behaviour.schema import DEDUPE_TABLE, REPORT_TABLE
@@ -76,7 +76,7 @@ async def test_exact_concurrent_retry_returns_one_report(service: AgentBehaviour
 async def test_retry_is_resolved_before_current_configuration_validation(service: AgentBehaviourService, publication: PublishConfiguration, caller: CallerContext, submission: SubmitDiagnosticReport) -> None:
     await service.publish_configuration(publication)
     first = await service.submit_report(caller, submission)
-    await service.publish_configuration(PublishConfiguration(expected_revision=2, patterns=(), playbooks=()))
+    await service.publish_configuration(PublishConfiguration(reporting_enabled=True, expected_revision=2, patterns=(), playbooks=()))
     retried = await service.submit_report(caller, submission)
     assert retried.report_id == first.report_id
     assert retried.received_at == first.received_at
@@ -94,15 +94,47 @@ async def test_same_key_is_isolated_by_authenticated_issuer(service: AgentBehavi
     assert (await service.list_reports(ReportQuery())).total == 2
 
 
-async def test_stale_or_proactive_submission_is_rejected_without_write(service: AgentBehaviourService, publication: PublishConfiguration, caller: CallerContext, submission: SubmitDiagnosticReport) -> None:
+async def test_stale_or_invalid_submission_is_rejected_without_write(service: AgentBehaviourService, publication: PublishConfiguration, caller: CallerContext, submission: SubmitDiagnosticReport) -> None:
     await service.publish_configuration(publication)
     with pytest.raises(StaleConfiguration):
         await service.submit_report(caller, submission.model_copy(update={"configuration_revision": 3}))
-    with pytest.raises(ProactiveDisabled):
-        await service.submit_report(caller, submission.model_copy(update={"trigger": "proactive"}))
     with pytest.raises(ReportInvalid):
         await service.submit_report(caller, submission.model_copy(update={"assessments": ()}))
     assert (await service.list_reports(ReportQuery())).total == 0
+
+
+async def test_trigger_is_saved_as_metadata_and_remains_part_of_idempotency(
+    service: AgentBehaviourService, publication: PublishConfiguration, caller: CallerContext, submission: SubmitDiagnosticReport,
+) -> None:
+    await service.publish_configuration(publication)
+    proactive = submission.model_copy(update={"trigger": "proactive"})
+    receipt = await service.submit_report(caller, proactive)
+    assert (await service.get_report(receipt.report_id)).submission.trigger == "proactive"
+    with pytest.raises(IdempotencyConflict):
+        await service.submit_report(caller, submission)
+
+
+async def test_reporting_off_blocks_new_and_duplicate_submissions_without_writing_receipts(
+    service: AgentBehaviourService, publication: PublishConfiguration, caller: CallerContext,
+    submission: SubmitDiagnosticReport, database: Database,
+) -> None:
+    await service.publish_configuration(publication)
+    receipt = await service.submit_report(caller, submission)
+    dormant = await service.publish_configuration(publication.model_copy(update={"expected_revision": 2, "reporting_enabled": False}))
+    assert dormant.patterns == publication.patterns
+    assert dormant.playbooks == publication.playbooks
+    with pytest.raises(ReportingDisabled):
+        await service.submit_report(caller, submission)
+    fresh = submission.model_copy(update={"idempotency_key": uuid4(), "configuration_revision": dormant.revision})
+    with pytest.raises(ReportingDisabled):
+        await service.submit_report(caller, fresh)
+    async with database.read_session() as session:
+        assert len(await session.find_many(DEDUPE_TABLE, Query(NoFilter(), AllFields(), Unordered()))) == 1
+    assert (await service.list_reports(ReportQuery())).total == 1
+    await service.publish_configuration(publication.model_copy(update={"expected_revision": 3}))
+    assert (await service.submit_report(caller, submission)).report_id == receipt.report_id
+    submitted = await service.submit_report(caller, fresh.model_copy(update={"configuration_revision": 4}))
+    assert submitted.duplicate is False
 
 
 async def test_unavailable_identity_cannot_submit(service: AgentBehaviourService, submission: SubmitDiagnosticReport) -> None:

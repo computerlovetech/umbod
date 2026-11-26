@@ -5,6 +5,7 @@ import httpx
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
+from mcp.shared.exceptions import MCPError
 
 from conftest import RuntimeEndpoints
 
@@ -31,7 +32,7 @@ async def test_running_admin_publication_mcp_reporting_and_admin_inspection_shar
         assert len(catalog["playbooks"]) == 1
         assert catalog["playbooks"][0]["id"] == "behaviour-review"
         assert catalog["playbooks"][0]["enabled"] is True
-        assert catalog["playbooks"][0]["allow_proactive"] is False
+        assert catalog["reporting_enabled"] is False
         assert (await api.get(f"{base}/configuration")).json() == original
         pattern = {
             "id": pattern_id, "name": "Runtime context pattern", "description": "Task context is unavailable",
@@ -41,9 +42,9 @@ async def test_running_admin_publication_mcp_reporting_and_admin_inspection_shar
         }
         playbook = {
             "id": playbook_id, "name": "Runtime review", "collection_instructions": "Review only the authorized task context",
-            "pattern_ids": [pattern_id], "enabled": True, "allow_proactive": False,
+            "pattern_ids": [pattern_id], "enabled": True,
         }
-        published = await api.put(f"{base}/configuration", json={"expected_revision": original["revision"], "patterns": [*original["patterns"], pattern], "playbooks": [*original["playbooks"], playbook]})
+        published = await api.put(f"{base}/configuration", json={"expected_revision": original["revision"], "reporting_enabled": True, "patterns": [*original["patterns"], pattern], "playbooks": [*original["playbooks"], playbook]})
         assert published.status_code == 200, published.text
         report_ids: list[str] = []
         try:
@@ -52,6 +53,8 @@ async def test_running_admin_publication_mcp_reporting_and_admin_inspection_shar
             assert (await api.get(f"{base}/defaults")).json() == catalog
             assert (await api.get(f"{base}/configuration")).json() == published.json()
             async with Client(transport, mode="legacy") as client:
+                available_tools = {tool.name for tool in await client.list_tools()}
+                assert "report_diagnostic" in available_tools
                 instructions = await client.read_resource(f"umbod://agent-behaviour/playbooks/{playbook_id}")
                 decoded = json.loads(instructions[0].text)
                 assert decoded["configuration_revision"] == revision
@@ -59,7 +62,7 @@ async def test_running_admin_publication_mcp_reporting_and_admin_inspection_shar
                 prompt = await client.get_prompt("run_diagnostics", {"playbook_id": playbook_id})
                 assert decoded["resource_uri"] in prompt.messages[0].content.text
                 assert decoded["playbook"]["collection_instructions"] == playbook["collection_instructions"]
-                assert "trigger=user_requested" in decoded["reporting_guidance"]
+                assert "report_diagnostic" in decoded["reporting_guidance"]
                 command = {
                     "idempotency_key": str(uuid4()), "configuration_revision": revision, "playbook_id": playbook_id,
                     "trigger": "user_requested", "assessments": [{"pattern_id": pattern_id, "status": "observed", "summary": "A required task specification was unavailable", "evidence": ["The task specification could not be provided"]}],
@@ -85,7 +88,7 @@ async def test_running_admin_publication_mcp_reporting_and_admin_inspection_shar
                 before_change = await api.get(f"{base}/configuration")
                 assert before_change.status_code == 200, before_change.text
                 current_configuration = before_change.json()
-                changed = await api.put(f"{base}/configuration", json={"expected_revision": current_configuration["revision"], "patterns": current_configuration["patterns"], "playbooks": [changed_playbook if item["id"] == playbook_id else item for item in current_configuration["playbooks"]]})
+                changed = await api.put(f"{base}/configuration", json={"expected_revision": current_configuration["revision"], "reporting_enabled": True, "patterns": current_configuration["patterns"], "playbooks": [changed_playbook if item["id"] == playbook_id else item for item in current_configuration["playbooks"]]})
                 assert changed.status_code == 200, changed.text
                 refreshed = await client.read_resource(f"umbod://agent-behaviour/playbooks/{playbook_id}")
                 assert json.loads(refreshed[0].text)["playbook"]["collection_instructions"] == changed_playbook["collection_instructions"]
@@ -94,13 +97,36 @@ async def test_running_admin_publication_mcp_reporting_and_admin_inspection_shar
                 rejected = await client.call_tool("report_diagnostic", {**command, "idempotency_key": str(uuid4())}, raise_on_error=False)
                 assert rejected.is_error is True
                 assert "stale_configuration" in str(rejected.content)
+                updated = changed.json()
+                disabled = await api.put(f"{base}/configuration", json={"expected_revision": updated["revision"], "reporting_enabled": False, "patterns": updated["patterns"], "playbooks": updated["playbooks"]})
+                assert disabled.status_code == 200, disabled.text
+                assert disabled.json()["playbooks"] == updated["playbooks"]
+                assert disabled.json()["patterns"] == updated["patterns"]
+                assert {tool.name for tool in await client.list_tools()} == available_tools - {"report_diagnostic"}
+                assert "run_diagnostics" not in {prompt.name for prompt in await client.list_prompts()}
+                assert all(not str(resource.uri).startswith("umbod://agent-behaviour/") for resource in await client.list_resources())
+                assert all(not template.uriTemplate.startswith("umbod://agent-behaviour/") for template in await client.list_resource_templates())
+                for uri in ("umbod://agent-behaviour/playbooks", decoded["resource_uri"]):
+                    with pytest.raises(MCPError, match="reporting_disabled"):
+                        await client.read_resource(uri)
+                with pytest.raises(MCPError, match="reporting_disabled"):
+                    await client.get_prompt("run_diagnostics", {"playbook_id": playbook_id})
+                for blocked_command in (command, {**command, "configuration_revision": disabled.json()["revision"], "idempotency_key": str(uuid4())}):
+                    blocked = await client.call_tool("report_diagnostic", blocked_command, raise_on_error=False)
+                    assert blocked.is_error is True
+                    assert "reporting_disabled" in str(blocked.content)
                 retained = await api.get(f"{base}/reports/{receipt['report_id']}")
                 assert retained.json()["instructions"]["playbook"]["collection_instructions"] == playbook["collection_instructions"]
+                reenabled = await api.put(f"{base}/configuration", json={"expected_revision": disabled.json()["revision"], "reporting_enabled": True, "patterns": updated["patterns"], "playbooks": updated["playbooks"]})
+                assert reenabled.status_code == 200, reenabled.text
+                assert {tool.name for tool in await client.list_tools()} == available_tools
+                restored_instructions = json.loads((await client.read_resource(decoded["resource_uri"]))[0].text)
+                assert restored_instructions["playbook"]["collection_instructions"] == changed_playbook["collection_instructions"]
         finally:
             for report_id in report_ids:
                 await api.delete(f"{base}/reports/{report_id}")
             current = await api.get(f"{base}/configuration")
             assert current.status_code == 200, current.text
             current_configuration = current.json()
-            restored = await api.put(f"{base}/configuration", json={"expected_revision": current_configuration["revision"], "patterns": [item for item in current_configuration["patterns"] if item["id"] != pattern_id], "playbooks": [item for item in current_configuration["playbooks"] if item["id"] != playbook_id]})
+            restored = await api.put(f"{base}/configuration", json={"expected_revision": current_configuration["revision"], "reporting_enabled": original["reporting_enabled"], "patterns": [item for item in current_configuration["patterns"] if item["id"] != pattern_id], "playbooks": [item for item in current_configuration["playbooks"] if item["id"] != playbook_id]})
             assert restored.status_code == 200, restored.text

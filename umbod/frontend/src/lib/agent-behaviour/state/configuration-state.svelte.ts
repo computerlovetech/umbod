@@ -7,21 +7,13 @@ type ReadonlyPattern = Readonly<Omit<BehaviourPattern, 'categories'>> & { readon
 type ReadonlySettings = Readonly<Omit<DiagnosticPlaybook, 'pattern_ids'>> & { readonly pattern_ids: readonly string[] };
 type PatternSelection = { baseline: string; pendingCategory: string } & ({ kind: 'existing'; id: string } | { kind: 'new'; pattern: BehaviourPattern; message: string });
 type CollectionStatus = 'unavailable' | 'unconfigured' | 'off' | 'configured';
-type ReportingMode = 'Off' | 'Automatic reports allowed' | 'When requested';
-
-function activeReportingSettings(settings: readonly ReadonlySettings[], patterns: readonly ReadonlyPattern[]): readonly ReadonlySettings[] {
+function hasUsablePlaybook(settings: readonly ReadonlySettings[], patterns: readonly ReadonlyPattern[]): boolean {
   const enabledPatternIds = new Set(patterns.filter((pattern): boolean => pattern.enabled).map((pattern): string => pattern.id));
-  return settings.filter((setting): boolean => setting.enabled && setting.pattern_ids.some((id): boolean => enabledPatternIds.has(id)));
-}
-
-function reportingMode(settings: readonly ReadonlySettings[], patterns: readonly ReadonlyPattern[]): ReportingMode {
-  const enabled = activeReportingSettings(settings, patterns);
-  if (!enabled.length) return 'Off';
-  return enabled.some((setting): boolean => setting.allow_proactive) ? 'Automatic reports allowed' : 'When requested';
+  return settings.some((setting): boolean => setting.enabled && setting.pattern_ids.some((id): boolean => enabledPatternIds.has(id)));
 }
 
 export class ConfigurationState {
-  private value = $state<Configuration>({ revision: 0, patterns: [], playbooks: [] });
+  private value = $state<Configuration>({ revision: 0, reporting_enabled: false, patterns: [], playbooks: [] });
   private saved = $state<Configuration | null>(null);
   private pending = $state(false);
   private notice = $state('');
@@ -60,15 +52,17 @@ export class ConfigurationState {
   get collectionStatus(): CollectionStatus {
     if (!this.saved) return 'unavailable';
     if (!this.publishedPlaybooks.length) return 'unconfigured';
-    return activeReportingSettings(this.publishedPlaybooks, this.publishedPatterns).length ? 'configured' : 'off';
+    if (!this.saved.reporting_enabled) return 'off';
+    return hasUsablePlaybook(this.publishedPlaybooks, this.publishedPatterns) ? 'configured' : 'unconfigured';
   }
-  get reportingMode(): ReportingMode { return reportingMode(this.playbooks, this.patterns); }
-  get reportingNeedsEnabledPattern(): boolean {
-    return this.reportingMode === 'Off' && this.settings.some((setting): boolean => setting.enabled);
+  get reportingEnabled(): boolean { return this.value.reporting_enabled; }
+  get reportingNeedsUsablePlaybook(): boolean {
+    return this.reportingEnabled && !hasUsablePlaybook(this.playbooks, this.patterns);
   }
-  get savedReportingMode(): ReportingMode {
+  get savedReportingEnabled(): boolean { return (this.collision ?? this.saved)?.reporting_enabled ?? false; }
+  get savedReportingNeedsUsablePlaybook(): boolean {
     const latest = this.collision ?? this.saved;
-    return reportingMode(latest?.playbooks ?? [], latest?.patterns ?? []);
+    return !!latest?.reporting_enabled && !hasUsablePlaybook(latest.playbooks, latest.patterns);
   }
   private get editable(): boolean { return !this.disposed && !this.pending && this.loaded; }
 
@@ -116,7 +110,7 @@ export class ConfigurationState {
 
   save = async (): Promise<void> => {
     if (!this.editable || this.conflict) return;
-    const parsed = publishSchema.safeParse({ expected_revision: this.revision, patterns: this.value.patterns, playbooks: this.value.playbooks });
+    const parsed = publishSchema.safeParse({ expected_revision: this.revision, reporting_enabled: this.reportingEnabled, patterns: this.value.patterns, playbooks: this.value.playbooks });
     if (!parsed.success) {
       this.notice = configurationFeedback(parsed.error.issues, this.value);
       return;
@@ -208,7 +202,7 @@ export class ConfigurationState {
       try {
         const defaults = await this.api.defaults(request.signal);
         if (this.disposed || this.request !== request) return;
-        this.value.playbooks = defaults.playbooks.map((setting): DiagnosticPlaybook => ({ ...setting, pattern_ids: [], allow_proactive: false }));
+        this.value.playbooks = defaults.playbooks.map((setting): DiagnosticPlaybook => ({ ...setting, pattern_ids: [] }));
       } catch (error) {
         if (!this.disposed && this.request === request) this.failure(error, 'pattern');
         return;
@@ -256,9 +250,24 @@ export class ConfigurationState {
     if (this.selection?.kind === 'existing' && this.selection.id === id) this.selection = null;
   };
 
-  updateSettings = <K extends 'collection_instructions' | 'allow_proactive' | 'enabled'>(id: string, key: K, value: DiagnosticPlaybook[K]): void => {
+  setReportingEnabled = (enabled: boolean): void => {
+    if (this.editable) this.value.reporting_enabled = enabled;
+  };
+
+  canEditPlaybookInclusion = (playbook: ReadonlySettings): boolean => this.playbooks.length > 1 || !playbook.enabled;
+
+  setPlaybookIncluded = (id: string, included: boolean): void => {
+    const playbook = this.playbooks.find((setting): boolean => setting.id === id);
+    if (playbook && this.canEditPlaybookInclusion(playbook)) this.updatePlaybook(id, { enabled: included });
+  };
+
+  updateCollectionInstructions = (id: string, instructions: string): void => {
+    this.updatePlaybook(id, { collection_instructions: instructions });
+  };
+
+  private updatePlaybook = (id: string, update: Partial<Pick<DiagnosticPlaybook, 'enabled' | 'collection_instructions'>>): void => {
     if (!this.editable) return;
-    this.value.playbooks = this.value.playbooks.map((setting): DiagnosticPlaybook => setting.id === id ? { ...setting, [key]: value } : setting);
+    this.value.playbooks = this.value.playbooks.map((setting): DiagnosticPlaybook => setting.id === id ? { ...setting, ...update } : setting);
   };
 
   dispose = (): void => {
@@ -266,7 +275,7 @@ export class ConfigurationState {
     this.disposed = true;
     this.request?.abort();
     this.pending = false;
-    this.value = { revision: 0, patterns: [], playbooks: [] };
+    this.value = { revision: 0, reporting_enabled: false, patterns: [], playbooks: [] };
     this.saved = null;
     this.selection = null;
     this.collision = null;

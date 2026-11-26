@@ -14,7 +14,7 @@ async def test_stable_resource_resolves_new_publication_without_restart(diagnost
         first = json.loads((await client.read_resource("umbod://agent-behaviour/playbooks/review"))[0].text)
         current = await diagnostic_mcp.service.get_configuration()
         await diagnostic_mcp.service.publish_configuration(PublishConfiguration(
-            expected_revision=current.revision, patterns=current.patterns,
+            expected_revision=current.revision, reporting_enabled=True, patterns=current.patterns,
             playbooks=(current.playbooks[0].model_copy(update={"collection_instructions": "New authorized review"}),),
         ))
         second = json.loads((await client.read_resource("umbod://agent-behaviour/playbooks/review"))[0].text)
@@ -26,16 +26,19 @@ async def test_stable_resource_resolves_new_publication_without_restart(diagnost
 
 
 @pytest.mark.asyncio
-async def test_empty_enabled_index_preserves_eligible_capability_discovery(diagnostic_mcp: DiagnosticMcp) -> None:
+async def test_no_usable_playbook_hides_diagnostic_discovery(diagnostic_mcp: DiagnosticMcp) -> None:
     current = await diagnostic_mcp.service.get_configuration()
     await diagnostic_mcp.service.publish_configuration(PublishConfiguration(
-        expected_revision=current.revision, patterns=current.patterns,
+        expected_revision=current.revision, reporting_enabled=True, patterns=current.patterns,
         playbooks=(current.playbooks[0].model_copy(update={"enabled": False}),),
     ))
     async with Client(diagnostic_mcp.server) as client:
-        assert [tool.name for tool in await client.list_tools()] == ["report_diagnostic"]
-        index = json.loads((await client.read_resource("umbod://agent-behaviour/playbooks"))[0].text)
-        assert index == {"configuration_revision": 3, "playbooks": []}
+        assert await client.list_tools() == []
+        assert await client.list_prompts() == []
+        assert await client.list_resources() == []
+        assert await client.list_resource_templates() == []
+        with pytest.raises(Exception, match="instructions_unavailable"):
+            await client.read_resource("umbod://agent-behaviour/playbooks")
         for playbook in ["review", "missing"]:
             with pytest.raises(Exception, match="instructions_unavailable"):
                 await client.read_resource(f"umbod://agent-behaviour/playbooks/{playbook}")

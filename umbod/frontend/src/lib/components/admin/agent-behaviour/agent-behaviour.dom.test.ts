@@ -19,12 +19,12 @@ function button(target: HTMLElement, label: string): HTMLButtonElement {
 
 test('inspects a pattern inline and keeps its labelled actions independent of the disclosure', async (): Promise<void> => {
   const api = new InMemoryAgentBehaviourApi();
-  api.current = { revision: 6, patterns: [{ id: 'internal-pattern', name: 'Missing context', description: 'Notice missing facts', assessment_prompt: 'Assess missing facts', inclusion_criteria: 'Required facts are missing', exclusion_criteria: 'The facts are already available', categories: ['context', 'quality'], polarity: 'negative', enabled: true }], playbooks: [{ id: 'internal-settings', name: 'Behaviour review', collection_instructions: 'Collect facts', pattern_ids: ['internal-pattern'], enabled: true, allow_proactive: false }] };
+  api.current = { revision: 6, reporting_enabled: false, patterns: [{ id: 'internal-pattern', name: 'Missing context', description: 'Notice missing facts', assessment_prompt: 'Assess missing facts', inclusion_criteria: 'Required facts are missing', exclusion_criteria: 'The facts are already available', categories: ['context', 'quality'], polarity: 'negative', enabled: true }], playbooks: [{ id: 'internal-settings', name: 'Behaviour review', collection_instructions: 'Collect facts', pattern_ids: ['internal-pattern'], enabled: true }] };
   const state = new ConfigurationState(api.configuration, vi.fn()); await state.load();
   const target = document.createElement('div'); document.body.append(target); const component = mount(ConfigurationEditor, { target, props: { state } }); flushSync();
   try {
     expect(target.textContent).toContain('Missing context');
-    expect(target.querySelector('section[aria-labelledby="reporting-settings-title"]')).toBeNull();
+    expect(target.querySelector('section[aria-label="Reporting settings"]')).toBeNull();
     expect(target.textContent).not.toContain('internal-pattern'); expect(target.textContent).not.toContain('internal-settings');
     expect(target.textContent).not.toMatch(/revision|playbook/i);
     expect(target.querySelector('section[aria-label="Pattern editor"]')).toBeNull();
@@ -90,46 +90,166 @@ test('inspects a pattern inline and keeps its labelled actions independent of th
   } finally { await unmount(component); target.remove(); state.dispose(); }
 });
 
-test('shows the reporting mode only while enabled and preserves the mode when reporting is switched off', async (): Promise<void> => {
+function reportingFixture(): InMemoryAgentBehaviourApi {
   const api = new InMemoryAgentBehaviourApi();
-  api.current = { revision: 6, patterns: [{ id: 'pattern', name: 'Missing context', description: 'Notice missing facts', assessment_prompt: 'Assess missing facts', inclusion_criteria: '', exclusion_criteria: '', categories: [], polarity: 'neutral', enabled: true }], playbooks: [{ id: 'review', name: 'Behaviour review', collection_instructions: 'Collect facts', pattern_ids: ['pattern'], enabled: true, allow_proactive: false }, { id: 'secondary', name: 'Secondary review', collection_instructions: 'Collect secondary facts', pattern_ids: ['pattern'], enabled: false, allow_proactive: true }] };
+  api.current = { revision: 6, reporting_enabled: true, patterns: [{ id: 'pattern', name: 'Missing context', description: 'Notice missing facts', assessment_prompt: 'Assess missing facts', inclusion_criteria: '', exclusion_criteria: '', categories: [], polarity: 'neutral', enabled: true }], playbooks: [{ id: 'review', name: 'Behaviour review', collection_instructions: 'Collect facts', pattern_ids: ['pattern'], enabled: true }, { id: 'secondary', name: 'Secondary review', collection_instructions: 'Collect secondary facts', pattern_ids: ['pattern'], enabled: false }] };
+  return api;
+}
+
+test('uses one reporting switch and preserves collection instructions and memberships when turned off and on', async (): Promise<void> => {
+  const api = reportingFixture();
+  const { patterns, playbooks } = structuredClone(api.current);
   const state = new ConfigurationState(api.configuration, vi.fn());
   await state.load();
   const target = document.createElement('div'); document.body.append(target);
   const component = mount(ConfigurationEditor, { target, props: { state, section: 'reporting' } }); flushSync();
   try {
-    const settings = target.querySelector<HTMLElement>('section[aria-labelledby="reporting-settings-title"]')!;
-    expect(settings.hidden).toBe(false);
-    expect(settings.querySelector('details')).toBeNull();
-    expect(target.querySelector('section[aria-labelledby="diagnostic-patterns-title"]')).toBeNull();
-    expect(settings.querySelector('textarea')).toBeNull();
-    const selector = '[role="combobox"][aria-label="Reporting mode · Behaviour review"]';
-    const mode = settings.querySelector<HTMLButtonElement>(selector);
-    const toggle = settings.querySelector<HTMLInputElement>('input[aria-label="Accept diagnostic reports · Behaviour review"]');
-    expect(toggle?.checked).toBe(true);
-    expect(mode?.textContent).toContain('When requested');
-    expect(settings.querySelector('[role="combobox"][aria-label="Reporting mode · Secondary review"]')).toBeNull();
-    mode!.click();
-    await tick();
-    expect(mode!.getAttribute('aria-expanded')).toBe('true');
-    const proactive = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option): boolean => option.textContent?.trim() === 'Allow proactive reports');
-    expect(proactive).toBeDefined();
-    proactive!.click();
-    await tick();
-    expect(settings.textContent).toContain('Saved mode: When requested');
-    expect(settings.textContent).toContain('After saving: Automatic reports allowed');
-    toggle!.click(); flushSync();
-    expect(settings.querySelector(selector)).toBeNull();
-    expect(settings.textContent).toContain('After saving: Off');
-    toggle!.click(); flushSync();
-    expect(settings.querySelector(selector)?.textContent).toContain('Allow proactive reports');
-    toggle!.click(); flushSync();
+    const settings = target.querySelector<HTMLElement>('section[aria-label="Reporting settings"]')!;
+    const toggle = reportingToggle(settings);
+    expect(settings.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
+    expect(settings.querySelector('select, [role="combobox"]')).toBeNull();
+    button(target, 'Exclude playbook · Behaviour review').click(); flushSync();
+    expect(settings.textContent).toContain('No usable playbook');
+    button(target, 'Include playbook · Behaviour review').click(); flushSync();
+    expect(settings.textContent).not.toContain('No usable playbook');
+    expect(findButton(target, 'Include playbook · Secondary review')).toBeDefined();
+    expect(toggle.checked).toBe(true);
+    expect(settings.textContent).toContain('Saved: On');
+    expect(settings.textContent).not.toContain('Draft:');
+
+    toggle.click(); flushSync();
+    expect(settings.textContent).toContain('Saved: On');
+    expect(settings.textContent).toContain('Draft: Off');
+    button(target, 'Discard changes').click(); flushSync();
+    expect(toggle.checked).toBe(true);
+    expect(settings.textContent).not.toContain('Draft:');
+
+    toggle.click(); flushSync();
     button(target, 'Save changes').click();
-    await vi.waitFor((): void => expect(settings.textContent).toContain('Saved mode: Off'));
-    expect(settings.textContent).not.toContain('After saving:');
-    expect(api.current.playbooks[0]).toMatchObject({ enabled: false, allow_proactive: true, collection_instructions: 'Collect facts' });
-    expect(api.current.playbooks[1]).toMatchObject({ enabled: false, allow_proactive: true, collection_instructions: 'Collect secondary facts' });
+    await vi.waitFor((): void => expect(settings.textContent).toContain('Saved: Off'));
+    expect(api.current.reporting_enabled).toBe(false);
+    expect(api.current.patterns).toEqual(patterns);
+    expect(api.current.playbooks).toEqual(playbooks);
+
+    button(target, 'Edit instructions · Secondary review').click(); flushSync();
+    const instructions = settings.querySelector<HTMLTextAreaElement>('textarea')!;
+    expect(instructions.value).toBe('Collect secondary facts');
+    expect(instructions.disabled).toBe(false);
+    instructions.value = 'Collect updated facts';
+    instructions.dispatchEvent(new Event('input', { bubbles: true })); flushSync();
+    button(target, 'Save changes').click();
+    await vi.waitFor((): void => expect(findButton(target, 'Discard changes')).toBeUndefined());
+    expect(api.current.playbooks[1].collection_instructions).toBe('Collect updated facts');
+    expect(toggle.checked).toBe(false);
+    toggle.click(); flushSync();
+    expect(settings.textContent).toContain('Draft: On');
+    button(target, 'Save changes').click();
+    await vi.waitFor((): void => expect(settings.textContent).toContain('Saved: On'));
+    expect(settings.textContent).not.toContain('Draft:');
+    expect(api.current.reporting_enabled).toBe(true);
+    expect(api.current.patterns).toEqual(patterns);
+    expect(api.current.playbooks).toEqual([playbooks[0], { ...playbooks[1], collection_instructions: 'Collect updated facts' }]);
   } finally { await unmount(component); target.remove(); state.dispose(); }
+});
+
+function reportingToggle(target: HTMLElement): HTMLInputElement {
+  const toggle = target.querySelector<HTMLInputElement>('input[aria-label="Enable diagnostic reporting"]');
+  if (!toggle) throw new Error('Missing diagnostic reporting switch');
+  return toggle;
+}
+
+test('recovers a single excluded playbook without enabling it when the global switch changes', async (): Promise<void> => {
+  const api = reportingFixture();
+  api.current.reporting_enabled = false;
+  api.current.playbooks = [{ ...api.current.playbooks[0], enabled: false }];
+  const state = new ConfigurationState(api.configuration);
+  await state.load();
+  const target = document.createElement('div'); document.body.append(target);
+  const component = mount(ConfigurationEditor, { target, props: { state, section: 'reporting' } }); flushSync();
+  try {
+    const toggle = reportingToggle(target);
+    expect(target.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
+    expect(toggle.checked).toBe(false);
+    const include = button(target, 'Include playbook');
+    expect(include.disabled).toBe(false);
+    toggle.click(); flushSync();
+    expect(target.textContent).toContain('No usable playbook');
+    expect(button(target, 'Include playbook')).toBe(include);
+    include.focus();
+    include.click();
+    await tick();
+    expect(target.textContent).not.toContain('No usable playbook');
+    expect(findButton(target, 'Include playbook')).toBeUndefined();
+    expect(findButton(target, 'Exclude playbook')).toBeUndefined();
+    await vi.waitFor((): void => expect(document.activeElement).toBe(button(target, 'Edit instructions')));
+    button(target, 'Save changes').click();
+    await vi.waitFor((): void => expect(target.textContent).toContain('Saved: On'));
+    expect(api.current.playbooks[0]).toMatchObject({ enabled: true, pattern_ids: ['pattern'], collection_instructions: 'Collect facts' });
+  } finally { await unmount(component); target.remove(); state.dispose(); }
+});
+
+test('keeps the saved unavailability visible until a usable playbook is published', async (): Promise<void> => {
+  const api = reportingFixture();
+  api.current.playbooks = [{ ...api.current.playbooks[0], enabled: false }];
+  const state = new ConfigurationState(api.configuration);
+  await state.load();
+  const target = document.createElement('div'); document.body.append(target);
+  const component = mount(ConfigurationEditor, { target, props: { state, section: 'reporting' } }); flushSync();
+  try {
+    expect(target.textContent).toContain('No usable playbook in the saved configuration.');
+    button(target, 'Include playbook').click(); await tick();
+    expect(target.textContent).toContain('No usable playbook in the saved configuration.');
+    button(target, 'Save changes').click();
+    await vi.waitFor((): void => expect(target.textContent).not.toContain('No usable playbook'));
+  } finally { await unmount(component); target.remove(); state.dispose(); }
+});
+
+test('warns of missing usable playbooks when the draft enables reporting', async (): Promise<void> => {
+  const api = new InMemoryAgentBehaviourApi();
+  const state = new ConfigurationState(api.configuration, vi.fn());
+  await state.load();
+  const target = document.createElement('div'); document.body.append(target);
+  const component = mount(ConfigurationEditor, { target, props: { state, section: 'reporting' } }); flushSync();
+  try {
+    const toggle = reportingToggle(target);
+    expect(toggle.checked).toBe(false);
+    expect(target.textContent).not.toContain('No usable playbook');
+    toggle.click(); flushSync();
+    expect(target.textContent).toContain('No usable playbook');
+    expect(button(target, 'Save changes').disabled).toBe(false);
+    button(target, 'Discard changes').click(); flushSync();
+    expect(target.textContent).not.toContain('No usable playbook');
+  } finally { await unmount(component); target.remove(); state.dispose(); }
+});
+
+test('keeps the reporting draft separate from the saved setting when publishing conflicts', async (): Promise<void> => {
+  const api = new InMemoryAgentBehaviourApi();
+  const state = new ConfigurationState(api.configuration, vi.fn());
+  const loading = deferred<typeof api.current>();
+  const get = vi.spyOn(api.configuration, 'get').mockReturnValueOnce(loading.promise);
+  const loaded = state.load();
+  const target = document.createElement('div'); document.body.append(target);
+  const component = mount(ConfigurationEditor, { target, props: { state, section: 'reporting' } }); flushSync();
+  try {
+    expect(target.querySelector('input')).toBeNull();
+    expect(target.textContent).not.toContain('Saved:');
+    expect(button(target, 'Loading…').disabled).toBe(true);
+    loading.resolve({ ...api.current, reporting_enabled: true });
+    await loaded; flushSync();
+    const toggle = reportingToggle(target);
+    expect(toggle.checked).toBe(true);
+    toggle.click(); flushSync();
+    api.current = { ...api.current, revision: 1, reporting_enabled: true };
+    button(target, 'Save changes').click();
+    await vi.waitFor((): void => expect(target.textContent).toContain('Another administrator saved changes.'));
+    expect(toggle.checked).toBe(false);
+    expect(target.textContent).toContain('Saved: On');
+    expect(target.textContent).toContain('Draft: Off');
+    expect(button(target, 'Save changes').disabled).toBe(true);
+    button(target, 'Discard changes').click(); flushSync();
+    expect(toggle.checked).toBe(true);
+    expect(target.textContent).not.toContain('Draft:');
+  } finally { await unmount(component); target.remove(); state.dispose(); get.mockRestore(); }
 });
 
 test.each(['Close', 'Escape'])('dismisses an unsaved new pattern with %s without changing the list', async (dismissal): Promise<void> => {
@@ -327,7 +447,7 @@ test('focuses a linked pattern once the report arrives', async (): Promise<void>
 });
 
 test('renders original report snapshots and evidence only as escaped text', async (): Promise<void> => {
-  const api = new InMemoryAgentBehaviourApi(); api.rows = [{ report_id: '00000000-0000-4000-8000-000000000001', received_at: '2026-06-01T00:00:00Z', expires_at: '2026-07-01T00:00:00Z', caller: { authentication: 'local_test', subject: { issuer: { value: 'issuer' }, subject: 'caller' } }, submission: { idempotency_key: '00000000-0000-4000-8000-000000000002', configuration_revision: 1, playbook_id: 'review', trigger: 'proactive', assessments: [{ pattern_id: 'first', status: 'observed', summary: 'Observed summary', evidence: ['<img src=x onerror=alert(1)>'] }, { pattern_id: 'second', status: 'not_observed', summary: '', evidence: [] }, { pattern_id: 'third', status: 'not_assessed', summary: 'Unavailable context', evidence: [] }] }, instructions: { configuration_revision: 1, playbook: { id: 'review', name: 'Original review', collection_instructions: 'Original collection instructions', pattern_ids: ['first', 'second', 'third'], enabled: true, allow_proactive: true }, patterns: ['first', 'second', 'third'].map((id) => ({ id, name: id, description: 'Original description', assessment_prompt: 'Original assessment', inclusion_criteria: 'Original inclusion', exclusion_criteria: 'Original exclusion', categories: [], polarity: 'neutral' as const, enabled: true })), reporting_guidance: 'Original guidance', resource_uri: 'umbod://agent-behaviour/playbooks/review' } }];
+  const api = new InMemoryAgentBehaviourApi(); api.rows = [{ report_id: '00000000-0000-4000-8000-000000000001', received_at: '2026-06-01T00:00:00Z', expires_at: '2026-07-01T00:00:00Z', caller: { authentication: 'local_test', subject: { issuer: { value: 'issuer' }, subject: 'caller' } }, submission: { idempotency_key: '00000000-0000-4000-8000-000000000002', configuration_revision: 1, playbook_id: 'review', trigger: 'proactive', assessments: [{ pattern_id: 'first', status: 'observed', summary: 'Observed summary', evidence: ['<img src=x onerror=alert(1)>'] }, { pattern_id: 'second', status: 'not_observed', summary: '', evidence: [] }, { pattern_id: 'third', status: 'not_assessed', summary: 'Unavailable context', evidence: [] }] }, instructions: { configuration_revision: 1, playbook: { id: 'review', name: 'Original review', collection_instructions: 'Original collection instructions', pattern_ids: ['first', 'second', 'third'], enabled: true }, patterns: ['first', 'second', 'third'].map((id) => ({ id, name: id, description: 'Original description', assessment_prompt: 'Original assessment', inclusion_criteria: 'Original inclusion', exclusion_criteria: 'Original exclusion', categories: [], polarity: 'neutral' as const, enabled: true })), reporting_guidance: 'Original guidance', resource_uri: 'umbod://agent-behaviour/playbooks/review' } }];
   const state = new ReportsState(api.reports, vi.fn());
   const target = document.createElement('div'); document.body.append(target);
   const component = mount(ReportDetailView, { target, props: { state, reportId: api.rows[0].report_id, listHref: '/insights/agent-behaviour' } });
@@ -338,6 +458,7 @@ test('renders original report snapshots and evidence only as escaped text', asyn
     expect(target.querySelector('img')).toBeNull();
     expect(target.textContent).toContain('<img src=x onerror=alert(1)>');
     expect(target.textContent).toContain('Not independently verified');
+    expect(target.textContent).toContain('Agent-reported trigger: proactive');
     expect(target.textContent).not.toContain('No evidence supplied');
     const links = Array.from(target.querySelectorAll('nav a'), (link): string | null => link.getAttribute('href'));
     expect(links).toEqual(['#pattern-first', '#pattern-third', '#pattern-second']);
