@@ -285,6 +285,7 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
             raw_archive_retention_days=operator.telemetry_analytics_raw_archive_retention_days,
         ),
         filesystem=FilesystemRuntimeConfig(
+            require_mcp_file_deletion_approval=operator.require_mcp_file_deletion_approval,
             content=_filesystem_content(operator),
             upload_max_bytes=operator.filesystem_upload_max_bytes,
             preview_max_bytes=operator.filesystem_preview_max_bytes,

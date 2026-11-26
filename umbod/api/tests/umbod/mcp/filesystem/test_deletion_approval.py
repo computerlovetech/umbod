@@ -19,12 +19,12 @@ from umbod.core.filesystem import (
     ContentRef, MissingNode, OwnershipNotFound,
 )
 from umbod.core.filesystem.deletion.service import DeletionService
+from umbod.core.system_settings import UpdateSystemSettings, create_system_settings_service
 from umbod.infrastructure import create_access_control_driver, create_namespace_driver
 from tests.umbod.mcp.test_http_transport import HEADERS, rpc_result
 from umbod.mcp.http_transport import MAX_MCP_REQUEST_BODY_BYTES, create_mcp_http_app
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
-from umbod.mcp.logging.invocation.sink import StdoutMcpToolInvocationLogSink
-from umbod.mcp.signals import McpInvocationPublisher
+from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink, StdoutMcpToolInvocationLogSink
 
 from .conftest import FilesystemMcp, FilesystemState, caller_snapshot, create_filesystem_server
 from .test_browsing import create_node
@@ -86,25 +86,24 @@ async def prepare_file(filesystem: FilesystemMcp) -> tuple[str, SharedNamespaceV
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("disable_while_pending", [False, True])
 async def test_signed_continuation_echoes_unchanged_and_deletes_only_after_acceptance(
-    filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
+    filesystem_state: FilesystemState, disable_while_pending: bool,
 ) -> None:
-    filesystem = filesystem_invocation_mcp
-    node_id, policy = await prepare_file(filesystem)
+    logs = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
+    filesystem = create_filesystem_server(filesystem_state, filtered=False, invocation_logs=logs)
+    node_id, _ = await prepare_file(filesystem)
     namespace = create_namespace_driver(database=filesystem.database)
     policies = create_access_control_driver(database=filesystem.database)
     before = await namespace.get_node(UUID(node_id))
     owner = await policies.get_owner(UUID(node_id))
     transport = RecordingFastMCPTransport(filesystem.server)
     callbacks: list[bool] = []
-    terminal_successes: list[object] = []
-    original_succeeded = McpInvocationPublisher.succeeded
-
-    def record_success(publisher: McpInvocationPublisher, lifecycle: Any) -> None:
-        terminal_successes.append(lifecycle)
-        original_succeeded(publisher, lifecycle)
-
-    monkeypatch.setattr(McpInvocationPublisher, "succeeded", record_success)
+    def deletion_outcomes() -> list[str]:
+        return [
+            record.attributes["mcp.invocation.outcome"] for record in logs.invocation_records()
+            if record.attributes["mcp.tool.name"] == TOOL
+        ]
 
     async def accept(*args: object) -> dict[str, bool]:
         callbacks.append(True)
@@ -114,12 +113,15 @@ async def test_signed_continuation_echoes_unchanged_and_deletes_only_after_accep
         assert await policies.get_owner(UUID(node_id)) == owner
         assert await policies.list_grants(UUID(node_id)) == []
         assert deletion_successes(filesystem) == []
-        assert terminal_successes == []
+        assert deletion_outcomes() == []
+        if disable_while_pending:
+            await disable_approval(filesystem)
         return {"value": True}
 
     async with Client(transport, elicitation_handler=accept) as client:
         result = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": 1})
         metrics = deletion_successes(filesystem)
+        assert deletion_outcomes() == ["success"]
         repeated = await client.call_tool(
             TOOL, {"node_id": node_id, "expected_revision": 1}, raise_on_error=False,
         )
@@ -130,7 +132,7 @@ async def test_signed_continuation_echoes_unchanged_and_deletes_only_after_accep
     assert repeated.is_error
     assert metrics == [1.0, 1.0]
     assert deletion_successes(filesystem) == metrics
-    assert len(terminal_successes) == 1
+    assert deletion_outcomes() == ["success", "failure"]
     with pytest.raises(MissingNode):
         await namespace.get_node(UUID(node_id))
     with pytest.raises(OwnershipNotFound):
@@ -214,7 +216,7 @@ async def test_stateless_legacy_http_cannot_delete_without_backchannel(
             result = rpc_result(response)
     assert result["isError"]
     assert "Deletion cancelled: approval is required, but the confirmation prompt could not be delivered. No files were deleted." in result["content"][0]["text"]
-    assert "Only start a new deletion on explicit user request" in result["content"][1]["text"]
+    assert "only on renewed explicit user request" in result["content"][1]["text"]
     guidance = result["_meta"]["computerlove.tech/umbod"]["guidance"]
     assert guidance["error"]["code"] == "filesystem_delete_approval_unavailable"
     assert guidance["operation_state"] == "not_started"
@@ -265,10 +267,22 @@ async def test_nonboolean_wire_approval_cannot_delete(
     assert deletion_successes(filesystem) == []
 
 
+async def disable_approval(filesystem: FilesystemMcp) -> None:
+    await create_system_settings_service(filesystem.database).set_settings(
+        "administrator", UpdateSystemSettings(require_mcp_file_deletion_approval=False),
+    )
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("value", [1, "true", "yes"])
-async def test_server_rejects_nonboolean_continuation_without_client_validation(
-    filesystem_invocation_mcp: FilesystemMcp, value: object,
+@pytest.mark.parametrize("approval_response", [
+    None,
+    WireElicitResult(action="decline"),
+    WireElicitResult(action="accept", content={"value": 1}),
+    WireElicitResult(action="accept", content={"value": "true"}),
+    WireElicitResult(action="accept", content={"value": "yes"}),
+])
+async def test_disabled_policy_does_not_authorize_invalid_continuation(
+    filesystem_invocation_mcp: FilesystemMcp, approval_response: WireElicitResult | None,
 ) -> None:
     filesystem = filesystem_invocation_mcp
     node_id, policy = await prepare_file(filesystem)
@@ -281,12 +295,11 @@ async def test_server_rejects_nonboolean_continuation_without_client_validation(
     async with Client(filesystem.server) as client:
         pending = await client.session.call_tool(TOOL, arguments, allow_input_required=True)
         assert isinstance(pending, InputRequiredResult)
+        await disable_approval(filesystem)
         result = await client.session.call_tool(
             TOOL, arguments,
             request_state=pending.request_state,
-            input_responses={
-                "filesystem_delete_approval": WireElicitResult(action="accept", content={"value": value}),
-            },
+            input_responses=None if approval_response is None else {"filesystem_delete_approval": approval_response},
         )
 
     assert isinstance(result, CallToolResult)

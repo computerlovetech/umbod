@@ -6,6 +6,7 @@ from umbod.core.invocation.failure_evidence import InvocationFailureEvidence
 from umbod.mcp.signals.channels import McpSignals
 from umbod.mcp.signals.events import McpToolIdentity, McpToolInvocationFailureCategory, ToolInventoryObserved
 from umbod.mcp.signals.lifecycle import McpToolInvocationLifecycle, UnavailableToolInvocationLifecycle
+from umbod.mcp.signals.ports import McpInvocationPublishing
 
 
 class McpInvocationPublisher:
@@ -47,4 +48,39 @@ class McpInvocationPublisher:
             self._signals.report_failure("MCP tool invocation failure completion failed", error)
             return
         self._signals.invocation_completed.send(completed)
+
+
+class IsolatedInvocationPublishing:
+    def __init__(self, publisher: McpInvocationPublishing) -> None:
+        self._publisher = publisher
+
+    def start(self, identity: McpToolIdentity) -> McpToolInvocationLifecycle | UnavailableToolInvocationLifecycle:
+        try:
+            return self._publisher.start(identity)
+        except Exception as error:
+            self.report_failure("invocation.start", error)
+            return UnavailableToolInvocationLifecycle()
+
+    def succeeded(self, lifecycle: McpToolInvocationLifecycle | UnavailableToolInvocationLifecycle) -> None:
+        try:
+            self._publisher.succeeded(lifecycle)
+        except Exception as error:
+            self.report_failure("invocation.success", error)
+
+    def failed(
+        self, lifecycle: McpToolInvocationLifecycle | UnavailableToolInvocationLifecycle,
+        category: McpToolInvocationFailureCategory,
+        diagnostic: InvocationFailureDiagnostic | NoInvocationFailureDiagnostic,
+        evidence: InvocationFailureEvidence,
+    ) -> None:
+        try:
+            self._publisher.failed(lifecycle, category, diagnostic, evidence)
+        except Exception as error:
+            self.report_failure("invocation.failure", error)
+
+    def report_failure(self, name: str, error: Exception) -> None:
+        try:
+            self._publisher.report_failure(name, error)
+        except Exception:
+            return
 

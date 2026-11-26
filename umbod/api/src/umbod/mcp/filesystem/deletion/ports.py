@@ -13,6 +13,10 @@ class FileDeletionApproval(Enum):
     APPROVED = "approved"
 
 
+class FileDeletionApprovalPolicy(Protocol):
+    async def requires_mcp_file_deletion_approval(self) -> bool: ...
+
+
 class FilesystemDeletionApproval(Protocol):
     async def confirm(
         self, caller: CallerSnapshot, command: DeleteFileCommand, node: NodeSummary,

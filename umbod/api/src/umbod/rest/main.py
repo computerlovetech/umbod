@@ -70,6 +70,7 @@ from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_diagnostics
 from umbod.rest.settings import APISettings
 from umbod.rest.install import router as install_router
 from umbod.rest.system import router as system_router
+from umbod.rest.system_settings.routes import router as system_settings_router
 from umbod.rest.system.routes import health
 from umbod.rest.system.schemas import HealthResponse
 from umbod.rest.telemetry_analytics import personal_router as personal_telemetry_analytics_router
@@ -194,6 +195,7 @@ def _mount_admin_app(
     admin_router.include_router(downstream_mcp_connector_router)
     admin_router.include_router(instance_configuration_router)
     admin_router.include_router(filesystem_administration_router)
+    admin_router.include_router(system_settings_router)
     admin_app = SubApiAppFactory(title="umbod-admin-api", router=admin_router).create()
     admin_app.dependency_overrides.update(oauth_dependencies)
     admin_routes = tuple(admin_router.routes)

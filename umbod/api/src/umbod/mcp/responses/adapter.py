@@ -1,4 +1,6 @@
 import asyncio
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from typing import Any
 from uuid import uuid4
 
@@ -34,11 +36,14 @@ class BuiltinToolResult(ToolResult):
 
 
 class UnmodifiedToolResponseAdapter:
-    async def invoke(self, invocation: ToolInvocation, arguments: dict[str, Any]) -> ToolResult:
-        return await invocation(arguments)
+    def invocation_context(self) -> AbstractContextManager[None]:
+        return nullcontext()
 
     def prepare(self, result: ToolResult, arguments: dict[str, Any]) -> ToolResult:
         return result
+
+    def prepare_failure(self, error: Exception, arguments: dict[str, Any]) -> ToolResult | None:
+        return None
 
     def completed(self) -> None:
         pass
@@ -49,33 +54,41 @@ class BuiltinToolResponseAdapter:
         self._factory = factory
         self._tool = tool
 
-    async def invoke(self, invocation: ToolInvocation, arguments: dict[str, Any]) -> ToolResult:
+    @contextmanager
+    def invocation_context(self) -> Iterator[None]:
         request_id = current_request_id() or uuid4().hex
-        with request_id_context(request_id), operation_progress_context() as progress:
+        with request_id_context(request_id), operation_progress_context():
+            yield
+
+    async def invoke(self, invocation: ToolInvocation, arguments: dict[str, Any]) -> ToolResult:
+        with self.invocation_context():
             try:
                 result = await invocation(arguments)
                 if isinstance(result, InputRequiredToolResult):
                     return result
                 if not result.is_error:
-                    progress.completed()
+                    self.completed()
                 if isinstance(result, BuiltinToolResult):
                     return result
                 return self.prepare(result, arguments)
             except (asyncio.CancelledError, AuthorizationError, MCPError):
                 raise
             except Exception as error:
-                details, retry, notices = self._failure(error, progress.state)
-                state = progress.state
-                if not isinstance(error, (BuiltinToolArgumentError, BuiltinToolAuthorizationDenied, BuiltinToolError, ModelValidationError, ValidationError, ToolAuthorizationDenied)):
-                    if state == OperationState.NOT_STARTED:
-                        state = OperationState.UNKNOWN
-                if state != OperationState.NOT_STARTED and retry not in {RetryAdvice.NEVER, RetryAdvice.INSPECT_BEFORE_RETRY}:
-                    retry = RetryAdvice.INSPECT_BEFORE_RETRY
-                metadata = self._factory.failure(
-                    request_id, error=details, operation_state=state, retry=retry, notices=notices,
-                    instructions=recovery_instructions(self._tool.name, arguments, details.code, state),
-                )
-                return self._failure_result(metadata)
+                return self.prepare_failure(error, arguments)
+
+    def prepare_failure(self, error: Exception, arguments: dict[str, Any]) -> BuiltinToolResult:
+        state = operation_state()
+        details, retry, notices = self._failure(error, state)
+        if not isinstance(error, (BuiltinToolArgumentError, BuiltinToolAuthorizationDenied, BuiltinToolError, ModelValidationError, ValidationError, ToolAuthorizationDenied)):
+            if state == OperationState.NOT_STARTED:
+                state = OperationState.UNKNOWN
+        if state != OperationState.NOT_STARTED and retry not in {RetryAdvice.NEVER, RetryAdvice.INSPECT_BEFORE_RETRY}:
+            retry = RetryAdvice.INSPECT_BEFORE_RETRY
+        metadata = self._factory.failure(
+            current_request_id() or uuid4().hex, error=details, operation_state=state, retry=retry, notices=notices,
+            instructions=recovery_instructions(self._tool.name, arguments, details.code, state),
+        )
+        return self._failure_result(metadata)
 
     def prepare(self, result: ToolResult, arguments: dict[str, Any]) -> ToolResult:
         if isinstance(result, (InputRequiredToolResult, BuiltinToolResult)):

@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
@@ -10,7 +11,7 @@ from fastmcp import FastMCP
 from fastmcp.server.context import Context
 from fastmcp.server.elicitation import AcceptedElicitation, CancelledElicitation, DeclinedElicitation
 from fastmcp.tools import InputRequiredToolResult
-from mcp.types import CallToolRequest, CallToolRequestParams, ElicitResult
+from mcp.types import ElicitResult
 
 from tests.support.approval_nonces import InMemoryApprovalNonceStore
 from umbod.core.callers import (
@@ -23,6 +24,7 @@ from umbod.core.callers import (
 )
 from umbod.core.filesystem.browsing import NodeSummary
 from umbod.core.filesystem.models import NodeKind, NodeMetadata, RootParent
+from umbod.core.system_settings import SystemSettingsService
 from umbod.mcp.filesystem.deletion import McpFilesystemDeletionApproval
 from umbod.mcp.filesystem.deletion import (
     FileDeletionApprovalDenied,
@@ -38,7 +40,7 @@ class ApprovalContext(Context):
         super().__init__(self.server)
         self.request_data = SimpleNamespace(
             protocol_version="2026-07-28" if modern else "2025-11-25",
-            request=CallToolRequest(params=CallToolRequestParams(name="filesystem_delete_file")),
+            _srctx=SimpleNamespace(method="tools/call", params={"name": "filesystem_delete_file"}),
         )
         self.continuation_state: str | None = None
         self.continuation_responses: dict[str, Any] | None = None
@@ -89,8 +91,10 @@ def _node() -> NodeSummary:
 
 @pytest.fixture
 def approval() -> McpFilesystemDeletionApproval:
+    policy = AsyncMock(spec=SystemSettingsService)
+    policy.requires_mcp_file_deletion_approval.return_value = True
     return McpFilesystemDeletionApproval(
-        InMemoryApprovalNonceStore(), lambda: 1000.0, lambda: "nonce-1"
+        InMemoryApprovalNonceStore(), lambda: 1000.0, lambda: "nonce-1", policy=policy,
     )
 
 
@@ -249,15 +253,41 @@ async def test_modern_requires_paired_continuation(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("modern", [True, False])
-async def test_codemode_is_denied(
-    approval: McpFilesystemDeletionApproval, modern: bool
+@pytest.mark.parametrize(("method", "params"), [
+    ("tools/call", {"name": "another_tool"}),
+    ("tools/call", {}),
+    ("resources/read", {"name": "filesystem_delete_file"}),
+    (None, {"name": "filesystem_delete_file"}),
+])
+async def test_unrecognized_requests_cannot_skip_approval(
+    method: str | None, params: dict[str, str],
 ) -> None:
+    policy = AsyncMock(spec=SystemSettingsService)
+    policy.requires_mcp_file_deletion_approval.return_value = False
+    approval = McpFilesystemDeletionApproval(
+        InMemoryApprovalNonceStore(), lambda: 1000.0, lambda: "nonce-1", policy=policy,
+    )
+    context = ApprovalContext(True)
+    context.request_data._srctx = SimpleNamespace(method=method, params=params)
+
+    assert isinstance(await _confirm(approval, context), InputRequiredToolResult)
+    policy.requires_mcp_file_deletion_approval.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("modern", [True, False])
+async def test_codemode_is_denied_even_when_direct_calls_skip_approval(modern: bool) -> None:
+    policy = AsyncMock(spec=SystemSettingsService)
+    policy.requires_mcp_file_deletion_approval.return_value = False
+    approval = McpFilesystemDeletionApproval(
+        InMemoryApprovalNonceStore(), lambda: 1000.0, lambda: "nonce-1", policy=policy,
+    )
     context = ApprovalContext(modern)
-    context.request_data.request = CallToolRequest(params=CallToolRequestParams(name="execute_code"))
+    context.request_data._srctx.params = {"name": "execute_code"}
     with pytest.raises(FileDeletionApprovalDenied):
         await _confirm(approval, context)
     assert context.elicitations == []
+    policy.requires_mcp_file_deletion_approval.assert_not_awaited()
 
 
 @pytest.mark.parametrize("mutation", [

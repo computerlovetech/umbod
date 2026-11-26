@@ -52,6 +52,7 @@ from umbod.core.groups.stores.schema import GROUP_TABLE
 from umbod.core.identity_directory.schema import DIRECTORY_TABLES
 from umbod.core.personal_access_tokens.install_claim_schema import INSTALL_CLAIM_TABLES
 from umbod.core.personal_access_tokens.schema import PERSONAL_ACCESS_TOKEN_TABLES
+from umbod.core.system_settings.schema import SYSTEM_SETTINGS_TABLE
 from umbod.core.usage.schema import USAGE_TABLES
 from .group_reconciliation import reconcile_group_catalogue
 from umbod.core.filesystem.stores.schema import NODE_TABLE, OWNER_TABLE, GRANT_TABLE
@@ -79,6 +80,7 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     *INSTALL_CLAIM_TABLES,
     *USAGE_TABLES,
     *AGENT_BEHAVIOUR_TABLES,
+    SYSTEM_SETTINGS_TABLE,
     CONNECTOR_PERMISSION_TABLE,
     CAPABILITY_PERMISSION_TABLE,
     CAPABILITY_DESCRIPTION_OVERRIDE_TABLE,

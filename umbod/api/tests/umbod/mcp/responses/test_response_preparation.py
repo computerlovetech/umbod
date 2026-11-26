@@ -5,7 +5,9 @@ from fastmcp import FastMCP
 from fastmcp.tools import ToolResult
 from mcp.types import CallToolResult, TextContent
 
+from umbod.core.responses import ToolFailureMetadata
 from umbod.mcp.responses.adapter import RESPONSE_METADATA_KEY
+from umbod.mcp.responses.rendering import render_failure_guidance
 from umbod.mcp.signals import McpInvocationPublisher, McpToolInvocationCompleted, McpToolInvocationFailed
 from umbod.mcp.tools import McpObservedToolRegistrar
 
@@ -24,6 +26,12 @@ async def test_response_preparation_failure_publishes_one_failure_without_repeat
 
     def fail_projection(*arguments: object, **options: object) -> list[TextContent]:
         raise ValueError("SECRET renderer payload")
+
+    def render_before_observation(metadata: ToolFailureMetadata) -> list[TextContent]:
+        assert completion_events == []
+        return render_failure_guidance(metadata)
+
+    monkeypatch.setattr("umbod.mcp.responses.adapter.render_failure_guidance", render_before_observation)
 
     async def mutate() -> ToolResult:
         mutations.append("created")
@@ -53,6 +61,35 @@ async def test_response_preparation_failure_publishes_one_failure_without_repeat
     assert isinstance(completion_events[0], McpToolInvocationFailed)
     assert completion_events[0].diagnostic.stage == "output"
     assert completion_events[0].diagnostic.reason == "invalid_output"
+
+
+@pytest.mark.asyncio
+async def test_failure_renderer_is_not_retried(
+    publisher: McpInvocationPublisher, completion_events: list[McpToolInvocationCompleted],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rendering_attempts: list[ToolFailureMetadata] = []
+
+    def fail_first_render(metadata: ToolFailureMetadata) -> list[TextContent]:
+        rendering_attempts.append(metadata)
+        if len(rendering_attempts) == 1:
+            raise ValueError("renderer unavailable")
+        return render_failure_guidance(metadata)
+
+    async def fail_tool() -> ToolResult:
+        raise RuntimeError("operation unavailable")
+
+    monkeypatch.setattr("umbod.mcp.responses.adapter.render_failure_guidance", fail_first_render)
+    tool = McpObservedToolRegistrar(FastMCP(), publisher).register(
+        fail_tool, name="builtin", description="Run.", auth=None, builtin_response=True,
+    )
+
+    with pytest.raises(ValueError, match="renderer unavailable"):
+        await tool.run({})
+
+    assert len(rendering_attempts) == 1
+    assert len(completion_events) == 1
+    assert isinstance(completion_events[0], McpToolInvocationFailed)
 
 
 @pytest.mark.asyncio

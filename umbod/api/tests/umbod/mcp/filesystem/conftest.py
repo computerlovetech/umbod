@@ -28,6 +28,7 @@ from umbod.infrastructure import (
 )
 from umbod.core.filesystem.authorization import VerifiedIdentityResolver
 from umbod.core.persistence import Database
+from umbod.core.system_settings import create_system_settings_service
 from umbod.core.groups import RegisterGroup
 from umbod.core.groups.stores.composition import create_group_management
 from umbod.core.filesystem.content import ContentService, FilesystemContent
@@ -125,6 +126,7 @@ async def filesystem_state() -> AsyncIterator[FilesystemState]:
     approval = McpFilesystemDeletionApproval(
         nonce_store=DatabaseApprovalNonceStore(runtime.database),
         clock=time.time, random_token=lambda: secrets.token_urlsafe(24),
+        policy=create_system_settings_service(runtime.database),
     )
     try:
         yield FilesystemState(callers, metrics, services, content, files, runtime.database, discovery, visibility, approval)

@@ -97,6 +97,7 @@ class OperatorSettings(BaseSettings):
         validation_alias="UMBOD_INTERNAL_API_ORIGIN",
     )
 
+    require_mcp_file_deletion_approval: bool | None = None
     filesystem_upload_max_bytes: int = Field(
         default=defaults.FILESYSTEM_UPLOAD_MAX_BYTES, gt=0
     )

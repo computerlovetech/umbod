@@ -12,7 +12,8 @@
     | 'connectors'
     | 'groups'
     | 'namespaces'
-    | 'groupPermissions';
+    | 'groupPermissions'
+    | 'systemSettings';
 
   type AdminShellProps = {
     activeItem: AdminShellActiveItem;

@@ -35,6 +35,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [publishing](./publishing/README.md) — Connector publication.
 - [responses](./responses/README.md) — Immutable tool outcome metadata, recovery guidance, and transport-neutral construction.
 - [signals](./signals/README.md) — Application-local signals.
+- [system_settings](./system_settings/README.md) — Instance-wide settings and approval policy.
 - [telemetry](./telemetry/README.md) — Telemetry exports, sink ports and analytical read contracts.
 - [usage](./usage/README.md) — Owner-scoped personal completion counts and canonical OTEL persistence.
 - [user_catalogue](./user_catalogue/README.md) — Caller-visible connector catalogue.

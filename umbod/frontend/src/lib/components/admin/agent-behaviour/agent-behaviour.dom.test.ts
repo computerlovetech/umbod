@@ -58,7 +58,7 @@ test('inspects a pattern inline and keeps its labelled actions independent of th
     enterName('Edited context');
     expect(target.textContent).toContain('Unsaved changes');
     save.click(); flushSync();
-    const toggle = row!.querySelector<HTMLInputElement>('label[aria-label="Enable Edited context"] input')!;
+    const toggle = row!.querySelector<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Edited context"]')!;
     toggle.click(); flushSync();
     expect(toggle.checked).toBe(false);
     expect(pattern!.open).toBe(true);

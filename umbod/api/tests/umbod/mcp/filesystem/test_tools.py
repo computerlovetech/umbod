@@ -40,6 +40,10 @@ async def test_observed_tools_publish_safe_schemas(filesystem_invocation_mcp: Fi
         "filesystem_begin_upload", "filesystem_complete_upload", "filesystem_share", "filesystem_search_sharing_recipients",
     }
     assert "Provide at least one of name, parent_id or metadata" in descriptors["update_filesystem_node"].description
+    deletion_description = descriptors["filesystem_delete_file"].description
+    assert "By default it also requires explicit human confirmation" in deletion_description
+    assert "new direct calls" in deletion_description
+    assert "Any pending approval must still be completed explicitly" in deletion_description
     schema = descriptors[CREATE].input_schema
     assert set(schema["properties"]) == {"parent_id", "name", "metadata"}
     assert set(schema["required"]) == {"parent_id", "name", "metadata"}

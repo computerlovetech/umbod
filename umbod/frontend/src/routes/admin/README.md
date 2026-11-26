@@ -16,6 +16,7 @@ description: Capability-checked administration layout, workspaces and compatibil
 - [Groups](./groups/README.md) — Central administrator group catalogue route.
 - [Shared namespaces](./namespaces/+page.svelte) — Administration inventory for creating, editing, and deleting shared namespaces.
 - [Permissions](./group-permissions/README.md) — Persistent permissions layout and lazy tab editors.
+- [System settings](./system-settings/+page.svelte) — Instance-wide settings and filesystem deletion approval.
 
 # Compatibility redirects
 

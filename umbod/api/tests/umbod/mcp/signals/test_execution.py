@@ -19,8 +19,18 @@ from umbod.core.invocation.failure_evidence import (
     capture_returned_failure,
     invocation_failure_scope,
 )
+from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.invocation.policy import ConnectorInvocation, ConnectorInvocationDenied
-from umbod.core.invocation.tools.execution import ToolExecutionFailed, ToolExecutionInterceptor, ToolExecutionOutcome, ToolExecutionRequest, ToolExecutionSucceeded
+from umbod.core.invocation.tools.execution import (
+    PreparedToolExecution,
+    ToolExecutionFailed,
+    ToolExecutionInterceptor,
+    ToolExecutionOutcome,
+    ToolExecutionRequest,
+    ToolExecutionSucceeded,
+    create_tool_execution_pipeline,
+    prepare_tool_execution,
+)
 from tests.support.signals import InMemorySignalFailureHandler
 from umbod.mcp.signals import McpInvocationPublisher, McpInvocationPublishing, McpSignals, McpToolInvocationCompleted, McpToolInvocationFailed
 from umbod.mcp.connectors.native.approval import ModernConnectorApprovalRequired
@@ -234,6 +244,31 @@ async def test_start_failure_returns_unavailable_connector_state(
 
     assert isinstance(state, UnavailableToolInvocationLifecycle)
     assert events == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("publication", ["start", "succeeded", "failed"])
+async def test_connector_result_survives_publisher_and_reporter_failures(
+    execution_request: ToolExecutionRequest, publication: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    publisher = RecordingInvocationPublisher()
+    failing_publication = Mock(side_effect=RuntimeError("signal unavailable"))
+    failing_reporter = Mock(side_effect=RuntimeError("reporter unavailable"))
+    monkeypatch.setattr(publisher, publication, failing_publication)
+    monkeypatch.setattr(publisher, "report_failure", failing_reporter)
+    interceptor = ConnectorInvocationSignalInterceptor("name", publisher, lambda result: publication == "failed")
+    pipeline = create_tool_execution_pipeline(PermitAllConnectorInvocationPolicy(), (interceptor,))
+    result = object()
+
+    async def execute() -> object:
+        return result
+
+    async def prepare() -> PreparedToolExecution[object]:
+        return prepare_tool_execution({}, execute, {})
+
+    assert await pipeline.execute(execution_request, prepare) is result
+    failing_publication.assert_called_once()
+    failing_reporter.assert_called_once()
 
 
 @pytest.mark.asyncio

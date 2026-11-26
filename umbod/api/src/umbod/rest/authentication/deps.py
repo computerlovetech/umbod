@@ -3,6 +3,7 @@ from fastapi import HTTPException, Request
 from umbod.core.callers import CallerContext
 from umbod.rest.authentication.authorization import JwtClaims
 
+ADMIN_AUTHORIZED_STATE_KEY = "admin_authorized"
 VERIFIED_ACCESS_CLAIMS_STATE_KEY = "verified_access_claims"
 CALLER_CONTEXT_STATE_KEY = "caller_context"
 

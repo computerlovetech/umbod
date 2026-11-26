@@ -385,6 +385,7 @@ FilesystemContentConfig = Annotated[
 
 
 class FilesystemRuntimeConfig(ConfigModel):
+    require_mcp_file_deletion_approval: Annotated[bool, Field(strict=True)] | None = None
     preview_max_bytes: int = Field(
         default=defaults.FILESYSTEM_PREVIEW_MAX_BYTES, gt=0, le=9_007_199_254_740_991, strict=True
     )

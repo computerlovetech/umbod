@@ -26,6 +26,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 - [proxies.py](./proxies.py) — Deferred bindings.
 - [settings.py](./settings.py) — REST settings.
 - [system/](./system/) — Internal state, events and health.
+- [system_settings/](./system_settings/README.md) — Administrator settings sections and deployment defaults.
 - [telemetry/](./telemetry/README.md) — OTLP receiver.
 - [telemetry_setup/](./telemetry_setup/README.md) — Authenticated discovery of the instance-configured public logs endpoint.
 - [telemetry_analytics/](./telemetry_analytics/README.md) — Instance-wide administrator counts and owner-scoped personal log counts.

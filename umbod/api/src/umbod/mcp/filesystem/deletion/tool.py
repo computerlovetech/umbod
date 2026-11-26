@@ -30,8 +30,9 @@ class FilesystemDeleteFileTool(Tool):
             name="filesystem_delete_file",
             description=(
                 "Permanently remove one file's namespace entry, ownership and direct grants. "
-                "Requires its UUID, current revision from filesystem browsing and explicit human confirmation. "
-                "Declined, unavailable or expired approval never deletes the file; stale revisions fail. "
+                "Requires its UUID and current revision from filesystem browsing. "
+                "By default it also requires explicit human confirmation; the instance may disable the prompt for new direct calls. "
+                "Any pending approval must still be completed explicitly. Stale revisions fail. "
                 "Directories, the root and recursive deletion are unsupported. "
                 "Does not erase stored bytes or provide trash or restore. "
                 "Retrying a successful deletion fails because the file no longer exists."

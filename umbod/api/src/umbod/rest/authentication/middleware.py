@@ -18,6 +18,7 @@ from umbod.rest.authentication.caller import (
     authentication_provenance,
 )
 from umbod.rest.authentication.deps import (
+    ADMIN_AUTHORIZED_STATE_KEY,
     CALLER_CONTEXT_STATE_KEY,
     VERIFIED_ACCESS_CLAIMS_STATE_KEY,
 )
@@ -185,6 +186,7 @@ class AdminAuthenticationMiddleware(BaseHTTPMiddleware):
         authentication_response = await self.strategy.authenticate(request)
         if authentication_response is not None:
             return authentication_response
+        setattr(request.state, ADMIN_AUTHORIZED_STATE_KEY, True)
         return await call_next(request)
 
 

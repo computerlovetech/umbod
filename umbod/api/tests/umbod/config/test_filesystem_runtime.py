@@ -28,6 +28,7 @@ def test_embedded_filesystem_defaults_to_inmemory_content() -> None:
         "content": {"type": "inmemory"},
         "upload_max_bytes": 10 * 1024 * 1024,
         "preview_max_bytes": 1_048_576,
+        "require_mcp_file_deletion_approval": None,
     }
 
 

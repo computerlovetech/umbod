@@ -1,6 +1,3 @@
-import asyncio
-
-from umbod.core.usage.models import BuiltinUsageToolTarget
 import json
 
 from collections.abc import Callable
@@ -8,10 +5,8 @@ from functools import lru_cache
 from typing import Any, TypedDict, Unpack
 
 from fastmcp import FastMCP
-from fastmcp.exceptions import AuthorizationError, ValidationError
 from fastmcp.tools import FunctionTool, InputRequiredToolResult, ToolResult
 from fastmcp.tools.base import Tool
-from mcp.shared.exceptions import MCPError
 from pydantic import PrivateAttr
 from jsonschema.exceptions import SchemaError
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
@@ -21,23 +16,24 @@ from referencing import Registry
 from referencing.exceptions import Unresolvable
 
 from umbod.build_identity import UMBOD_RELEASE, UMBOD_REVISION
-from umbod.core.responses import ToolResponseMetadataFactory
-from umbod.mcp.responses.ports import ToolResponseAdapter
-from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoInvocationFailureDiagnostic
-
+from umbod.core.invocation.diagnostics import NoInvocationFailureDiagnostic
 from umbod.core.invocation.failure_evidence import (
     InvocationExceptionEvidence,
-    InvocationFailureEvidence,
     InvocationFailureOrigin,
-    InvocationRejectedFailure,
     InvocationReturnedFailure,
     current_invocation_failure,
-    exception_evidence,
 )
-from umbod.mcp.tools.errors import BuiltinToolRejected, ToolAuthorizationDenied, ToolResponseContractError
+from umbod.core.invocation.tools.ordered_execution import OrderedExecutionRunner, PreparedExecution
+from umbod.core.responses import ToolResponseMetadataFactory
+from umbod.core.usage.models import BuiltinUsageToolTarget
+from umbod.mcp.responses.ports import ToolResponseAdapter
 from umbod.mcp.signals import McpInvocationPublisher, McpInvocationPublishing
-from umbod.mcp.signals.lifecycle import UnavailableToolInvocationLifecycle
 from umbod.mcp.signals.events import McpToolIdentity, McpToolInvocationFailureCategory
+from umbod.mcp.signals.publisher import IsolatedInvocationPublishing
+from umbod.mcp.tools.errors import ToolResponseContractError
+from umbod.mcp.tools.observation import (
+    ObservedToolFailure, ObservedToolResponse, ObservedToolSignalInterceptor, classify_raised_failure,
+)
 
 
 @lru_cache(maxsize=128)
@@ -64,7 +60,8 @@ class ObservedToolOptions(ToolResponseOptions, total=False):
 
 class ObservedFunctionTool(Tool):
     _delegate: Tool = PrivateAttr()
-    _publisher: McpInvocationPublishing = PrivateAttr()
+    _publisher: IsolatedInvocationPublishing = PrivateAttr()
+    _runner: OrderedExecutionRunner[McpToolIdentity, None, ObservedToolResponse] = PrivateAttr()
     _result_is_error: Callable[[ToolResult], bool] = PrivateAttr()
     _operation_names: frozenset[str] = PrivateAttr()
     _response_adapter: ToolResponseAdapter = PrivateAttr()
@@ -76,65 +73,70 @@ class ObservedFunctionTool(Tool):
     ) -> None:
         super().__init__(**{field: getattr(delegate, field) for field in Tool.model_fields})
         self._delegate = delegate
-        self._publisher = publisher
+        self._publisher = IsolatedInvocationPublishing(publisher)
+        self._runner = OrderedExecutionRunner((ObservedToolSignalInterceptor(self._publisher),))
         self._result_is_error = result_is_error
         self._operation_names = operation_names
         self._response_adapter = response_adapter
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
-        return await self._response_adapter.invoke(self._run_observed, arguments)
+        with self._response_adapter.invocation_context():
+            return await self._run_observed(arguments)
 
     async def _run_observed(self, arguments: dict[str, Any]) -> ToolResult:
         operation = arguments.get("operation")
         operation_name = operation if isinstance(operation, str) and operation in self._operation_names else None
+        identity = McpToolIdentity(
+            tool_name=self.name, connector_id=None, operation_name=operation_name,
+            usage_target=BuiltinUsageToolTarget(kind="builtin", registered_name=self._delegate.name),
+        )
+
+        async def prepare() -> PreparedExecution[None, ObservedToolResponse]:
+            async def execute() -> ObservedToolResponse:
+                return await self._prepare_observed_response(arguments)
+
+            return PreparedExecution(context=None, operation=execute)
+
+        response = await self._runner.execute(identity, prepare)
+        return response.result
+
+    async def _prepare_observed_response(self, arguments: dict[str, Any]) -> ObservedToolResponse:
         try:
-            lifecycle = self._publisher.start(McpToolIdentity(tool_name=self.name, connector_id=None, operation_name=operation_name, usage_target=BuiltinUsageToolTarget(kind='builtin', registered_name=self._delegate.name)))
+            return await self._execute(arguments)
         except Exception as error:
-            self._publisher.report_failure("invocation.start", error)
-            lifecycle = UnavailableToolInvocationLifecycle()
-        try:
-            result = await self._delegate.run(arguments)
-        except (asyncio.CancelledError, AuthorizationError, MCPError):
-            raise
-        except ToolAuthorizationDenied:
-            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.AUTHORIZATION, InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT))
-            raise
-        except ValidationError:
-            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.VALIDATION, InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT))
-            raise
-        except BuiltinToolRejected:
-            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.TOOL_ERROR, InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT))
-            raise
-        except Exception as error:
-            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
-            raise
+            failure = classify_raised_failure(error)
+            if failure is None:
+                raise
+            response = self._response_adapter.prepare_failure(error, arguments)
+            if response is None:
+                raise
+            return ObservedToolResponse(response, failure)
+
+    async def _execute(self, arguments: dict[str, Any]) -> ObservedToolResponse:
+        result = await self._delegate.run(arguments)
         if isinstance(result, InputRequiredToolResult):
-            return result
+            return ObservedToolResponse(result, None)
         try:
             is_error = self._result_is_error(result)
         except Exception as error:
+            failure = ObservedToolFailure.unexpected(error)
             self._publisher.report_failure("invocation.result_classification", error)
-            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
-            return result
-        try:
-            if not is_error:
+            if not result.is_error:
                 self._response_adapter.completed()
-                self._validate_response(result)
-            result = self._response_adapter.prepare(result, arguments)
-        except ToolResponseContractError as error:
-            self._publish_response_failure(lifecycle, error)
-            raise
-        if is_error:
-            evidence = current_invocation_failure() or InvocationReturnedFailure(InvocationFailureOrigin.INTERNAL)
-            category = (
-                McpToolInvocationFailureCategory.UNEXPECTED_ERROR
-                if isinstance(evidence, InvocationExceptionEvidence)
-                else McpToolInvocationFailureCategory.TOOL_ERROR
-            )
-            self._publish_failure(lifecycle, category, evidence)
-        else:
-            self._publish_success(lifecycle)
-        return result
+            return ObservedToolResponse(self._response_adapter.prepare(result, arguments), failure)
+        if not is_error:
+            self._response_adapter.completed()
+            self._validate_response(result)
+        result = self._response_adapter.prepare(result, arguments)
+        if not is_error:
+            return ObservedToolResponse(result, None)
+        evidence = current_invocation_failure() or InvocationReturnedFailure(InvocationFailureOrigin.INTERNAL)
+        category = (
+            McpToolInvocationFailureCategory.UNEXPECTED_ERROR
+            if isinstance(evidence, InvocationExceptionEvidence)
+            else McpToolInvocationFailureCategory.TOOL_ERROR
+        )
+        return ObservedToolResponse(result, ObservedToolFailure(category, evidence, NoInvocationFailureDiagnostic()))
 
     def _validate_response(self, result: ToolResult) -> None:
         if self.output_schema is None:
@@ -149,29 +151,6 @@ class ObservedFunctionTool(Tool):
         else:
             return
         raise ToolResponseContractError()
-
-    def _publish_success(self, lifecycle: Any) -> None:
-        try:
-            self._publisher.succeeded(lifecycle)
-        except Exception as error:
-            self._publisher.report_failure("invocation.success", error)
-
-    def _publish_failure(
-        self, lifecycle: Any, category: McpToolInvocationFailureCategory,
-        evidence: InvocationFailureEvidence,
-    ) -> None:
-        try:
-            self._publisher.failed(lifecycle, category, NoInvocationFailureDiagnostic(), evidence)
-        except Exception as error:
-            self._publisher.report_failure("invocation.failure", error)
-
-    def _publish_response_failure(self, lifecycle: Any, error: ToolResponseContractError) -> None:
-        evidence = exception_evidence(error, InvocationFailureOrigin.INTERNAL)
-        diagnostic = InvocationFailureDiagnostic(execution_mode="shared", stage="output", reason="invalid_output")
-        try:
-            self._publisher.failed(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, diagnostic, evidence)
-        except Exception as receiver_error:
-            self._publisher.report_failure("invocation.failure", receiver_error)
 
 
 class McpObservedToolRegistrar:

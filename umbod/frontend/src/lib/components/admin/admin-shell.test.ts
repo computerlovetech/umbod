@@ -50,7 +50,7 @@ describe('admin shell logout', () => {
     expect(shell.body).not.toContain('href="/admin/filesystem"');
     expect(shell.body).not.toContain('Filesystem</a>');
     expect(Array.from(document.querySelectorAll('nav a'), (link): string => link.textContent.trim())).toEqual([
-      'Connectors', 'Groups', 'Shared namespaces', 'Permissions', 'Insights', 'Agent diagnostics'
+      'Connectors', 'Groups', 'Shared namespaces', 'Permissions', 'Insights', 'Agent diagnostics', 'System settings'
     ]);
     expect(document.querySelectorAll('nav a[aria-current="page"]')).toHaveLength(1);
     expect(document.querySelector('nav a[aria-current="page"]')?.getAttribute('href')).toBe('/admin/connectors');

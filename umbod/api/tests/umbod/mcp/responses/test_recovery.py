@@ -23,7 +23,7 @@ from umbod.mcp.responses.rendering import render_response_guidance
         ("filesystem_begin_upload", {}, "staging session was created"),
         ("filesystem_complete_upload", {}, "same upload_id"),
         ("update_filesystem_node", {}, "original node UUID"),
-        ("filesystem_delete_file", {}, "fresh explicit human confirmation"),
+        ("filesystem_delete_file", {}, "may delete without a prompt"),
         ("read_connector_configuration", {}, "No configuration write was requested"),
         ("upsert_connector_configuration", {}, "read_connector_configuration"),
     ],

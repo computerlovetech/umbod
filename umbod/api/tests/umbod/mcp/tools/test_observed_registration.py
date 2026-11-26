@@ -311,11 +311,18 @@ async def test_cancellation_emits_no_completion() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failing_method", ["start", "succeeded"])
-async def test_observer_failure_does_not_change_success_result(failing_method: str) -> None:
+@pytest.mark.parametrize("reporter_fails", [False, True])
+async def test_observer_failure_does_not_change_success_result(
+    failing_method: str, reporter_fails: bool, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observer = RaisingObserver(failing_method)
+    if reporter_fails:
+        monkeypatch.setattr(observer, "report_failure", Mock(side_effect=RuntimeError("reporter unavailable")))
+
     async def invoke() -> str:
         return "ok"
 
-    result = await _registered_tool(invoke, RaisingObserver(failing_method)).run({})
+    result = await _registered_tool(invoke, observer).run({})
 
     assert result.structured_content == {"result": "ok"}
 

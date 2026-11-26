@@ -1,3 +1,5 @@
+import pytest
+from pydantic import ValidationError
 from pytest import MonkeyPatch
 
 from umbod.config import OperatorSettings, load_app_config_without_env_file
@@ -20,6 +22,26 @@ def test_defaults_are_local_dev_profile() -> None:
     assert operator.rest_port == 8000
     assert operator.rest_metrics_port == 8001
     assert operator.mcp_metrics_port == 8012
+
+
+@pytest.mark.parametrize(("raw", "expected"), [(None, None), ("true", True), ("off", False)])
+def test_deletion_approval_default_loads_through_app_config(
+    monkeypatch: MonkeyPatch, raw: str | None, expected: bool | None,
+) -> None:
+    key = "UMBOD_REQUIRE_MCP_FILE_DELETION_APPROVAL"
+    if raw is None:
+        monkeypatch.delenv(key, raising=False)
+    else:
+        monkeypatch.setenv(key, raw)
+
+    assert load_app_config_without_env_file().filesystem.require_mcp_file_deletion_approval is expected
+
+
+def test_invalid_deletion_approval_default_fails_config_loading(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("UMBOD_REQUIRE_MCP_FILE_DELETION_APPROVAL", "sometimes")
+
+    with pytest.raises(ValidationError, match="require_mcp_file_deletion_approval"):
+        load_app_config_without_env_file()
 
 
 def test_rest_ports_read_canonical_names(monkeypatch: MonkeyPatch) -> None:

@@ -29,7 +29,7 @@ from umbod.mcp.signals.events import McpToolIdentity, McpToolInvocationFailureCa
 from umbod.mcp.signals.lifecycle import McpToolInvocationLifecycle, UnavailableToolInvocationLifecycle
 from umbod.mcp.signals.diagnostics import invocation_failure
 from umbod.mcp.signals.ports import McpInvocationPublishing
-from umbod.mcp.signals.publisher import McpInvocationPublisher
+from umbod.mcp.signals.publisher import IsolatedInvocationPublishing, McpInvocationPublisher
 from umbod.mcp.tools.errors import ToolAuthorizationDenied
 from umbod.core.invocation.tools.execution import ToolExecutionPipeline, create_tool_execution_pipeline
 
@@ -42,7 +42,7 @@ class ConnectorInvocationSignalInterceptor:
         result_is_error: Callable[[object], bool],
     ) -> None:
         self._connector_name = connector_name
-        self._publisher = publisher
+        self._publisher = IsolatedInvocationPublishing(publisher)
         self._result_is_error = result_is_error
 
     async def before_tool_preparation(self, request: ToolExecutionRequest) -> McpToolInvocationLifecycle | UnavailableToolInvocationLifecycle:

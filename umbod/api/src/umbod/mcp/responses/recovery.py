@@ -37,7 +37,7 @@ _OPERATION_INSTRUCTIONS: dict[str, tuple[str, ...]] = {
     ),
     "filesystem_delete_file": (
         "Inspect the original UUID with get_filesystem_node or filesystem_browse operation stat before another deletion request. Missing and inaccessible nodes remain indistinguishable and do not prove deletion.",
-        "Any fresh deletion attempt requires current eligibility, the current revision, and fresh explicit human confirmation. Do not replay consumed continuation state.",
+        "Do not retry automatically or replay continuation state. A new direct call may delete without a prompt; proceed only on renewed explicit user request, with current eligibility and revision.",
     ),
     "read_connector_configuration": (
         "No configuration write was requested. Verify the connector reference and current administrator access before repeating read_connector_configuration when the service is available.",
@@ -74,11 +74,11 @@ def _operation_recovery(
     if early_strategy is not None:
         return early_strategy(state)
     if error_code == "filesystem_delete_approval_unavailable":
-        return ("Only start a new deletion on explicit user request from an MCP client that can deliver the confirmation prompt.",)
+        return ("Do not retry automatically. Start a new direct deletion only on renewed explicit user request, using an MCP client that can deliver a confirmation prompt if required.",)
     if error_code == "filesystem_delete_approval_denied":
         return (
             "No deletion was authorized by this failed approval. Do not fabricate acceptance, modify continuation state, or replay a consumed continuation.",
-            "After decline or cancellation, stop. Only a renewed explicit user request should initiate fresh confirmation.",
+            "After decline or cancellation, stop. Only a renewed explicit user request should initiate a new deletion; a fresh direct call may delete without prompting.",
         )
     if state == OperationState.NOT_STARTED:
         return ()

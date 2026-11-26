@@ -6,10 +6,13 @@ import pytest
 from fastmcp import Client, FastMCP
 from jsonschema import FormatChecker, ValidationError as SchemaValidationError, validate
 
+from tests.support.signals import InMemorySignalFailureHandler
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem.namespace import ROOT_ID
 from umbod.mcp.filesystem import register_filesystem_tools
-from umbod.mcp.signals import McpInvocationPublisher
+from umbod.mcp.signals import (
+    McpInvocationPublisher, McpSignals, McpToolInvocationCompleted, McpToolInvocationFailed,
+)
 from umbod.mcp.tools import McpObservedToolRegistrar
 
 from .conftest import FilesystemMcp, FilesystemState, caller_snapshot
@@ -25,21 +28,21 @@ async def test_browse_observation_records_only_declared_operation_names(
     filesystem_state: FilesystemState, operation: str,
 ) -> None:
     server = FastMCP()
-    publisher = Mock(spec=McpInvocationPublisher)
+    signals = McpSignals(InMemorySignalFailureHandler())
+    events: list[McpToolInvocationCompleted] = []
+    signals.invocation_completed.connect("capture", events.append)
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, publisher), filesystem_state.callers, filesystem_state.services,
+        McpObservedToolRegistrar(server, McpInvocationPublisher(signals)), filesystem_state.callers, filesystem_state.services,
         filesystem_state.visibility, filesystem_state.approval,
     )
     async with Client(server) as client:
         result = await client.call_tool(TOOL, {"operation": operation, "target": ROOT}, raise_on_error=False)
-    identity = publisher.start.call_args.args[0]
+    assert len(events) == 1
+    identity = events[0].started.tool
     assert identity.tool_name == TOOL
     assert identity.operation_name == (operation if operation != "unknown" else None)
     assert result.is_error == (operation == "unknown")
-    if result.is_error:
-        publisher.failed.assert_called_once()
-    else:
-        publisher.succeeded.assert_called_once()
+    assert isinstance(events[0], McpToolInvocationFailed) == result.is_error
 
 
 async def create_node(client: Client, parent: str, name: str, kind: str) -> str:

@@ -23,8 +23,8 @@
     <span class="track" aria-hidden="true"><span class="thumb"></span></span>
   </button>
 {:else}
-  <label class="toggle" aria-label={ariaLabel} class:disabled>
-    <input type="checkbox" name={inputName} value={inputValue} {checked} {disabled} {onchange} />
+  <label class="toggle" class:disabled>
+    <input type="checkbox" aria-label={ariaLabel} name={inputName} value={inputValue} {checked} {disabled} {onchange} />
     <span class="track" aria-hidden="true"><span class="thumb"></span></span>
   </label>
 {/if}

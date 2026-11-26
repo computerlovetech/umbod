@@ -122,6 +122,8 @@ from umbod.mcp.connectors.openapi.inventory import read_openapi_tool_inventory
 from umbod.mcp.connectors.openapi.discovery_runtime import initialize_openapi_discovery, reconcile_openapi_discovery
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, ConnectorStorePair, HttpConnectorRuntimeStateSourceStrategy, LocalConnectorRuntimeStateSourceStrategy, StoreBackedConnectorRuntimeStateSourceStrategy, resolve_connector_runtime_state_source_strategy
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
+from umbod.config.system_settings import ConfiguredSystemSettingsDefaults
+from umbod.core.system_settings import create_system_settings_service_with_defaults
 from umbod.config import AppConfig, InMemoryConnectorStoreConfig, SQLiteConnectorStoreConfig, load_server_app_config
 from umbod.logging import flush_logging
 from umbod.mcp.settings import MCPAppSettings
@@ -221,6 +223,9 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authenticati
         McpFilesystemDeletionApproval(
             nonce_store=DatabaseApprovalNonceStore(persistence_runtime.database),
             clock=time.time, random_token=random_approval_token,
+            policy=create_system_settings_service_with_defaults(
+                persistence_runtime.database, defaults=ConfiguredSystemSettingsDefaults(settings),
+            ),
         ),
     )
     register_filesystem_resources(mcp, filesystem_callers, filesystem_services)

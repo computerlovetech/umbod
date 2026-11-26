@@ -40,7 +40,7 @@ test('preserves configuration drafts across separate findings and analytics rout
   const get = vi.spyOn(api.configuration, 'get');
   const factory = vi.fn((): InsightsState => new InsightsState(api, logs));
   component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: factory } }); flushSync();
-  await vi.waitFor((): void => expect(document.querySelector('label[aria-label="Enable Missing context"] input')).not.toBeNull());
+  await vi.waitFor((): void => expect(document.querySelector('input[type="checkbox"][aria-label="Enable Missing context"]')).not.toBeNull());
   expect(required('h1').textContent).toBe('Agent diagnostics');
   expect(required(activeAdminLink).getAttribute('href')).toBe('/admin/agent-diagnostics');
   expect(document.querySelector('nav[aria-label="Insights views"]')).toBeNull();
@@ -49,7 +49,7 @@ test('preserves configuration drafts across separate findings and analytics rout
   expect(diagnosticsTabs.querySelector('a[href$="?tab=reporting"]')?.textContent).toBe('Reporting settings');
   expect(required('section[aria-labelledby="diagnostic-patterns-title"] header button').textContent).toBe('Add pattern');
   expect(required(findingsLink).textContent).toContain('View findings');
-  required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').click(); flushSync();
+  required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').click(); flushSync();
   expect(document.body.textContent).toContain('Unsaved changes');
   follow(findingsLink);
   await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(1));
@@ -77,7 +77,7 @@ test('preserves configuration drafts across separate findings and analytics rout
   follow(findingsTab);
   await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(3));
   follow(settingsLink);
-  expect(required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').checked).toBe(false);
+  expect(required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').checked).toBe(false);
   expect(document.body.textContent).toContain('Unsaved changes');
   expect(factory).toHaveBeenCalledOnce();
   expect(get).toHaveBeenCalledOnce();
@@ -91,12 +91,12 @@ test('identity changes and hidden identity destroy old drafts rather than reusin
     const state = new InsightsState(api, new InMemoryLogCounts()); scopes.push(state); return state;
   };
   component = mount(InsightsHarness, { target: document.body, props: { controls, createState: factory } }); flushSync();
-  await vi.waitFor((): void => expect(document.querySelector('label[aria-label="Enable Missing context"] input')).not.toBeNull());
-  required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').click(); flushSync();
+  await vi.waitFor((): void => expect(document.querySelector('input[type="checkbox"][aria-label="Enable Missing context"]')).not.toBeNull());
+  required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').click(); flushSync();
   expect(document.body.textContent).toContain('Unsaved changes');
   controls.changeIdentity('account-b'); flushSync();
-  await vi.waitFor((): void => expect(document.querySelector('label[aria-label="Enable Missing context"] input')).not.toBeNull());
-  expect(required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').checked).toBe(true);
+  await vi.waitFor((): void => expect(document.querySelector('input[type="checkbox"][aria-label="Enable Missing context"]')).not.toBeNull());
+  expect(required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').checked).toBe(true);
   expect(scopes).toHaveLength(2);
   expect(scopes[0].allowed).toBe(false);
   expect(scopes[0].behaviour.configuration.patterns).toEqual([]);
@@ -111,8 +111,8 @@ test('a log-query authorization failure clears cached configuration and removes 
   const logs = new InMemoryLogCounts();
   const state = new InsightsState(api, logs);
   component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: (): InsightsState => state } }); flushSync();
-  await vi.waitFor((): void => expect(document.querySelector('label[aria-label="Enable Missing context"] input')).not.toBeNull());
-  required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').click(); flushSync();
+  await vi.waitFor((): void => expect(document.querySelector('input[type="checkbox"][aria-label="Enable Missing context"]')).not.toBeNull());
+  required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').click(); flushSync();
   logs.failure = new HttpError(403, 'Forbidden', null);
   follow(findingsLink);
   follow(logsTab);
@@ -137,8 +137,8 @@ test('findings show collection is off only after the disabling draft is publishe
   const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
   const state = new InsightsState(api, new InMemoryLogCounts());
   component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: (): InsightsState => state } });
-  await vi.waitFor((): void => expect(document.querySelector('label[aria-label="Enable Missing context"] input')).not.toBeNull());
-  required<HTMLInputElement>('label[aria-label="Enable Missing context"] input').click(); flushSync();
+  await vi.waitFor((): void => expect(document.querySelector('input[type="checkbox"][aria-label="Enable Missing context"]')).not.toBeNull());
+  required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').click(); flushSync();
   expect(document.body.textContent).toContain('Unsaved changes');
   follow(findingsLink);
   expect(document.querySelector('.collection-notice')).toBeNull();

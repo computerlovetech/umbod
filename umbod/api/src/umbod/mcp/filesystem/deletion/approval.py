@@ -1,12 +1,11 @@
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Union
 
-from fastmcp.server.context import Context
 from fastmcp.server.dependencies import get_access_token, get_context
 from fastmcp.tools import InputRequiredToolResult
 from mcp.shared.exceptions import NoBackChannelError
-from mcp.types import ElicitRequest, ElicitRequestFormParams, ElicitResult, InputRequiredResult
+from mcp.types import ElicitRequest, ElicitRequestFormParams, ElicitResult, InputRequiredResult, InputResponses
 
 from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem.browsing import NodeSummary
@@ -16,7 +15,7 @@ from .approval_state import (
     FileDeletionApprovalDenied, FileDeletionApprovalStateCodec, FileDeletionApprovalUnavailable,
 )
 from .models import DeleteFileCommand, FileDeletionConfirmation
-from .ports import FileDeletionApproval
+from .ports import FileDeletionApproval, FileDeletionApprovalPolicy
 
 
 _APPROVAL_REQUEST_KEY = "filesystem_delete_approval"
@@ -28,22 +27,37 @@ class McpFilesystemDeletionApproval:
         nonce_store: ApprovalNonceStore,
         clock: Callable[[], float],
         random_token: Callable[[], str],
+        *, policy: FileDeletionApprovalPolicy,
     ) -> None:
         self._nonce_store = nonce_store
+        self._policy = policy
         self._state_codec = FileDeletionApprovalStateCodec(clock, random_token)
 
     async def confirm(
         self, caller: CallerSnapshot, command: DeleteFileCommand, node: NodeSummary
     ) -> Union[FileDeletionApproval, InputRequiredToolResult]:
         context = get_context()
-        request = getattr(context.request_context, "request", None)
-        if getattr(getattr(request, "params", None), "name", None) == "execute_code":
+        request = getattr(context.request_context, "_srctx", None)
+        params = getattr(request, "params", None)
+        tool_name = params.get("name") if isinstance(params, Mapping) else None
+        if tool_name == "execute_code":
             raise FileDeletionApprovalDenied("File deletion approval unavailable")
+        modern = context._is_modern_protocol()
+        request_state = context.request_state
+        responses = context.input_responses
+        if request_state is not None or responses is not None or self._has_continuation_fields(params):
+            if not modern or request_state is None or responses is None:
+                raise FileDeletionApprovalDenied("File deletion approval continuation invalid")
+            return await self._resume_modern(caller, command, self._client_id(), request_state, responses)
+        if (
+            getattr(request, "method", None) == "tools/call"
+            and tool_name == "filesystem_delete_file"
+            and await self._policy.requires_mcp_file_deletion_approval() is False
+        ):
+            return FileDeletionApproval.APPROVED
         message = self._message(command, node)
-        if context._is_modern_protocol():
-            token = get_access_token()
-            client_id = token.client_id if token else ""
-            return await self._confirm_modern(context, caller, command, client_id, message)
+        if modern:
+            return self._request_modern(caller, command, self._client_id(), message)
         try:
             response = await context.elicit(message, FileDeletionConfirmation)
         except NoBackChannelError:
@@ -57,36 +71,39 @@ class McpFilesystemDeletionApproval:
             raise FileDeletionApprovalDenied("File deletion approval denied")
         return FileDeletionApproval.APPROVED
 
-    async def _confirm_modern(
+    def _request_modern(
         self,
-        context: Context,
         caller: CallerSnapshot,
         command: DeleteFileCommand,
         client_id: str,
         message: str,
-    ) -> Union[FileDeletionApproval, InputRequiredToolResult]:
-        request_state = context.request_state
-        responses = context.input_responses
-        if (request_state is None) != (responses is None):
-            raise FileDeletionApprovalDenied("File deletion approval continuation invalid")
-        if request_state is None:
-            return InputRequiredToolResult(
-                InputRequiredResult(
-                    inputRequests={
-                        _APPROVAL_REQUEST_KEY: ElicitRequest(
-                            params=ElicitRequestFormParams(
-                                message=message,
-                                requestedSchema={
-                                    "type": "object",
-                                    "properties": {"value": {"type": "boolean"}},
-                                    "required": ["value"],
-                                },
-                            )
+    ) -> InputRequiredToolResult:
+        return InputRequiredToolResult(
+            InputRequiredResult(
+                inputRequests={
+                    _APPROVAL_REQUEST_KEY: ElicitRequest(
+                        params=ElicitRequestFormParams(
+                            message=message,
+                            requestedSchema={
+                                "type": "object",
+                                "properties": {"value": {"type": "boolean"}},
+                                "required": ["value"],
+                            },
                         )
-                    },
-                    requestState=self._state_codec.mint(caller, command, client_id),
-                )
+                    )
+                },
+                requestState=self._state_codec.mint(caller, command, client_id),
             )
+        )
+
+    async def _resume_modern(
+        self,
+        caller: CallerSnapshot,
+        command: DeleteFileCommand,
+        client_id: str,
+        request_state: str,
+        responses: InputResponses,
+    ) -> FileDeletionApproval:
         if not isinstance(responses, dict) or set(responses) != {_APPROVAL_REQUEST_KEY}:
             raise FileDeletionApprovalDenied("File deletion approval response invalid")
         response = responses[_APPROVAL_REQUEST_KEY]
@@ -103,6 +120,15 @@ class McpFilesystemDeletionApproval:
         ):
             raise FileDeletionApprovalDenied("File deletion approval already consumed")
         return FileDeletionApproval.APPROVED
+
+    @staticmethod
+    def _client_id() -> str:
+        token = get_access_token()
+        return token.client_id if token else ""
+
+    @staticmethod
+    def _has_continuation_fields(params: object) -> bool:
+        return isinstance(params, Mapping) and not {"requestState", "inputResponses"}.isdisjoint(params)
 
     @staticmethod
     def _message(command: DeleteFileCommand, node: NodeSummary) -> str:

@@ -14,6 +14,7 @@ description: Actor-owned administration views and shared administration controls
 - [Group management](./groups/README.md) — Central administrator group catalogue forms.
 - [Group permissions](./group-permissions/README.md) — Persistent permissions workspace and tab editors.
 - [Shared namespaces](./filesystem/README.md) — Namespace metadata and revision-safe group access management.
+- [System settings](./system-settings/SystemSettingsWorkspace.svelte) — Filesystem approval policy editor with draft changes and reset.
 
 # Shared controls
 

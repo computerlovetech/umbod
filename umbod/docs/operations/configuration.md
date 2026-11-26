@@ -82,6 +82,12 @@ Use positive integers. The preview environment variable and both Helm values hav
 
 If a large upload fails despite the API limit, check every gateway on the upload path. The frontend nginx proxy limits the entire request body to 12 MiB; direct API ingress does not pass through that proxy. The upload limit is not a storage quota.
 
+### MCP file deletion approval
+
+`UMBOD_REQUIRE_MCP_FILE_DELETION_APPROVAL` defaults to unset. Set it to `true` or `false` to provide a deployment default for the administrator filesystem settings. Restart the services after changing the environment value; it is read at startup. An administrator override takes precedence. Resetting the override restores the deployment default, or the built-in `true` if the variable is unset.
+
+This policy applies only to new direct `filesystem_delete_file` MCP calls. It does not affect browser deletion or pending MCP approvals. If MCP cannot read the stored policy, it still requires approval.
+
 ### Content storage
 
 | Environment variable | Default | When to set it |
