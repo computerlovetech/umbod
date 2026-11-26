@@ -2,6 +2,7 @@
   import { goto, replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import Button from '../shared/Button.svelte';
+  import PlusIcon from '#lib/components/shared/PlusIcon.svelte';
   import SetupProgress from '../shared/SetupProgress.svelte';
   import ModalShell from '../../shared/ModalShell.svelte';
   import { useToast } from '../../feedback/index.js';
@@ -73,7 +74,7 @@
   }
 </script>
 
-<Button aria-label="Add connector" disabled={disabled || picker.handingOff} onclick={picker.show} {@attach picker.register} {@attach resumeSetup(pendingSetup, !disabled && pendingSetup === entry?.kind && (pendingSetup !== 'native' || nativeAvailable))}><span aria-hidden="true">+</span> Add connector</Button>
+<Button aria-label="Add connector" disabled={disabled || picker.handingOff} onclick={picker.show} {@attach picker.register} {@attach resumeSetup(pendingSetup, !disabled && pendingSetup === entry?.kind && (pendingSetup !== 'native' || nativeAvailable))}><PlusIcon />Add connector</Button>
 
 {#if picker.open}
   <ModalShell title="Add connector" titleId={`${id}-title`} close={picker.close} closeDisabled={picker.handingOff} initialFocus="[data-dialog-title]"

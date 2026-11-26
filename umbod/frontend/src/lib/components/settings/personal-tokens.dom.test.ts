@@ -73,8 +73,10 @@ it('opens the form on demand, selects options and updates the list after issuanc
   await vi.waitFor(() => expect(target.textContent).toContain('No personal access tokens.'));
   expect(target.querySelector('form, dialog, details')).toBeNull();
   expect(target.textContent).not.toContain('Refresh');
+  expect(button(target, 'Create access token').querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   const dialog = await openCreate(target);
   expect(dialog.open).toBe(true);
+  expect(button(dialog, 'Create token').querySelector('svg')).toBeNull();
   expect(element<HTMLInputElement>(dialog, 'input').required).toBe(true);
   expect(element<HTMLInputElement>(dialog, 'input').maxLength).toBe(256);
   const permission = agentLogsCheckbox(dialog);

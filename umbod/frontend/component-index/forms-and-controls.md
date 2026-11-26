@@ -13,6 +13,7 @@ description: Buttons, fields, selection controls, form containers, and their sha
 - [TextAreaField](../src/lib/components/shared/TextAreaField.svelte) — Controlled labelled multiline input with native attributes and events; uses the same field and focus styling as plain and configuration text inputs.
 - [TextField](../src/lib/components/shared/TextField.svelte) — Controlled labelled plain text input with native attribute and event forwarding; use for non-credential text without configuration-secret behavior.
 - [Button](../src/lib/components/admin/shared/Button.svelte) — Native action button with primary, secondary, danger, quiet, compact, and icon-only presentation; forwards native attributes, events, and attachments.
+- [PlusIcon](../src/lib/components/shared/PlusIcon.svelte) — Decorative leading plus for labeled buttons that start creating a new item, not form submit buttons.
 - [ButtonLink](../src/lib/components/admin/shared/ButtonLink.svelte) — Native navigation anchor with canonical action styling; use for action-like links without replacing href semantics.
 - [LoadingButton](../src/lib/components/admin/shared/LoadingButton.svelte) — Button with delayed loading feedback, native attribute forwarding, and immediate pending protection; supports the same variants and sizes.
 - [AdminSaveAction](../src/lib/components/admin/shared/AdminSaveAction.svelte) — Save button with status feedback; use when a save action needs loading, success, or error presentation.

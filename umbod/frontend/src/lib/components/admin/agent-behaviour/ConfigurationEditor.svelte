@@ -2,6 +2,7 @@
   import { tick } from 'svelte';
   import '#lib/styles/form-fields.css';
   import Button from '#lib/components/admin/shared/Button.svelte';
+  import PlusIcon from '#lib/components/shared/PlusIcon.svelte';
   import AdminToggle from '#lib/components/admin/shared/AdminToggle.svelte';
   import ToolSaveBar from '#lib/components/admin/connectors/ToolSaveBar.svelte';
   import Select from '#lib/components/admin/shared/Select.svelte';
@@ -127,7 +128,7 @@
         <h2 id="diagnostic-patterns-title">Patterns</h2>
         <p>{state.enabledPatternCount} of {state.patterns.length} enabled</p>
       </div>
-      <Button disabled={state.busy} onclick={state.addPattern}>Add pattern</Button>
+      <Button disabled={state.busy} onclick={state.addPattern}><PlusIcon />Add pattern</Button>
     </header>
     {#if state.patterns.length}
       <ul class="pattern-list" role="list">

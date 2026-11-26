@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
+  import PlusIcon from '#lib/components/shared/PlusIcon.svelte';
   import Select from '#lib/components/admin/shared/Select.svelte';
   import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
   import PersonalTokenDialog from './PersonalTokenDialog.svelte';
@@ -32,7 +33,7 @@
   <div class="admin-panel personal-tokens">
     <header class="card-heading">
       <h3>Personal access tokens</h3>
-      {#if state.canGenerate}<Button disabled={state.pending} onclick={state.openCreate}>Create access token</Button>{/if}
+      {#if state.canGenerate}<Button disabled={state.pending} onclick={state.openCreate}><PlusIcon />Create access token</Button>{/if}
     </header>
     <div class="card-body">
       {#if state.status === 'loading'}

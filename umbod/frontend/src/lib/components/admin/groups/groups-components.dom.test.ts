@@ -69,7 +69,9 @@ describe('group management form wiring', () => {
     const list = vi.spyOn(directory, 'list');
     const { api } = renderGroups(directory);
     expect(list).not.toHaveBeenCalled();
-    button('Add Group').click();
+    const addGroup = button('Add Group');
+    expect(addGroup.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    addGroup.click();
     await vi.waitFor(() => expect(document.querySelector('.observed-groups button')?.textContent).toBe(value));
     expect(document.body.textContent).toContain('Groups observed from logins');
     (document.querySelector('.observed-groups button') as HTMLButtonElement).click();
@@ -77,7 +79,9 @@ describe('group management form wiring', () => {
     expect((document.getElementById('provider-group-id') as HTMLInputElement).value).toBe(value);
     expect(document.querySelector('.observed-groups button')?.getAttribute('aria-pressed')).toBe('true');
     input('group-label', 'Selected');
-    button('Save group').click();
+    const saveGroup = button('Save group');
+    expect(saveGroup.querySelector('svg')).toBeNull();
+    saveGroup.click();
     await vi.waitFor(() => expect(document.querySelector('form')).toBeNull());
     expect((await api.list()).some((entry) => entry.group_id === value)).toBe(true);
     const calls = list.mock.calls.length;

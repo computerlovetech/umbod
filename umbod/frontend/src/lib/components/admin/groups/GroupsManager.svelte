@@ -2,6 +2,7 @@
   import type { GroupsState } from './groups-state.svelte';
   import AdminRecordList from '#lib/components/admin/shared/AdminRecordList.svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
+  import PlusIcon from '#lib/components/shared/PlusIcon.svelte';
   import SubpageContainer from '#lib/components/shared/workspace/SubpageContainer.svelte';
   import GroupFormModal from './GroupFormModal.svelte';
   let { state }: { state: GroupsState } = $props();
@@ -10,7 +11,7 @@
 <SubpageContainer title="Groups" headingId="groups-title" lede="Manage shared group labels and descriptions. Registration grants no access and does not change identity provider membership.">
   {#snippet navigation()}{/snippet}
   {#snippet actions()}
-    {#if !state.denied}<Button disabled={state.pending} onclick={state.create}>Add Group</Button>{/if}
+    {#if !state.denied}<Button disabled={state.pending} onclick={state.create}><PlusIcon />Add Group</Button>{/if}
   {/snippet}
   {#snippet children()}
   <section aria-labelledby="groups-title" class="groups-page">
