@@ -21,12 +21,14 @@ MARKETPLACE = "umbod-" + hashlib.sha256(ENDPOINT.encode()).hexdigest()[:12]
 COMPLETION_ICON = "\n".join(["      |", "      |", "     /|\\", "    / | \\", "   |  |  |", "   |     |", "", "   Umbod"])
 
 
-def completion_message(harness: str) -> str:
+def completion_message(harness: str, *, windows: bool = False) -> str:
     harness_name = "Codex" if harness == "codex" else "Claude Code"
+    codex_step = "Open or restart Codex when you are ready." if windows else "Start Codex when you are ready."
+    first_step = codex_step if harness == "codex" else "Restart Claude Code."
     return (
         f"\n{COMPLETION_ICON}\n\n"
         f"Umbod plugin installed for {harness_name}. Plugin registration verified.\n\n"
-        f"1. Restart {harness_name}.\n"
+        f"1. {first_step}\n"
         "2. Open /mcp and sign in if prompted.\n"
         "3. Ask your agent to discover available Umbod connected apps.\n\n"
         "Connection has not been verified. Installation does not verify access to connected apps.\n\n"
@@ -104,7 +106,19 @@ if args[:2] in [["plugin", "add"], ["plugin", "install"]]:
     if os.environ.get("FAIL_REGISTRATION"):
         sys.exit(5)
     market = next(item for item in json.loads(state.read_text()) if item["name"] == args[2].rsplit("@", 1)[-1])
-    installed_state.write_text(json.dumps([{"pluginId": args[2], "id": args[2], "enabled": True, "scope": "user", "source": {"source": "local", "path": str(pathlib.Path(market["root"]) / "plugins/umbod")}, "readFromFolder": str(pathlib.Path(market["root"]) / "plugins/umbod")}]))
+    plugin_root = pathlib.Path(market["root"]) / "plugins/umbod"
+    installed_plugin = {
+        "pluginId": args[2],
+        "id": args[2],
+        "enabled": True,
+        "scope": "user",
+        "source": {"source": "local", "path": str(plugin_root)},
+        "readFromFolder": str(plugin_root),
+    }
+    if name == "codex":
+        manifest = json.loads((plugin_root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+        installed_plugin["version"] = manifest["version"]
+    installed_state.write_text(json.dumps([installed_plugin]))
     sys.exit(0)
 sys.exit(9)
 '''

@@ -196,7 +196,7 @@ def test_windows_fresh_install_and_identical_rerun_are_verified(windows_installe
         assert f"Checking {windows_installer.package.harness} installer prerequisites..." in result.stdout
         assert f"Checking plugin command support for {'codex' if windows_installer.package.harness == 'codex' else 'claude'}..." in result.stdout
         assert f"Verifying {windows_installer.package.harness} plugin registration..." in result.stdout
-        assert result.stdout.endswith(completion_message(windows_installer.package.harness))
+        assert result.stdout.endswith(completion_message(windows_installer.package.harness, windows=True))
         assert result.stdout.count(COMPLETION_ICON) == 1
         assert result.stdout.isascii()
         assert "\x1b" not in result.stdout
@@ -259,7 +259,7 @@ def test_windows_valid_endpoint_path_punctuation_is_installed_as_literal_data(wi
 def test_windows_installation_requires_only_the_selected_harness_on_path(windows_installer: WindowsInstallerDriver) -> None:
     result = windows_installer.run(environment={"PATH": str(windows_installer.package.root / "bin")})
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.endswith(completion_message(windows_installer.package.harness))
+    assert result.stdout.endswith(completion_message(windows_installer.package.harness, windows=True))
 
 
 @pytest.mark.parametrize("prefix,expected_error", [
@@ -321,7 +321,7 @@ def test_windows_harness_nonzero_exit_is_reported_and_recoverable(windows_instal
     assert not (windows_installer.installation_parent / ".install.lock").exists()
     recovered = windows_installer.run()
     assert recovered.returncode == 0, recovered.stdout + recovered.stderr
-    assert recovered.stdout.endswith(completion_message(windows_installer.package.harness))
+    assert recovered.stdout.endswith(completion_message(windows_installer.package.harness, windows=True))
 
 
 def test_windows_expected_endpoint_mismatch_prevents_mutations(windows_installer: WindowsInstallerDriver) -> None:
@@ -371,7 +371,7 @@ def test_windows_codex_remote_catalog_stall_is_bypassed(windows_installer: Windo
     for _ in range(2):
         result = windows_installer.run(environment={"STALL_REMOTE_CATALOG": "1"})
         assert result.returncode == 0, result.stdout + result.stderr
-        assert result.stdout.endswith(completion_message("codex"))
+        assert result.stdout.endswith(completion_message("codex", windows=True))
     listings = [call for call in windows_installer.package.calls() if call[1:3] == ["plugin", "list"]]
     assert listings == [["codex", "plugin", "list", "--json", "--marketplace", MARKETPLACE]] * 4
 
