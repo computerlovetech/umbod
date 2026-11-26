@@ -25,12 +25,12 @@ from umbod.core.connectors.downstream_mcp.personal.tools import (
 )
 from umbod.core.connectors.downstream_mcp.personal.connections import PersonalAuthorizationHealthUnavailable
 from umbod.mcp.signals.diagnostics import invocation_failure
-from typing import Any
+from typing import Any, Literal
 
 from fastmcp.server.dependencies import get_context
 from fastmcp.server.providers.proxy import ProxyTool
 from fastmcp.tools import ToolResult
-from fastmcp.tools.base import Tool
+from fastmcp.tools.base import RawStructuredToolResult, Tool
 from mcp.types import CallToolResult
 from jsonschema.validators import validator_for
 from jsonschema import Draft202012Validator
@@ -154,9 +154,8 @@ class AuthorizedDownstreamProxyTool(AuthorizedDownstreamTool):
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="shared", stage="downstream", reason="downstream_exception"))
             return _safe_downstream_failure()
         if result.is_error:
-            capture_returned_failure(InvocationFailureOrigin.MCP)
-            invocation_failure.set(InvocationFailureDiagnostic(execution_mode="shared", stage="downstream", reason="downstream_tool_error"))
-            return _safe_downstream_failure()
+            _capture_downstream_tool_error("shared")
+            return _as_downstream_tool_error(result)
         return result
 
 
@@ -166,6 +165,23 @@ def _shared_failure_origin(error: BaseException) -> InvocationFailureOrigin:
     if isinstance(error, (MCPError, ClientError, ToolError, httpx2.HTTPError, TimeoutError, anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError)):
         return InvocationFailureOrigin.MCP
     return InvocationFailureOrigin.INTERNAL
+
+
+class _RawDownstreamToolError(RawStructuredToolResult, ConnectorToolRecoveryResult):
+    pass
+
+
+def _as_downstream_tool_error(result: ToolResult) -> ToolResult:
+    result_type = _RawDownstreamToolError if isinstance(result, RawStructuredToolResult) else ConnectorToolRecoveryResult
+    return result_type(
+        content=result.content, structured_content=result.structured_content,
+        meta=result.meta, is_error=True,
+    )
+
+
+def _capture_downstream_tool_error(execution_mode: Literal["shared", "personal"]) -> None:
+    capture_returned_failure(InvocationFailureOrigin.MCP)
+    invocation_failure.set(InvocationFailureDiagnostic(execution_mode=execution_mode, stage="downstream", reason="downstream_tool_error"))
 
 
 def _safe_downstream_failure() -> ToolResult:
@@ -213,10 +229,13 @@ class AuthorizedPersonalTool(AuthorizedDownstreamTool):
                 _meta=result.result.get("_meta"),
             )
             if downstream.is_error:
-                return ConnectorToolRecoveryResult(content=downstream.content, is_error=True)
+                if invocation_failure.get() is None:
+                    _capture_downstream_tool_error("personal")
+                if downstream.structured_content is not None and not isinstance(downstream.structured_content, dict):
+                    return _RawDownstreamToolError.from_mcp_result(downstream)
+                return ConnectorToolRecoveryResult.from_mcp_result(downstream)
             return ToolResult(
                 content=downstream.content,
-                is_error=downstream.is_error,
                 structured_content=downstream.structured_content,
                 meta=downstream.meta,
             )

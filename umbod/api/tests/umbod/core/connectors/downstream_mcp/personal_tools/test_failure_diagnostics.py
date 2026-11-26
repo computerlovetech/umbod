@@ -52,7 +52,7 @@ class FaultingPersonalToolAccessStore:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("reason", ["context_unavailable", "admission_denied", "invalid_arguments", "invalid_output", "downstream_tool_error"])
+@pytest.mark.parametrize("reason", ["context_unavailable", "admission_denied", "invalid_arguments", "invalid_output"])
 async def test_runtime_preserves_safe_diagnostics_before_redaction(runtime_case: RuntimeCase, reason: str) -> None:
     execution = await execution_case(runtime_case)
     command = execution.command
@@ -63,8 +63,6 @@ async def test_runtime_preserves_safe_diagnostics_before_redaction(runtime_case:
         await runtime_case.bundle.personal_connections.disconnect(runtime_case.query.key)
     elif reason == "invalid_arguments":
         command = command.model_copy(update={"arguments": {"value": 123}})
-    elif reason == "downstream_tool_error":
-        execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result={"content": [{"type": "text", "text": "sensitive-sentinel"}], "isError": True})
     else:
         execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result={"content": [], "structuredContent": "sensitive-sentinel"})
     with pytest.raises(PersonalRuntimeUnavailable) as caught:

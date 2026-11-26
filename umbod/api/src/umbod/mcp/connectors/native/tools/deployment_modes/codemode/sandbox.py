@@ -181,14 +181,15 @@ class FastMcpMontyCodeModeAdapter:
         printed_lines: list[str] = []
 
         async def invoke(tool_name: str, **arguments: Any) -> Any:
-            safe_error = "connector_execution_failed"
+            failure_code = "connector_execution_failed"
+            reported_error = failure_code
             try:
                 result = await registry.execute_tool(tool_name, arguments, authorization_scope)
                 if isinstance(result, ConnectorToolRecoveryResult):
-                    safe_error = result.recovery_guidance
-                    raise RuntimeError(safe_error)
+                    reported_error = result.recovery_guidance or failure_code
+                    raise RuntimeError(failure_code)
                 if isinstance(result, ConnectorToolFailureResult) or result.is_error:
-                    raise RuntimeError(safe_error)
+                    raise RuntimeError(failure_code)
                 value = result.structured_content
                 nested_calls.append(
                     SuccessfulNestedConnectorCall(tool_name=tool_name, arguments={}, result=value)
@@ -197,10 +198,10 @@ class FastMcpMontyCodeModeAdapter:
             except Exception:
                 nested_calls.append(
                     FailedNestedConnectorCall(
-                        tool_name=tool_name, arguments={}, error=safe_error
+                        tool_name=tool_name, arguments={}, error=reported_error
                     )
                 )
-                raise RuntimeError(safe_error) from None
+                raise RuntimeError(failure_code) from None
 
         external_functions = {
             code_names[candidate.tool_name]: self._bound_invoker(

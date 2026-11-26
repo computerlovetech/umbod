@@ -23,7 +23,7 @@ from tests.umbod.mcp.connectors.downstream_mcp.test_provider import RecordingInv
 from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, SetPersonalConnectionEnabled
 from umbod.core.invocation import ConnectorInvocation, ConnectorInvocationPolicy, PermitAllConnectorInvocationPolicy
 from umbod.mcp.connectors.native.tools import ConnectorToolSearchCandidate
-from umbod.mcp.connectors.native.tools.deployment_modes.codemode.sandbox import FastMcpMontyCodeModeAdapter, OpenApiCodeModeInvocation
+from umbod.mcp.connectors.native.tools.deployment_modes.codemode.sandbox import FailedNestedConnectorCall, FastMcpMontyCodeModeAdapter, OpenApiCodeModeInvocation
 from umbod.mcp.connectors.native.tools.infrastructure.authorization import ConnectorToolAuthorizationScope, UnrestrictedConnectorTools
 from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import personal_tool_permission_check
@@ -125,10 +125,12 @@ class RejectingOpenApiExecutor:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("exposure", ("flat", "gateway", "codemode"))
-async def test_personal_exposure_modes_share_approval_and_telemetry(runtime_case: RuntimeCase, exposure: str) -> None:
+@pytest.mark.parametrize("is_error", (False, True), ids=("success", "downstream_validation_error"))
+async def test_personal_exposure_modes_preserve_downstream_outcome_and_telemetry(runtime_case: RuntimeCase, exposure: str, is_error: bool) -> None:
     execution = await execution_case(runtime_case)
     log = InvocationLog()
-    payload = {"content": [{"type": "text", "text": "unchanged"}], "structuredContent": {"owner": "owner"}, "_meta": {"vendor": {"trace": ["unchanged"]}}}
+    message = "The account's time limit exceeded its daily quota. Use a different account." if is_error else "unchanged"
+    payload = {"content": [{"type": "text", "text": message}], "structuredContent": {"owner": "owner"}, "_meta": {"vendor": {"trace": ["unchanged"]}}, "isError": is_error}
     execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result=payload)
     provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), log)
     public = FastMCP("personal", providers=[provider])
@@ -139,18 +141,42 @@ async def test_personal_exposure_modes_share_approval_and_telemetry(runtime_case
     async with Client(public) as client:
         if exposure == "codemode":
             result = await FastMcpMontyCodeModeAdapter(5).execute('Personal_read(value="same")', ProviderGateway(provider), UnrestrictedConnectorTools(), RejectingOpenApiExecutor())
-            assert result.outcome == "success"
-            assert result.final_value == {"owner": "owner"}
+            if is_error:
+                assert result.outcome == "failure"
+                call = result.nested_calls[0]
+                assert isinstance(call, FailedNestedConnectorCall)
+                assert call.error == message
+            else:
+                assert result.outcome == "success"
+                assert result.final_value == {"owner": "owner"}
         else:
             result = await client.call_tool_mcp("execute_personal" if exposure == "gateway" else "Personal_read", {} if exposure == "gateway" else {"value": "same"})
+            assert result.is_error is is_error
             assert result.structured_content == payload["structuredContent"]
-            assert result.content[0].text == "unchanged"
+            assert result.content[0].text == message
             assert result.meta["vendor"] == payload["_meta"]["vendor"]
     assert len(execution.transport.calls) == 1
     assert len(log.events) == 1
     assert "owner-token" not in str(log.events)
     assert await provider.owns_tool("Personal_read")
     assert await provider.is_eligible("personal", "read")
+
+
+@pytest.mark.asyncio
+async def test_personal_error_preserves_non_object_structured_content(runtime_case: RuntimeCase) -> None:
+    execution = await execution_case(runtime_case)
+    message = "Use an active account."
+    details = [{"field": "value", "reason": "inactive_account"}]
+    execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result={
+        "content": [{"type": "text", "text": message}], "structuredContent": details, "isError": True,
+    })
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+
+    result = await provider.execute_tool("Personal_read", {"value": "same"})
+
+    assert result.is_error
+    assert result.content[0].text == message
+    assert result.structured_content == details
 
 
 @pytest.mark.asyncio

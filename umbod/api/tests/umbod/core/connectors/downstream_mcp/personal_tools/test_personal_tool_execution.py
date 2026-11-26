@@ -157,8 +157,17 @@ async def test_recreated_worker_uses_persisted_authority(runtime_case: RuntimeCa
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("result", ({}, {"content": [], "isError": True}, {"content": [], "structuredContent": None}, {"content": [], "structuredContent": "secret"}))
-async def test_malformed_or_downstream_error_results_are_safe(runtime_case: RuntimeCase, result: dict[str, object]) -> None:
+async def test_downstream_error_without_content_is_preserved(runtime_case: RuntimeCase) -> None:
+    execution = await execution_case(runtime_case)
+    failure = PersonalToolResult(result={"content": [], "isError": True})
+    execution.transport.results[(runtime_case.query.key, "read")] = failure
+
+    assert await execution.runtime.execute(execution.command) == failure
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("result", ({}, {"content": [], "structuredContent": None}, {"content": [], "structuredContent": "secret"}))
+async def test_malformed_results_are_rejected(runtime_case: RuntimeCase, result: dict[str, object]) -> None:
     execution = await execution_case(runtime_case)
     execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result=result)
     with pytest.raises(PersonalRuntimeUnavailable, match="^Personal tool unavailable$"):

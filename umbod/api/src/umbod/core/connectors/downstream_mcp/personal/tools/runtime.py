@@ -6,7 +6,6 @@ from jsonschema.exceptions import ValidationError
 from umbod.core.invocation.failure_evidence import (
     InvocationFailureOrigin,
     capture_invocation_exception,
-    capture_returned_failure,
     current_invocation_failure,
 )
 
@@ -35,11 +34,11 @@ _INVALID_OUTPUT = InvocationFailureDiagnostic(execution_mode="personal", stage="
 
 
 def _validate_result(tool: DiscoveredTool, result: PersonalToolResult) -> None:
-    if result.result.get("isError", False) is True:
-        capture_returned_failure(InvocationFailureOrigin.MCP)
-        raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=InvocationFailureDiagnostic(execution_mode="personal", stage="downstream", reason="downstream_tool_error"))
-    if not isinstance(result.result.get("content"), list) or result.result.get("isError", False) is not False:
+    is_error = result.result.get("isError", False)
+    if not isinstance(result.result.get("content"), list) or not isinstance(is_error, bool):
         raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=_INVALID_OUTPUT)
+    if is_error:
+        return
     if "structuredContent" in result.result:
         output = result.result["structuredContent"]
         if not isinstance(output, dict):

@@ -29,7 +29,8 @@ from umbod.rest.main import create_app_with_dependency_factories
 from umbod.rest.settings import APISettings
 TOOL_NAME = 'lookup_record'
 TOOL_RESULT = {'record': {'id': 7, 'status': 'ready'}}
-SECRET_CANARY = 'downstream-secret-canary'
+DOWNSTREAM_VALIDATION_MESSAGE = 'record_id must identify an active record.'
+DOWNSTREAM_VALIDATION_DETAILS = {'field': 'record_id', 'reason': 'inactive_record'}
 
 class DeterministicDownstream:
 
@@ -45,7 +46,12 @@ class DeterministicDownstream:
     async def _lookup_record(self, record_id: int) -> ToolResult:
         self.invocations.append({'record_id': record_id})
         if self.fail:
-            raise RuntimeError(f'downstream failed with {SECRET_CANARY}')
+            return ToolResult(
+                content=DOWNSTREAM_VALIDATION_MESSAGE,
+                structured_content=DOWNSTREAM_VALIDATION_DETAILS,
+                meta={'example.test/validation': {'retryable': True}},
+                is_error=True,
+            )
         return ToolResult(structured_content=TOOL_RESULT)
 
 class DownstreamHttpJourney:
@@ -136,7 +142,7 @@ async def test_admin_registered_downstream_tool_roundtrips_through_public_mcp_ht
     assert journey.downstream.invocations == [{'record_id': 7}]
 
 @pytest.mark.asyncio
-async def test_downstream_failure_is_safe_and_public_http_session_remains_usable(runtime_resources: AsyncExitStack, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_downstream_validation_failure_reaches_the_public_mcp_client(runtime_resources: AsyncExitStack, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     journey = await _build_journey(tmp_path, monkeypatch, runtime_resources)
     journey.downstream.fail = True
     async with journey.app.router.lifespan_context(journey.app):
@@ -145,8 +151,9 @@ async def test_downstream_failure_is_safe_and_public_http_session_remains_usable
             result = await client.call_tool('Deterministic_downstream_lookup_record', {'record_id': 7}, raise_on_error=False)
             tools_after_failure = {tool.name for tool in await client.list_tools()}
     assert result.is_error is True
-    assert result.content[0].text == 'Tool invocation failed'
-    assert SECRET_CANARY not in str(result)
+    assert result.content[0].text == DOWNSTREAM_VALIDATION_MESSAGE
+    assert result.structured_content == DOWNSTREAM_VALIDATION_DETAILS
+    assert result.meta['example.test/validation'] == {'retryable': True}
     assert 'Deterministic_downstream_lookup_record' in tools_after_failure
     assert journey.downstream.invocations == [{'record_id': 7}]
 

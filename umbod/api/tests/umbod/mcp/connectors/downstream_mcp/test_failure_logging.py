@@ -137,8 +137,13 @@ async def test_shared_failures_enrich_normal_stdout_completion(configured_signal
     monkeypatch.setattr("umbod.mcp.connectors.downstream_mcp.tool_invocation.get_context", lambda: object())
     result = await held.run({"city": SENSITIVE})
     assert result.is_error
-    assert SENSITIVE not in repr(result)
-    assert result.meta is None
+    if failure == "result":
+        assert result.content[0].text == SENSITIVE
+        assert result.structured_content == {"secret": SENSITIVE}
+        assert result.meta == {"secret": SENSITIVE}
+    else:
+        assert SENSITIVE not in repr(result)
+        assert result.meta is None
     records = completion_records(capsys, caplog)
     assert len(records) == 1
     assert_failure(records[0], "weather", "Weather", "Weather_forecast", "forecast", "shared", "downstream", "downstream_tool_error" if failure == "result" else "downstream_exception")
@@ -189,8 +194,13 @@ async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: R
             await held.run(arguments)
     else:
         result = await held.run(arguments)
-        assert SENSITIVE not in repr(result)
-        assert result.meta is None
+        assert result.is_error
+        if reason == "downstream_tool_error":
+            assert result.content[0].text == SENSITIVE
+            assert result.meta == {"secret": SENSITIVE}
+        else:
+            assert SENSITIVE not in repr(result)
+            assert result.meta is None
     records = completion_records(capsys, caplog)
     assert len(records) == 1
     assert_failure(records[0], "personal", "Personal", "Personal_read", "read", "personal", stage, reason)
