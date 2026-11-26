@@ -1,3 +1,4 @@
+import type { beforeNavigate as registerBeforeNavigate } from '$app/navigation';
 import { afterEach, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { InMemoryAgentBehaviourApi } from '#lib/agent-behaviour/in-memory.test-support.js';
@@ -7,13 +8,19 @@ import InsightsHarness from './InsightsHarness.test-support.svelte';
 import { InsightsHarnessState, configuration } from './insights.test-support.svelte';
 import { InsightsState } from './insights-state.svelte';
 
-vi.mock('$app/state', () => ({ navigating: { to: null, from: null }, page: { url: new URL('http://localhost/admin/agent-diagnostics') } }));
+type BeforeNavigate = Parameters<Parameters<typeof registerBeforeNavigate>[0]>[0];
+
+const { beforeNavigate } = vi.hoisted(() => ({ beforeNavigate: vi.fn<typeof registerBeforeNavigate>() }));
+vi.mock('$app/navigation', () => ({ beforeNavigate }));
+vi.mock('$app/state', () => ({ navigating: { to: null, from: null }, page: { url: new URL('http://localhost/admin/insights/agent-behaviour') } }));
 let component: ReturnType<typeof mount> | undefined;
 afterEach(async (): Promise<void> => {
   if (component) await unmount(component);
   component = undefined;
   document.body.replaceChildren();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  beforeNavigate.mockClear();
 });
 
 function required<T extends Element>(selector: string): T {
@@ -22,8 +29,14 @@ function required<T extends Element>(selector: string): T {
   return found!;
 }
 
-const findingsLink = '.subpage-container a[href="/admin/insights/agent-behaviour"]';
-const settingsLink = '.insight-heading a[href="/admin/agent-diagnostics"]';
+const diagnostics = '/admin/agent-diagnostics';
+const reporting = '/admin/system-settings?section=agent-diagnostics';
+const findings = '/admin/insights/agent-behaviour';
+const logsPath = '/admin/insights/logs';
+const findingsLink = `.subpage-container a[href="${findings}"]`;
+const settingsLink = `.insight-heading a[href="${reporting}"]`;
+const reportingLink = `.subpage-container a[href="${reporting}"]`;
+const patternToggle = 'input[type="checkbox"][aria-label="Enable Missing context"]';
 const logsTab = 'nav[aria-label="Insights views"] a[href="/admin/insights/logs"]';
 const findingsTab = 'nav[aria-label="Insights views"] a[href="/admin/insights/agent-behaviour"]';
 const activeAdminLink = 'nav[aria-label="Administration navigation"] a[aria-current="page"]';
@@ -33,24 +46,26 @@ function follow(selector: string): void {
   flushSync();
 }
 
-test('preserves configuration drafts across separate findings and analytics routes with contextual header actions', async (): Promise<void> => {
+test('preserves pattern drafts across standalone diagnostics, findings and log analytics', async (): Promise<void> => {
   const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
   const logs = new InMemoryLogCounts();
   const list = vi.spyOn(api.reports, 'list');
   const get = vi.spyOn(api.configuration, 'get');
   const factory = vi.fn((): InsightsState => new InsightsState(api, logs));
-  component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: factory } }); flushSync();
-  await vi.waitFor((): void => expect(document.querySelector('input[type="checkbox"][aria-label="Enable Missing context"]')).not.toBeNull());
+  const controls = new InsightsHarnessState(diagnostics);
+  component = mount(InsightsHarness, { target: document.body, props: { controls, createState: factory } });
+  await vi.waitFor((): void => expect(document.querySelector(patternToggle)).not.toBeNull());
   expect(required('h1').textContent).toBe('Agent diagnostics');
-  expect(required(activeAdminLink).getAttribute('href')).toBe('/admin/agent-diagnostics');
+  expect(required(activeAdminLink).getAttribute('href')).toBe(diagnostics);
   expect(document.querySelector('nav[aria-label="Insights views"]')).toBeNull();
-  const diagnosticsTabs = required('nav[aria-label="Agent diagnostics subpages"]');
-  expect(diagnosticsTabs.querySelector('[aria-current="page"]')?.textContent).toBe('Patterns');
-  expect(diagnosticsTabs.querySelector('a[href$="?tab=reporting"]')?.textContent).toBe('Reporting settings');
+  expect(document.querySelector('[aria-labelledby="reporting-settings-title"]')).toBeNull();
   expect(required('section[aria-labelledby="diagnostic-patterns-title"] header button').textContent).toBe('Add pattern');
+  expect(required(reportingLink).textContent).toBe('Reporting settings');
   expect(required(findingsLink).textContent).toContain('View findings');
-  required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').click(); flushSync();
+  required<HTMLInputElement>(patternToggle).click();
+  flushSync();
   expect(document.body.textContent).toContain('Unsaved changes');
+
   follow(findingsLink);
   await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(1));
   expect(required('h1').textContent).toBe('Insights');
@@ -58,45 +73,133 @@ test('preserves configuration drafts across separate findings and analytics rout
   expect(required(findingsTab).getAttribute('aria-current')).toBe('page');
   expect(required('h2').textContent).toBe('Agent behaviour');
   expect(required<HTMLDetailsElement>('.query-panel').open).toBe(false);
-  expect(document.querySelector('[role="tablist"]')).toBeNull();
   expect(required(settingsLink).textContent).toBe('Collection settings');
-  expect(document.querySelectorAll('.subpage-container a[href="/admin/agent-diagnostics"]')).toHaveLength(1);
   expect(document.body.textContent).not.toContain('Add pattern');
   follow(logsTab);
   await vi.waitFor((): void => expect(logs.reportQueries).toHaveLength(1));
   expect(required('h2').textContent).toBe('Log analytics');
   expect(required<HTMLDetailsElement>('.query-panel').open).toBe(false);
   expect(required(logsTab).getAttribute('aria-current')).toBe('page');
-  expect(document.querySelector('.subpage-container a[href="/admin/agent-diagnostics"]')).toBeNull();
+  expect(document.querySelector(settingsLink)).toBeNull();
   follow(findingsTab);
   await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(2));
   follow(logsTab);
   await vi.waitFor((): void => expect(logs.reportQueries).toHaveLength(2));
   expect(required<HTMLDetailsElement>('.query-panel').open).toBe(false);
   expect(document.querySelector('.query-summary')?.textContent).toBe('Stored logs · Last 7 days');
-  follow(findingsTab);
-  await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(3));
-  follow(settingsLink);
-  expect(required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').checked).toBe(false);
+  follow(`nav[aria-label="Administration navigation"] a[href="${diagnostics}"]`);
+  expect(required<HTMLInputElement>(patternToggle).checked).toBe(false);
   expect(document.body.textContent).toContain('Unsaved changes');
   expect(factory).toHaveBeenCalledOnce();
   expect(get).toHaveBeenCalledOnce();
 });
 
-test('identity changes and hidden identity destroy old drafts rather than reusing them', async (): Promise<void> => {
-  const controls = new InsightsHarnessState();
+function navigation(path: string | null, type: 'link' | 'popstate' | 'leave'): BeforeNavigate {
+  const target = (destination: string): NonNullable<BeforeNavigate['to']> => {
+    const url = new URL(destination, 'http://localhost');
+    const routeIds: Record<string, NonNullable<BeforeNavigate['to']>['route']['id']> = {
+      [diagnostics]: '/admin/(agent-insights)/agent-diagnostics',
+      [findings]: '/admin/(agent-insights)/insights/agent-behaviour',
+      [`${findings}/configuration`]: '/admin/(agent-insights)/insights/agent-behaviour/configuration',
+      [logsPath]: '/admin/(agent-insights)/insights/logs',
+      '/admin/system-settings': '/admin/system-settings'
+    };
+    return { params: {}, route: { id: routeIds[url.pathname] ?? null }, url, scroll: null };
+  };
+  const details = { from: target(diagnostics), to: path ? target(path) : null, willUnload: !path, shallow: false, complete: Promise.resolve(), cancel: vi.fn() };
+  if (type === 'link') return { ...details, type, event: new PointerEvent('click') };
+  if (type === 'popstate') return { ...details, type, delta: -1, event: new PopStateEvent('popstate') };
+  return { ...details, type };
+}
+
+test('guards unsaved pattern drafts only when leaving the shared Insights workspace', async (): Promise<void> => {
+  const confirm = vi.fn<Window['confirm']>().mockReturnValue(false);
+  vi.stubGlobal('confirm', confirm);
+  const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
+  const controls = new InsightsHarnessState(diagnostics);
+  component = mount(InsightsHarness, { target: document.body, props: { controls, createState: (): InsightsState => new InsightsState(api, new InMemoryLogCounts()) } });
+  await vi.waitFor((): void => expect(document.querySelector(patternToggle)).not.toBeNull());
+
+  const guard = beforeNavigate.mock.lastCall?.[0];
+  if (!guard) throw new Error('Missing navigation guard');
+
+  const cleanDeparture = navigation(reporting, 'link');
+  guard(cleanDeparture);
+  expect(cleanDeparture.cancel).not.toHaveBeenCalled();
+  expect(confirm).not.toHaveBeenCalled();
+
+  required<HTMLInputElement>(patternToggle).click();
+  flushSync();
+  for (const path of [findings, logsPath, diagnostics]) {
+    const withinGroup = navigation(path, 'link');
+    guard(withinGroup);
+    expect(withinGroup.cancel).not.toHaveBeenCalled();
+  }
+  expect(confirm).not.toHaveBeenCalled();
+  follow(findingsLink);
+
+  const stay = navigation(reporting, 'link');
+  guard(stay);
+  expect(stay.cancel).toHaveBeenCalledOnce();
+  expect(confirm).toHaveBeenCalledOnce();
+
+  confirm.mockReturnValue(true);
+  const departure = navigation(reporting, 'popstate');
+  guard(departure);
+  expect(departure.cancel).not.toHaveBeenCalled();
+  expect(confirm).toHaveBeenCalledTimes(2);
+
+  const unload = navigation(null, 'leave');
+  guard(unload);
+  expect(unload.cancel).toHaveBeenCalledOnce();
+  expect(confirm).toHaveBeenCalledTimes(2);
+
+  confirm.mockReturnValue(false);
+  for (const path of [diagnostics, `${findings}/configuration`]) {
+    const legacyReporting = navigation(`${path}?tab=reporting`, 'link');
+    guard(legacyReporting);
+    expect(legacyReporting.cancel).toHaveBeenCalledOnce();
+  }
+  expect(confirm).toHaveBeenCalledTimes(4);
+});
+
+test('guards an unfinished pattern category before it is added to the draft', async (): Promise<void> => {
+  const confirm = vi.fn<Window['confirm']>().mockReturnValue(false);
+  vi.stubGlobal('confirm', confirm);
+  const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
+  const controls = new InsightsHarnessState(diagnostics);
+  component = mount(InsightsHarness, { target: document.body, props: { controls, createState: (): InsightsState => new InsightsState(api, new InMemoryLogCounts()) } });
+  const editButton = 'button[aria-label="Edit Missing context"]';
+  await vi.waitFor((): void => expect(document.querySelector(editButton)).not.toBeNull());
+  required<HTMLButtonElement>(editButton).click();
+  flushSync();
+  const category = required<HTMLInputElement>('#pattern-categories');
+  category.value = 'unfinished-category';
+  category.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(document.body.textContent).not.toContain('Unsaved changes');
+
+  const guard = beforeNavigate.mock.lastCall?.[0];
+  if (!guard) throw new Error('Missing navigation guard');
+  const departure = navigation(reporting, 'link');
+  guard(departure);
+  expect(departure.cancel).toHaveBeenCalledOnce();
+  expect(confirm).toHaveBeenCalledOnce();
+});
+
+test('identity changes and hidden identity destroy old pattern drafts rather than reusing them', async (): Promise<void> => {
+  const controls = new InsightsHarnessState(diagnostics);
   const scopes: InsightsState[] = [];
   const factory = (): InsightsState => {
     const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
     const state = new InsightsState(api, new InMemoryLogCounts()); scopes.push(state); return state;
   };
   component = mount(InsightsHarness, { target: document.body, props: { controls, createState: factory } }); flushSync();
-  await vi.waitFor((): void => expect(document.querySelector('input[type="checkbox"][aria-label="Enable Missing context"]')).not.toBeNull());
-  required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').click(); flushSync();
+  await vi.waitFor((): void => expect(document.querySelector(patternToggle)).not.toBeNull());
+  required<HTMLInputElement>(patternToggle).click();
+  flushSync();
   expect(document.body.textContent).toContain('Unsaved changes');
   controls.changeIdentity('account-b'); flushSync();
-  await vi.waitFor((): void => expect(document.querySelector('input[type="checkbox"][aria-label="Enable Missing context"]')).not.toBeNull());
-  expect(required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').checked).toBe(true);
+  await vi.waitFor((): void => expect(required<HTMLInputElement>(patternToggle).checked).toBe(true));
   expect(scopes).toHaveLength(2);
   expect(scopes[0].allowed).toBe(false);
   expect(scopes[0].behaviour.configuration.patterns).toEqual([]);
@@ -110,9 +213,10 @@ test('a log-query authorization failure clears cached configuration and removes 
   const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
   const logs = new InMemoryLogCounts();
   const state = new InsightsState(api, logs);
-  component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: (): InsightsState => state } }); flushSync();
-  await vi.waitFor((): void => expect(document.querySelector('input[type="checkbox"][aria-label="Enable Missing context"]')).not.toBeNull());
-  required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').click(); flushSync();
+  component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(diagnostics), createState: (): InsightsState => state } });
+  await vi.waitFor((): void => expect(document.querySelector(patternToggle)).not.toBeNull());
+  required<HTMLInputElement>(patternToggle).click();
+  flushSync();
   logs.failure = new HttpError(403, 'Forbidden', null);
   follow(findingsLink);
   follow(logsTab);
@@ -126,33 +230,32 @@ test('a log-query authorization failure clears cached configuration and removes 
 
 test('findings offer setup when collection is unpublished and still show the query', async (): Promise<void> => {
   const state = new InsightsState(new InMemoryAgentBehaviourApi(), new InMemoryLogCounts());
-  const controls = new InsightsHarnessState('/admin/insights/agent-behaviour');
-  component = mount(InsightsHarness, { target: document.body, props: { controls, createState: (): InsightsState => state } });
+  component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: (): InsightsState => state } });
   await vi.waitFor((): void => expect(document.querySelector('.collection-notice')?.textContent).toContain('Collection isn’t configured'));
-  expect(required('.collection-notice a[href="/admin/agent-diagnostics"]').textContent).toBe('Set up collection');
+  expect(required(`.collection-notice a[href="${diagnostics}"]`).textContent).toBe('Set up collection');
   expect(required('.query-panel summary').textContent).toContain('Query');
 });
 
-test('findings show collection is off only after the disabling draft is published', async (): Promise<void> => {
+test('findings show collection is off only after the disabling pattern draft is published', async (): Promise<void> => {
   const api = new InMemoryAgentBehaviourApi(); api.current = configuration();
   const state = new InsightsState(api, new InMemoryLogCounts());
-  component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: (): InsightsState => state } });
-  await vi.waitFor((): void => expect(document.querySelector('input[type="checkbox"][aria-label="Enable Missing context"]')).not.toBeNull());
-  required<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Missing context"]').click(); flushSync();
-  expect(document.body.textContent).toContain('Unsaved changes');
+  component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(diagnostics), createState: (): InsightsState => state } });
+  await vi.waitFor((): void => expect(document.querySelector(patternToggle)).not.toBeNull());
+  required<HTMLInputElement>(patternToggle).click();
+  flushSync();
   follow(findingsLink);
   expect(document.querySelector('.collection-notice')).toBeNull();
 
-  follow(settingsLink);
-  const save = Array.from(document.querySelectorAll<HTMLButtonElement>('.subpage-container button')).find((button): boolean => button.textContent === 'Save changes');
-  expect(save).toBeDefined();
-  expect(save!.disabled).toBe(false);
-  save!.click();
+  follow(`nav[aria-label="Administration navigation"] a[href="${diagnostics}"]`);
+  const save = [...document.querySelectorAll<HTMLButtonElement>('.subpage-container button')].find((button): boolean => button.textContent === 'Save changes');
+  if (!save) throw new Error('Missing Save changes button');
+  expect(save.disabled).toBe(false);
+  save.click();
   await vi.waitFor((): void => expect(document.body.textContent).toContain('Changes saved'));
   follow(findingsLink);
   expect(required('.collection-notice').textContent).toContain('Collection is off');
   expect(required('.collection-notice').textContent).toContain('Existing entries remain available.');
-  expect(required('.collection-notice a[href="/admin/agent-diagnostics"]').textContent).toBe('Review collection settings');
+  expect(required(`.collection-notice a[href="${reporting}"]`).textContent).toBe('Review collection settings');
   expect(required('.query-panel summary').textContent).toContain('Query');
 });
 

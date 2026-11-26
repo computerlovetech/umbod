@@ -2,8 +2,8 @@
   import { tick } from 'svelte';
   import { calculateSelectOverlayGeometry, SelectState, type SelectOption } from './select-state.svelte';
 
-  let { options, label, value, onchange, disabled = false, compact = false, id, name, accessibleName, search, emptyMessage = 'No options found' }: {
-    options: SelectOption[]; label: string; value: string; onchange: (value: string) => void; disabled?: boolean; compact?: boolean; id?: string; name?: string; accessibleName?: string;
+  let { options, label, value, onchange, disabled = false, compact = false, inline = false, id, name, accessibleName, search, emptyMessage = 'No options found' }: {
+    options: SelectOption[]; label: string; value: string; onchange: (value: string) => void; disabled?: boolean; compact?: boolean; inline?: boolean; id?: string; name?: string; accessibleName?: string;
     search?: { value: string; oninput: (value: string) => void; placeholder: string }; emptyMessage?: string;
   } = $props();
 
@@ -130,7 +130,7 @@
   }
 </script>
 
-<div class={['select', { compact }]}>
+<div class={['select', { compact, inline }]}>
   <label for={selectId}>{label}</label>
   {#if search}
     <input {@attach attachTrigger} type="text" {disabled} id={selectId} class="trigger searchable" role="combobox" aria-label={accessibleName} aria-autocomplete="list" aria-haspopup="listbox" aria-expanded={state.isOpen && !disabled} aria-controls={listboxId} aria-activedescendant={state.isOpen && !disabled && state.activeValue !== undefined ? optionId(state.activeValue) : undefined} value={search.value} placeholder={search.placeholder} oninput={handleInput} onfocus={open} onclick={open} onblur={state.close} />
@@ -161,6 +161,8 @@
   .select.compact { gap: 0.25rem; }
   .select.compact label { font-size: 0.75rem; }
   .select.compact .trigger { font-size: 0.875rem; min-height: 2.25rem; padding: 0.45rem 0.6rem; }
+  .select.inline { align-items: center; display: flex; flex-wrap: wrap; gap: .5rem 1rem; justify-content: space-between; }
+  .select.inline .trigger { max-width: 100%; overflow-wrap: anywhere; width: auto; }
   .trigger:not(:disabled) { cursor: pointer; }
   .trigger:focus-visible { border-color: var(--admin-accent); outline: 3px solid var(--admin-focus); outline-offset: 2px; }
   .trigger:disabled { background: var(--admin-soft); color: var(--admin-muted); cursor: not-allowed; }

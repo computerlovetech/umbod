@@ -7,8 +7,12 @@ import ConfigurationEditor from './ConfigurationEditor.svelte';
 import ReportsView from '#lib/components/shared/agent-behaviour/ReportsView.svelte';
 import ReportDetailView from '#lib/components/shared/agent-behaviour/ReportDetailView.svelte';
 
+function findButton(target: HTMLElement, label: string): HTMLButtonElement | undefined {
+  return Array.from(target.querySelectorAll('button')).find((item): boolean => (item.getAttribute('aria-label') ?? item.textContent?.trim()) === label);
+}
+
 function button(target: HTMLElement, label: string): HTMLButtonElement {
-  const match = Array.from(target.querySelectorAll('button')).find((item): boolean => (item.getAttribute('aria-label') ?? item.textContent?.trim()) === label);
+  const match = findButton(target, label);
   expect(match).toBeDefined();
   return match!;
 }
@@ -20,15 +24,24 @@ test('inspects a pattern inline and keeps its labelled actions independent of th
   const target = document.createElement('div'); document.body.append(target); const component = mount(ConfigurationEditor, { target, props: { state } }); flushSync();
   try {
     expect(target.textContent).toContain('Missing context');
-    const reporting = target.querySelector('aside[aria-labelledby="reporting-summary-title"]');
-    expect(reporting?.textContent).toContain('Saved mode: When requested');
-    expect(reporting?.textContent).toContain('Umbod accepts reports only when the user asks for them.');
-    expect(reporting?.textContent).not.toContain('After saving:');
+    expect(target.querySelector('section[aria-labelledby="reporting-settings-title"]')).toBeNull();
     expect(target.textContent).not.toContain('internal-pattern'); expect(target.textContent).not.toContain('internal-settings');
     expect(target.textContent).not.toMatch(/revision|playbook/i);
     expect(target.querySelector('section[aria-label="Pattern editor"]')).toBeNull();
-    expect(reporting?.closest('section')?.hidden).toBe(true);
-    const row = target.querySelector('li');
+    const list = target.querySelector('[role="list"][aria-label="Patterns"]');
+    expect(list?.parentElement?.textContent).toContain('Enabled');
+    expect(list?.parentElement?.textContent).toContain('Actions');
+    const row = list?.querySelector('li');
+    const originalToggle = row?.querySelector<HTMLInputElement>('input[aria-label="Enable Missing context"]');
+    expect(originalToggle?.checked).toBe(true);
+    expect(findButton(target, 'Save changes')).toBeUndefined();
+    expect(findButton(target, 'Discard changes')).toBeUndefined();
+    originalToggle!.click(); flushSync();
+    expect(button(target, 'Save changes').disabled).toBe(false);
+    expect(button(target, 'Discard changes').disabled).toBe(false);
+    originalToggle!.click(); flushSync();
+    expect(findButton(target, 'Save changes')).toBeUndefined();
+    expect(findButton(target, 'Discard changes')).toBeUndefined();
     const pattern = row?.querySelector('details');
     expect(pattern?.open).toBe(false);
     const disclosure = pattern!.querySelector('summary')!;
@@ -63,7 +76,6 @@ test('inspects a pattern inline and keeps its labelled actions independent of th
     expect(toggle.checked).toBe(false);
     expect(pattern!.open).toBe(true);
     button(target, 'Discard changes').click(); flushSync(); expect(target.textContent).toContain('Missing context'); expect(state.dirty).toBe(false);
-    expect(reporting?.textContent).not.toContain('After saving:');
     const deleteButton = button(target, 'Delete Missing context');
     deleteButton.focus();
     deleteButton.click(); await tick();
@@ -73,10 +85,12 @@ test('inspects a pattern inline and keeps its labelled actions independent of th
     await vi.waitFor((): void => expect(document.activeElement).toBe(discard));
     discard.click(); flushSync();
     expect(target.querySelector('li summary')?.textContent?.trim()).toBe('Missing context');
+    expect(findButton(target, 'Save changes')).toBeUndefined();
+    expect(findButton(target, 'Discard changes')).toBeUndefined();
   } finally { await unmount(component); target.remove(); state.dispose(); }
 });
 
-test('shows reporting controls directly and previews the selected policy until it is saved', async (): Promise<void> => {
+test('shows the reporting mode only while enabled and preserves the mode when reporting is switched off', async (): Promise<void> => {
   const api = new InMemoryAgentBehaviourApi();
   api.current = { revision: 6, patterns: [{ id: 'pattern', name: 'Missing context', description: 'Notice missing facts', assessment_prompt: 'Assess missing facts', inclusion_criteria: '', exclusion_criteria: '', categories: [], polarity: 'neutral', enabled: true }], playbooks: [{ id: 'review', name: 'Behaviour review', collection_instructions: 'Collect facts', pattern_ids: ['pattern'], enabled: true, allow_proactive: false }, { id: 'secondary', name: 'Secondary review', collection_instructions: 'Collect secondary facts', pattern_ids: ['pattern'], enabled: false, allow_proactive: true }] };
   const state = new ConfigurationState(api.configuration, vi.fn());
@@ -87,23 +101,61 @@ test('shows reporting controls directly and previews the selected policy until i
     const settings = target.querySelector<HTMLElement>('section[aria-labelledby="reporting-settings-title"]')!;
     expect(settings.hidden).toBe(false);
     expect(settings.querySelector('details')).toBeNull();
-    expect(target.querySelector<HTMLElement>('section[aria-labelledby="diagnostic-patterns-title"]')?.hidden).toBe(true);
-    expect(settings.querySelector('textarea')?.value).toBe('Collect facts');
-    const groups = settings.querySelectorAll('fieldset');
-    expect(Array.from(groups, (group): string | undefined => group.querySelector('legend')?.textContent ?? undefined)).toEqual(['Which reports Umbod accepts · Behaviour review', 'Which reports Umbod accepts · Secondary review']);
-    const radios = groups[0].querySelectorAll<HTMLInputElement>('input[type="radio"]');
-    expect(radios).toHaveLength(3);
-    expect(radios[0].checked).toBe(true);
-    radios[1].click(); flushSync();
+    expect(target.querySelector('section[aria-labelledby="diagnostic-patterns-title"]')).toBeNull();
+    expect(settings.querySelector('textarea')).toBeNull();
+    const selector = '[role="combobox"][aria-label="Reporting mode · Behaviour review"]';
+    const mode = settings.querySelector<HTMLButtonElement>(selector);
+    const toggle = settings.querySelector<HTMLInputElement>('input[aria-label="Accept diagnostic reports · Behaviour review"]');
+    expect(toggle?.checked).toBe(true);
+    expect(mode?.textContent).toContain('When requested');
+    expect(settings.querySelector('[role="combobox"][aria-label="Reporting mode · Secondary review"]')).toBeNull();
+    mode!.click();
+    await tick();
+    expect(mode!.getAttribute('aria-expanded')).toBe('true');
+    const proactive = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option): boolean => option.textContent?.trim() === 'Allow proactive reports');
+    expect(proactive).toBeDefined();
+    proactive!.click();
+    await tick();
     expect(settings.textContent).toContain('Saved mode: When requested');
     expect(settings.textContent).toContain('After saving: Automatic reports allowed');
-    radios[2].click(); flushSync();
+    toggle!.click(); flushSync();
+    expect(settings.querySelector(selector)).toBeNull();
     expect(settings.textContent).toContain('After saving: Off');
+    toggle!.click(); flushSync();
+    expect(settings.querySelector(selector)?.textContent).toContain('Allow proactive reports');
+    toggle!.click(); flushSync();
     button(target, 'Save changes').click();
     await vi.waitFor((): void => expect(settings.textContent).toContain('Saved mode: Off'));
     expect(settings.textContent).not.toContain('After saving:');
-    expect(api.current.playbooks[0].enabled).toBe(false);
+    expect(api.current.playbooks[0]).toMatchObject({ enabled: false, allow_proactive: true, collection_instructions: 'Collect facts' });
     expect(api.current.playbooks[1]).toMatchObject({ enabled: false, allow_proactive: true, collection_instructions: 'Collect secondary facts' });
+  } finally { await unmount(component); target.remove(); state.dispose(); }
+});
+
+test.each(['Close', 'Escape'])('dismisses an unsaved new pattern with %s without changing the list', async (dismissal): Promise<void> => {
+  const api = new InMemoryAgentBehaviourApi();
+  const state = new ConfigurationState(api.configuration, vi.fn(), (): string => 'new-pattern');
+  await state.load();
+  const target = document.createElement('div'); document.body.append(target);
+  const component = mount(ConfigurationEditor, { target, props: { state } }); flushSync();
+  try {
+    button(target, 'Add pattern').click(); flushSync();
+    const dialog = target.querySelector('dialog')!;
+    expect(dialog.querySelector('h2')?.textContent).toBe('New pattern');
+    expect(target.textContent).toContain('0 of 0 enabled');
+    const name = dialog.querySelector<HTMLInputElement>('#pattern-name')!;
+    name.value = 'Abandoned pattern'; name.dispatchEvent(new Event('input', { bubbles: true })); flushSync();
+    expect(dialog.querySelector('h2')?.textContent).toBe('New pattern');
+    expect(target.querySelector('#diagnostic-patterns-title')?.closest('section')?.querySelector('summary')).toBeNull();
+    expect(target.textContent).not.toContain('Unsaved changes');
+    if (dismissal === 'Close') button(dialog, 'Close').click();
+    else dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    flushSync();
+    expect(target.querySelector('dialog')).toBeNull();
+    expect(target.textContent).toContain('No patterns configured.');
+    expect(findButton(target, 'Save changes')).toBeUndefined();
+    button(target, 'Add pattern').click(); flushSync();
+    expect(target.querySelector<HTMLInputElement>('dialog #pattern-name')?.value).toBe('');
   } finally { await unmount(component); target.remove(); state.dispose(); }
 });
 
@@ -149,8 +201,20 @@ test('adds and removes category tags without publishing the pattern', async (): 
     expect(input.isConnected).toBe(true);
     enterTag('Review notes');
     save.click(); flushSync();
-    expect(target.querySelector('dialog')).toBeNull();
-    button(target, 'Edit New pattern').click(); flushSync();
+    expect(target.querySelector('dialog [role="status"]')?.textContent).toContain('Add a name');
+    expect(target.querySelector('#diagnostic-patterns-title')?.closest('section')?.querySelector('summary')).toBeNull();
+    for (const [selector, value] of [['#pattern-name', 'Tool context'], ['#pattern-description', 'Notice missing tool context']]) {
+      const field = target.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector);
+      expect(field).not.toBeNull();
+      field!.value = value;
+      field!.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    flushSync();
+    save.click();
+    await vi.waitFor((): void => expect(target.querySelector('dialog')).toBeNull());
+    expect(target.querySelector('summary')?.textContent?.trim()).toBe('Tool context');
+    expect(button(target, 'Save changes').disabled).toBe(false);
+    button(target, 'Edit Tool context').click(); flushSync();
     expect(tags()).toEqual(['tools', 'review-notes']);
     const reopenedInput = target.querySelector<HTMLInputElement>('input[name="category"]')!;
     const reopenedSave = button(target, 'Save');
@@ -160,7 +224,7 @@ test('adds and removes category tags without publishing the pattern', async (): 
     expect(reopenedSave.disabled).toBe(false);
     reopenedSave.click(); flushSync();
     expect(target.querySelector('dialog')).toBeNull();
-    button(target, 'Edit New pattern').click(); flushSync();
+    button(target, 'Edit Tool context').click(); flushSync();
     expect(tags()).toEqual(['tools', 'review-notes', 'pending-category']);
     expect(api.current.patterns).toHaveLength(0);
   } finally { await unmount(component); target.remove(); state.dispose(); }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import InsightsLayout from './InsightsLayout.svelte';
-  import BehaviourPage from '../../../../routes/admin/(agent-insights)/insights/agent-behaviour/+page.svelte';
   import ConfigurationPage from '../../../../routes/admin/(agent-insights)/agent-diagnostics/+page.svelte';
+  import BehaviourPage from '../../../../routes/admin/(agent-insights)/insights/agent-behaviour/+page.svelte';
   import LogsPage from '../../../../routes/admin/(agent-insights)/insights/logs/+page.svelte';
   import type { InsightsState } from './insights-state.svelte';
   import type { InsightsHarnessState } from './insights.test-support.svelte';

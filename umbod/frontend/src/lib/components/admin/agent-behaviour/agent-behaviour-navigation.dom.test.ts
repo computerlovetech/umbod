@@ -17,7 +17,7 @@ test('renders findings directly with externally owned state and stops only repor
   try {
     await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(1));
     expect(target.querySelector('h2')?.textContent).toBe('Agent behaviour');
-    expect(target.querySelector('header a[href="/admin/agent-diagnostics"]')?.textContent).toBe('Collection settings');
+    expect(target.querySelector('header a[href="/admin/system-settings?section=agent-diagnostics"]')?.textContent).toBe('Collection settings');
     expect(target.textContent).not.toContain('Agent self-reported findings · Not independently verified');
     expect(target.querySelector('[role="tablist"]')).toBeNull();
     expect(target.textContent).not.toContain('Reports');
@@ -67,25 +67,29 @@ test('admin report announces a failed deletion in the confirmation and allows re
   } finally { await unmount(component); target.remove(); state.dispose(); }
 });
 
-test('Agent diagnostics owns its findings link and closes the editor on exit without discarding its draft', async (): Promise<void> => {
+test('Agent diagnostics owns its findings link and leaves the workspace-owned draft intact when unmounted', async (): Promise<void> => {
   const api = new InMemoryAgentBehaviourApi();
   const state = new AgentBehaviourPageState(api);
-  await state.configuration.load(); await state.configuration.addPattern();
+  await state.configuration.load(); state.configuration.addPattern();
   const selected = state.configuration.selected;
   expect(selected).toBeDefined();
   state.configuration.updatePattern(selected!.id, 'name', 'Unsaved pattern');
+  state.configuration.setPendingCategory('draft-category');
   const target = document.createElement('div'); document.body.append(target);
   const component = mount(ConfigurationView, { target, props: { state: state.configuration } }); flushSync();
   try {
     expect(target.querySelector('h1')?.textContent).toBe('Agent diagnostics');
+    expect(target.querySelector('a[href="/admin/system-settings?section=agent-diagnostics"]')?.textContent).toBe('Reporting settings');
+    expect(target.querySelector('section[aria-labelledby="reporting-settings-title"]')).toBeNull();
     expect(target.querySelector('a[href="/admin/insights/agent-behaviour"]')?.textContent).toContain('View findings');
     expect(target.querySelector('dialog')).not.toBeNull();
     expect(target.textContent).toContain('Add pattern');
     expect(target.textContent).not.toContain('Restore defaults');
   } finally { await unmount(component); target.remove(); }
-  expect(state.configuration.selected).toBeUndefined();
-  expect(state.configuration.patterns[0].name).toBe('Unsaved pattern');
-  expect(state.configuration.dirty).toBe(true);
+  expect(state.configuration.selected?.name).toBe('Unsaved pattern');
+  expect(state.configuration.pendingCategory).toBe('draft-category');
+  expect(state.configuration.editorDirty).toBe(true);
+  expect(state.configuration.dirty).toBe(false);
   state.dispose();
 });
 

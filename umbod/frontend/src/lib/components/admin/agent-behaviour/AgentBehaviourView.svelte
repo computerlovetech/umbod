@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { AgentBehaviourPageState } from '#lib/agent-behaviour/state/page-state.svelte.js';
   import ButtonLink from '#lib/components/admin/shared/ButtonLink.svelte';
-  import { agentBehaviourFindingsHref, agentDiagnosticsHref } from '#lib/workspace/navigation.js';
+  import { agentBehaviourFindingsHref, agentDiagnosticsHref, agentDiagnosticsReportingHref } from '#lib/workspace/navigation.js';
   import Button from '#lib/components/admin/shared/Button.svelte';
   import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
@@ -17,7 +17,7 @@
   {#if reportId === null}
     <header class="insight-heading findings-heading">
       <h2>Agent behaviour</h2>
-      <a class="admin-back-link" href={agentDiagnosticsHref}>Collection settings</a>
+      <a class="admin-back-link" href={agentDiagnosticsReportingHref}>Collection settings</a>
     </header>
     {#if state.configuration.collectionStatus === 'unconfigured'}
       <div class="insight-results collection-notice">
@@ -27,7 +27,7 @@
     {:else if state.configuration.collectionStatus === 'off'}
       <div class="insight-results collection-notice">
         <div><strong>Collection is off</strong><p class="insight-caption">Existing entries remain available.</p></div>
-        <ButtonLink variant="secondary" href={agentDiagnosticsHref}>Review collection settings</ButtonLink>
+        <ButtonLink variant="secondary" href={agentDiagnosticsReportingHref}>Review collection settings</ButtonLink>
       </div>
     {/if}
     <ReportsView state={state.reports} listHref={agentBehaviourFindingsHref} />

@@ -1,11 +1,17 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { agentDiagnosticsReportingHref, systemSettingsHref } from '#lib/workspace/navigation.js';
   import AdminSplitWorkspace from '../shared/AdminSplitWorkspace.svelte';
   import AdminToggle from '../shared/AdminToggle.svelte';
   import Button from '../shared/Button.svelte';
   import type { FilesystemSettingsState } from './filesystem-settings-state.svelte';
 
-  let { state }: { state: FilesystemSettingsState } = $props();
+  let { state, section, diagnosticsAllowed, diagnostics }: {
+    state: FilesystemSettingsState;
+    section: 'filesystem' | 'agent-diagnostics';
+    diagnosticsAllowed: boolean;
+    diagnostics: Snippet;
+  } = $props();
   const approvalLabel = 'Require approval for MCP file deletion';
 
   function changeApproval(event: Event): void {
@@ -17,29 +23,42 @@
   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 6h7l2 2h9v12H3z" /></svg>
 {/snippet}
 
-{#snippet sectionMarker(marker: Snippet | 'dot' | 'none')}
-  {#if marker !== 'none'}
-    <span class="section-marker" aria-hidden="true">
-      {#if marker === 'dot'}
-        <span class="section-dot"></span>
-      {:else}
-        {@render marker()}
-      {/if}
-    </span>
-  {/if}
+{#snippet diagnosticsIcon()}
+  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-7 4 14 3-7h4" /></svg>
 {/snippet}
 
-<AdminSplitWorkspace ariaLabel="System settings workspace" sidebarLabel="Settings sections" sidebarHeading="Settings sections" count={1} detailLabel="Filesystem settings">
+<AdminSplitWorkspace ariaLabel="System settings workspace" sidebarLabel="Settings sections" sidebarHeading="Settings sections" count={diagnosticsAllowed ? 2 : 1} detailLabel={section === 'agent-diagnostics' ? 'Agent diagnostics settings' : 'Filesystem settings'}>
   {#snippet sidebar()}
-    <ul class="sections" aria-label="Available sections">
-      <li class="section-row" aria-current="true">
-        {@render sectionMarker(folderIcon)}
-        <span class="section-copy"><strong>Filesystem</strong><small>1 setting</small></span>
-      </li>
-    </ul>
+    <nav aria-label="Available sections">
+      <ul class="sections">
+        <li>
+          <a class="section-row" href={systemSettingsHref} aria-current={section === 'filesystem' ? 'page' : undefined}>
+            <span class="section-marker">{@render folderIcon()}</span>
+            <span class="section-copy"><strong>Filesystem</strong><small>1 setting</small></span>
+          </a>
+        </li>
+        {#if diagnosticsAllowed}
+          <li>
+            <a class="section-row" href={agentDiagnosticsReportingHref} aria-current={section === 'agent-diagnostics' ? 'location' : undefined}>
+              <span class="section-marker">{@render diagnosticsIcon()}</span>
+              <span class="section-copy"><strong>Agent diagnostics</strong><small>Reporting settings</small></span>
+            </a>
+          </li>
+        {/if}
+      </ul>
+    </nav>
   {/snippet}
 
   {#snippet detail()}
+    {#if section === 'agent-diagnostics'}
+      {@render diagnostics()}
+    {:else}
+      {@render filesystem()}
+    {/if}
+  {/snippet}
+</AdminSplitWorkspace>
+
+{#snippet filesystem()}
     <header class="detail-header">
       <span class="folder-icon">{@render folderIcon()}</span>
       <div>
@@ -94,14 +113,15 @@
         </div>
       </div>
     {/if}
-  {/snippet}
-</AdminSplitWorkspace>
+{/snippet}
 
 <style>
   .sections { list-style: none; margin: 0; padding: 0; }
-  .section-row { align-items: flex-start; background: var(--admin-accent-soft); border-top: 1px solid var(--admin-border); box-shadow: inset 2px 0 0 var(--admin-accent); display: flex; gap: 0.6rem; padding: 15px 16px; }
+  .section-row { align-items: flex-start; border-top: 1px solid var(--admin-border); color: inherit; display: flex; gap: 0.6rem; padding: 15px 16px; text-decoration: none; }
+  .section-row:hover, .section-row[aria-current] { background: var(--admin-accent-soft); }
+  .section-row[aria-current] { box-shadow: inset 2px 0 0 var(--admin-accent); }
+  .section-row:focus-visible { outline-offset: -3px; }
   .section-marker { align-items: center; color: var(--admin-accent); display: inline-flex; flex: 0 0 20px; height: 20px; justify-content: center; }
-  .section-dot { background: currentColor; border-radius: 50%; height: 6px; width: 6px; }
   .section-copy { display: grid; font-size: 13px; gap: 0.25rem; }
   .section-copy strong { font-weight: 600; }
   .section-copy small { color: var(--admin-muted); font-size: 11px; }

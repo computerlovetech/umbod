@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import '#lib/styles/form-fields.css';
+  import AdminRecordList from '#lib/components/admin/shared/AdminRecordList.svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
   import PlusIcon from '#lib/components/shared/PlusIcon.svelte';
   import AdminToggle from '#lib/components/admin/shared/AdminToggle.svelte';
@@ -9,19 +10,8 @@
   import TextField from '#lib/components/shared/TextField.svelte';
   import TextAreaField from '#lib/components/shared/TextAreaField.svelte';
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
-  import { agentDiagnosticsHref } from '#lib/workspace/navigation.js';
-  import type { ConfigurationState, ReportingPolicy } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
-  const reportingDescriptions: Record<ConfigurationState['reportingMode'], string> = {
-    'When requested': 'Umbod accepts reports only when the user asks for them.',
-    'Automatic reports allowed': 'Umbod also accepts proactive reports where allowed by the reporting settings, the user, and the client.',
-    Off: 'Umbod does not accept new reports. Reporting requires at least one enabled reporting setting with an enabled pattern.'
-  };
-
-  const policies: readonly { id: ReportingPolicy; label: string; description: string }[] = [
-    { id: 'requested', label: 'When requested', description: 'Accept reports only when the user asks for them.' },
-    { id: 'proactive', label: 'Allow proactive reports', description: 'Also accept reports without a request if both the user and client allow it.' },
-    { id: 'off', label: 'Off', description: 'Reject all new reports under this setting, even when requested.' }
-  ];
+  import type { ConfigurationState } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
+  import ReportingSettings from './ReportingSettings.svelte';
   let { state, section = 'patterns' }: { state: ConfigurationState; section?: 'patterns' | 'reporting' } = $props();
 
   function categoryInput(form: HTMLFormElement | null): HTMLInputElement | null {
@@ -42,11 +32,11 @@
     return true;
   }
 
-  function savePatternEdit(id: string, button: HTMLButtonElement): void {
+  async function savePatternEdit(id: string, button: HTMLButtonElement): Promise<void> {
     if (!state.editorDirty) return;
     const input = categoryInput(button.form);
     if (input?.value.trim() && !addCategory(id, input)) return;
-    state.closeEditor();
+    await state.savePatternEdit();
   }
 
   function removeCategory(id: string, category: string, button: HTMLButtonElement): void {
@@ -59,10 +49,10 @@
   async function deletePattern(id: string, button: HTMLButtonElement): Promise<void> {
     const row = button.closest('li');
     const neighbor = row?.nextElementSibling ?? row?.previousElementSibling;
-    const nextFocus = neighbor?.querySelector<HTMLElement>('summary') ?? button.ownerDocument.getElementById('discard-diagnostics-changes');
+    const nextSummary = neighbor?.querySelector<HTMLElement>('summary');
     state.removePattern(id);
     await tick();
-    if (!button.isConnected) nextFocus?.focus();
+    if (!button.isConnected) (nextSummary ?? button.ownerDocument.getElementById('discard-diagnostics-changes'))?.focus();
   }
 </script>
 
@@ -70,59 +60,29 @@
   <svg class="fact-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d={path} /></svg>
 {/snippet}
 
-{#if state.message}<p role="status">{state.message}</p>{/if}
-{#if !state.loaded}
-  <Button disabled={state.busy} onclick={state.load}>{state.busy ? 'Loading…' : 'Retry patterns'}</Button>
-{:else}
+{#snippet saveBar()}
   <ToolSaveBar message={state.busy ? 'Working…' : state.dirty ? 'Unsaved changes' : ''} dirty={state.dirty} pending={state.busy}>
     <div class="actions save-actions">
       <Button id="discard-diagnostics-changes" variant="secondary" disabled={state.busy || (!state.dirty && !state.conflict)} onclick={state.discard}>Discard changes</Button>
       <Button disabled={state.busy || !state.dirty || state.conflict} onclick={state.save}>Save changes</Button>
     </div>
   </ToolSaveBar>
-  <section hidden={section !== 'reporting'} aria-labelledby="reporting-settings-title">
-    <header class="section-heading">
-      <div>
-        <h2 id="reporting-settings-title">Reporting settings</h2>
-        <p>Choose which diagnostic reports to accept and what they should include. These settings do not hide the MCP reporting tool.</p>
-      </div>
-    </header>
-    <div class="reporting-layout">
-      <div class="editor-card reporting-form">
-        {#each state.settings as setting (setting.id)}
-          {#if state.settings.length > 1}<h3>{setting.name}</h3>{/if}
-          <fieldset class="reporting-options" disabled={state.busy}>
-            <legend>Which reports Umbod accepts{state.settings.length > 1 ? ` · ${setting.name}` : ''}</legend>
-            {#each policies as policy (policy.id)}
-              <label class="reporting-option">
-                <input type="radio" name={`reporting-policy-${setting.id}`} checked={policy.id === (!setting.enabled ? 'off' : setting.allow_proactive ? 'proactive' : 'requested')} onchange={(): void => state.setReportingPolicy(setting.id, policy.id)} />
-                <span><strong>{policy.label}</strong><small>{policy.description}</small></span>
-              </label>
-            {/each}
-          </fieldset>
-          <TextAreaField id={`collection-instructions-${setting.id}`} label={state.settings.length > 1 ? `Collection instructions · ${setting.name}` : 'Collection instructions'} value={setting.collection_instructions} disabled={state.busy} rows={6} maxlength={8000} oninput={(event): void => state.updateSettings(setting.id, 'collection_instructions', event.currentTarget.value)} />
-        {:else}<p>No reporting settings configured.</p>{/each}
-      </div>
-      <aside class="editor-card reporting-summary" aria-labelledby="reporting-summary-title">
-        <h3 id="reporting-summary-title">Reporting status</h3>
-        <div role="status" aria-atomic="true">
-          <p><strong>Saved mode: {state.savedReportingMode}</strong></p>
-          <p>{reportingDescriptions[state.savedReportingMode]}</p>
-          {#if !state.conflict && state.reportingMode !== state.savedReportingMode}
-            <div class="reporting-draft">
-              <p><strong>After saving: {state.reportingMode}</strong></p>
-              <p>{reportingDescriptions[state.reportingMode]}</p>
-            </div>
-          {/if}
-        </div>
-        <div class="reporting-draft">
-          <p>{state.enabledPatternCount} enabled {state.enabledPatternCount === 1 ? 'pattern' : 'patterns'}</p>
-          <a class="admin-back-link" href={agentDiagnosticsHref}>Manage patterns <span aria-hidden="true">→</span></a>
-        </div>
-      </aside>
-    </div>
-  </section>
-  <section hidden={section !== 'patterns'} aria-labelledby="diagnostic-patterns-title">
+{/snippet}
+
+{#if state.message}<p role="status">{state.message}</p>{/if}
+{#if !state.loaded}
+  <Button disabled={state.busy} onclick={state.load}>{state.busy ? 'Loading…' : 'Retry loading diagnostics'}</Button>
+{:else}
+  {#if section === 'reporting'}
+    <ReportingSettings {state} />
+    {#if state.dirty || state.busy || state.conflict}
+      <div class="reporting-save-footer">{@render saveBar()}</div>
+    {/if}
+  {:else}
+  {#if state.dirty || state.busy || state.conflict}
+    {@render saveBar()}
+  {/if}
+  <section aria-labelledby="diagnostic-patterns-title">
     <header class="section-heading">
       <div>
         <h2 id="diagnostic-patterns-title">Patterns</h2>
@@ -130,63 +90,64 @@
       </div>
       <Button disabled={state.busy} onclick={state.addPattern}><PlusIcon />Add pattern</Button>
     </header>
-    {#if state.patterns.length}
-      <ul class="pattern-list" role="list">
-        {#each state.patterns as pattern (pattern.id)}
-          {@const name = pattern.name || 'New pattern'}
-          <li class="pattern-row">
-            <details class="pattern-details">
-              <summary class="pattern-summary"><span class="chevron" aria-hidden="true"></span><span>{name}</span></summary>
-              <div class="pattern-inspection">
-                <p>{pattern.description || 'No description'}</p>
-                <dl class="pattern-facts">
-                  <div class="rule-card inclusion-rule">
-                    <dt>{@render factIcon('M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM8 12l2.5 2.5L16 9')} When it counts</dt>
-                    <dd>{pattern.inclusion_criteria.trim() ? pattern.inclusion_criteria : 'Not specified'}</dd>
-                  </div>
-                  <div class="rule-card exclusion-rule">
-                    <dt>{@render factIcon('M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9 9l6 6m0-6-6 6')} When it does not count</dt>
-                    <dd>{pattern.exclusion_criteria.trim() ? pattern.exclusion_criteria : 'Not specified'}</dd>
-                  </div>
-                </dl>
-                <dl class="pattern-facts assessment-facts">
-                  <div class="assessment-prompt">
-                    <dt>{@render factIcon('M4 4h16v13H10l-6 4V4Zm4 5h8m-8 4h5')} Assessment prompt</dt>
-                    <dd>{pattern.assessment_prompt || 'Not specified'}</dd>
-                  </div>
-                  <div>
-                    <dt>{@render factIcon('M4 4h8l8 8-8 8-8-8V4Zm4 4h.01')} Categories</dt>
-                    <dd class="fact-badges">
-                      {#each pattern.categories as category, index (`${category}:${index}`)}
-                        <span class="fact-badge">{category}</span>
-                      {:else}None{/each}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{@render factIcon('M3 12h18m-14-4-4 4 4 4m10-8 4 4-4 4')} Polarity</dt>
-                    <dd><span class={['fact-badge', 'polarity', pattern.polarity]}>{pattern.polarity}</span></dd>
-                  </div>
-                </dl>
+    <AdminRecordList items={state.patterns} keyOf={(pattern): string => pattern.id} label="Patterns" recordHeading="Pattern" detailHeading="Enabled" emptyMessage="No patterns configured.">
+      {#snippet identity(pattern)}
+        <details class="pattern-details">
+          <summary class="pattern-summary"><span class="chevron" aria-hidden="true"></span><span>{pattern.name || 'New pattern'}</span></summary>
+          <div class="pattern-inspection">
+            <p>{pattern.description || 'No description'}</p>
+            <dl class="pattern-facts">
+              <div class="rule-card inclusion-rule">
+                <dt>{@render factIcon('M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM8 12l2.5 2.5L16 9')} When it counts</dt>
+                <dd>{pattern.inclusion_criteria.trim() ? pattern.inclusion_criteria : 'Not specified'}</dd>
               </div>
-            </details>
-            <div class="pattern-actions">
-              <AdminToggle checked={pattern.enabled} ariaLabel={`Enable ${name}`} disabled={state.busy} onchange={(): void => state.updatePattern(pattern.id, 'enabled', !pattern.enabled)} />
-              <Button variant="quiet" iconOnly aria-label={`Edit ${name}`} title={`Edit ${name}`} disabled={state.busy} onclick={(): void => state.editPattern(pattern.id)}>
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m15 4 5 5M4 20l5-1L21 7a2.1 2.1 0 0 0-5-5L4 14z" /></svg>
-              </Button>
-              <Button variant="danger" iconOnly aria-label={`Delete ${name}`} title={`Delete ${name}`} disabled={state.busy} onclick={(event): Promise<void> => deletePattern(pattern.id, event.currentTarget)}>
-                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" /></svg>
-              </Button>
-            </div>
-          </li>
-        {/each}
-      </ul>
-    {:else}<p>No patterns configured.</p>{/if}
+              <div class="rule-card exclusion-rule">
+                <dt>{@render factIcon('M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9 9l6 6m0-6-6 6')} When it does not count</dt>
+                <dd>{pattern.exclusion_criteria.trim() ? pattern.exclusion_criteria : 'Not specified'}</dd>
+              </div>
+            </dl>
+            <dl class="pattern-facts assessment-facts">
+              <div class="assessment-prompt">
+                <dt>{@render factIcon('M4 4h16v13H10l-6 4V4Zm4 5h8m-8 4h5')} Assessment prompt</dt>
+                <dd>{pattern.assessment_prompt || 'Not specified'}</dd>
+              </div>
+              <div>
+                <dt>{@render factIcon('M4 4h8l8 8-8 8-8-8V4Zm4 4h.01')} Categories</dt>
+                <dd class="fact-badges">
+                  {#each pattern.categories as category, index (`${category}:${index}`)}
+                    <span class="fact-badge">{category}</span>
+                  {:else}None{/each}
+                </dd>
+              </div>
+              <div>
+                <dt>{@render factIcon('M3 12h18m-14-4-4 4 4 4m10-8 4 4-4 4')} Polarity</dt>
+                <dd><span class={['fact-badge', 'polarity', pattern.polarity]}>{pattern.polarity}</span></dd>
+              </div>
+            </dl>
+          </div>
+        </details>
+      {/snippet}
+      {#snippet detail(pattern)}
+        <AdminToggle checked={pattern.enabled} ariaLabel={`Enable ${pattern.name || 'New pattern'}`} disabled={state.busy} onchange={(): void => state.updatePattern(pattern.id, 'enabled', !pattern.enabled)} />
+      {/snippet}
+      {#snippet actions(pattern)}
+        {@const name = pattern.name || 'New pattern'}
+        <Button variant="quiet" iconOnly aria-label={`Edit ${name}`} title={`Edit ${name}`} disabled={state.busy} onclick={(): void => state.editPattern(pattern.id)}>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m15 4 5 5M4 20l5-1L21 7a2.1 2.1 0 0 0-5-5L4 14z" /></svg>
+        </Button>
+        <Button variant="danger" iconOnly aria-label={`Delete ${name}`} title={`Delete ${name}`} disabled={state.busy} onclick={(event): Promise<void> => deletePattern(pattern.id, event.currentTarget)}>
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" /></svg>
+        </Button>
+      {/snippet}
+    </AdminRecordList>
   </section>
+  {/if}
   {#if section === 'patterns' && state.selected}
     {@const pattern = state.selected}
-    <ModalShell title={pattern.name ? 'Edit pattern' : 'New pattern'} titleId="pattern-editor-title" close={state.closeEditor} closeDisabled={state.busy} initialFocus="input" --modal-overflow="auto">
+    <ModalShell title={state.creatingPattern ? 'New pattern' : 'Edit pattern'} titleId="pattern-editor-title" close={state.closeEditor} closeDisabled={state.busy} initialFocus="input" --modal-overflow="auto">
     <section aria-label="Pattern editor">
+      {#if state.busy}<p role="status">Working…</p>
+      {:else if state.editorMessage}<p role="status">{state.editorMessage}</p>{/if}
       <fieldset disabled={state.busy}>
         <TextField id="pattern-name" label="Name" value={pattern.name} maxlength={120} oninput={(event): void => void state.updatePattern(pattern.id, 'name', event.currentTarget.value)} />
         <TextAreaField id="pattern-description" label="What should the agent notice?" value={pattern.description} maxlength={2000} oninput={(event): void => void state.updatePattern(pattern.id, 'description', event.currentTarget.value)} />
@@ -222,7 +183,7 @@
         <Select label="Polarity" value={pattern.polarity} options={[{ value: 'neutral', label: 'Neutral' }, { value: 'positive', label: 'Positive' }, { value: 'negative', label: 'Negative' }]} onchange={(value: string): void => state.updatePattern(pattern.id, 'polarity', value as 'positive' | 'negative' | 'neutral')} />
       </fieldset>
       <div class="actions save-actions">
-        <Button form="pattern-category-form" disabled={state.busy || !state.editorDirty} onclick={(event): void => savePatternEdit(pattern.id, event.currentTarget)}>Save</Button>
+        <Button form="pattern-category-form" disabled={state.busy || !state.editorDirty} onclick={(event): Promise<void> => savePatternEdit(pattern.id, event.currentTarget)}>Save</Button>
       </div>
     </section>
     </ModalShell>
@@ -230,17 +191,11 @@
 {/if}
 
 <style>
-  .pattern-list { list-style: none; margin: .65rem 0 0; padding: 0; background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); overflow: clip; }
-  .pattern-row { position: relative; }
-  .pattern-row + .pattern-row { border-top: 1px solid var(--admin-border); }
-  .pattern-summary { box-sizing: border-box; display: flex; align-items: center; gap: .75rem; min-height: 3.5rem; padding: .65rem 8.75rem .65rem .9rem; list-style: none; overflow-wrap: anywhere; }
+  .pattern-summary { display: flex; align-items: center; gap: .75rem; cursor: pointer; font-weight: 600; list-style: none; overflow-wrap: anywhere; }
   .pattern-summary::-webkit-details-marker { display: none; }
-  .pattern-summary:focus-visible { outline-offset: -3px; }
-  .pattern-summary:hover, .pattern-details[open] > .pattern-summary { background: var(--admin-soft); }
   .chevron { flex: none; width: .45rem; height: .45rem; margin-inline: .15rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); color: var(--admin-muted); }
   .pattern-details[open] > .pattern-summary .chevron { transform: rotate(45deg); }
-  .pattern-actions { position: absolute; inset-block-start: .5625rem; inset-inline-end: .6rem; display: flex; align-items: center; gap: .25rem; }
-  .pattern-inspection { padding: 1rem clamp(.9rem, 3vw, 1.75rem); border-top: 1px solid var(--admin-border); overflow-wrap: anywhere; }
+  .pattern-inspection { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--admin-border); overflow-wrap: anywhere; }
   .pattern-inspection p { margin: 0; white-space: pre-wrap; }
   .pattern-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: .85rem 1.25rem; margin: .75rem 0 0; }
   .pattern-facts dt { display: flex; align-items: center; gap: .45rem; font-weight: 600; }
@@ -261,27 +216,11 @@
   .polarity { text-transform: capitalize; }
   .polarity.negative { background: var(--admin-danger-bg); border-color: var(--admin-danger-border); color: var(--admin-danger-text); }
   .polarity.positive { background: var(--admin-success-bg); border-color: var(--admin-success-border); color: var(--admin-success-text); }
-  .editor-card { background: var(--admin-panel); padding: 1rem; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); margin: 1rem 0; overflow-wrap: anywhere; }
   fieldset { display: grid; gap: 1rem; border: 0; padding: 1rem 6px; min-width: 0; }
   h2 { margin: 0; font-size: 1.15rem; }
   .actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
   .save-actions { justify-content: flex-end; }
+  .reporting-save-footer { margin-top: 1rem; }
   .section-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-bottom: .65rem; }
-  .section-heading p, .reporting-summary p { margin: .35rem 0 0; font-size: .9rem; color: var(--admin-muted); }
-  .reporting-summary strong { color: var(--admin-ink); }
-  .reporting-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
-  .reporting-layout .editor-card { margin: 0; }
-  .reporting-form { display: grid; gap: .9rem; }
-  .reporting-options { gap: .4rem; padding: 0; }
-  .reporting-options legend { padding: 0; margin-bottom: .4rem; font-weight: 650; }
-  .reporting-option { display: flex; align-items: start; gap: .5rem; padding: .55rem .65rem; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); }
-  .reporting-option:has(:checked) { background: var(--admin-accent-soft); border-color: var(--admin-accent-border); }
-  .reporting-option input { accent-color: var(--admin-accent); flex: none; margin: .24rem 0 0; }
-  .reporting-option strong, .reporting-option small { display: block; }
-  .reporting-option small { color: var(--admin-muted); }
-  .reporting-summary { background: var(--admin-soft); }
-  .reporting-summary a { gap: .3rem; margin-top: .35rem; }
-  .reporting-draft { margin-top: .75rem; padding-top: .35rem; border-top: 1px solid var(--admin-border); }
-  @media (max-width: 680px) { .reporting-layout { grid-template-columns: 1fr; } }
-  summary { cursor: pointer; font-weight: 600; }
+  .section-heading p { margin: .35rem 0 0; font-size: .9rem; color: var(--admin-muted); }
 </style>

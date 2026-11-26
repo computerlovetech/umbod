@@ -1,13 +1,13 @@
 import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { ConfigurationPort } from '../api';
-import { configurationFeedback } from '../domain/editing';
-import { conflictSchema, identifierSchema, patternCategoryLimit, publishSchema, type Configuration, type BehaviourPattern, type DiagnosticPlaybook } from '../domain/schemas';
+import { configurationFeedback, newPatternFeedback } from '../domain/editing';
+import { conflictSchema, identifierSchema, patternCategoryLimit, patternSchema, publishSchema, type Configuration, type BehaviourPattern, type DiagnosticPlaybook } from '../domain/schemas';
 
 type ReadonlyPattern = Readonly<Omit<BehaviourPattern, 'categories'>> & { readonly categories: readonly string[] };
 type ReadonlySettings = Readonly<Omit<DiagnosticPlaybook, 'pattern_ids'>> & { readonly pattern_ids: readonly string[] };
+type PatternSelection = { baseline: string; pendingCategory: string } & ({ kind: 'existing'; id: string } | { kind: 'new'; pattern: BehaviourPattern; message: string });
 type CollectionStatus = 'unavailable' | 'unconfigured' | 'off' | 'configured';
 type ReportingMode = 'Off' | 'Automatic reports allowed' | 'When requested';
-export type ReportingPolicy = 'off' | 'requested' | 'proactive';
 
 function activeReportingSettings(settings: readonly ReadonlySettings[], patterns: readonly ReadonlyPattern[]): readonly ReadonlySettings[] {
   const enabledPatternIds = new Set(patterns.filter((pattern): boolean => pattern.enabled).map((pattern): string => pattern.id));
@@ -26,12 +26,13 @@ export class ConfigurationState {
   private pending = $state(false);
   private notice = $state('');
   private collision = $state<Configuration | null>(null);
-  private selection = $state<{ id: string; baseline: string; pendingCategory: string } | null>(null);
+  private selection = $state<PatternSelection | null>(null);
   private request: AbortController | null = null;
-  private disposed = false;
+  private disposed = $state(false);
 
-  constructor(private readonly api: ConfigurationPort, private readonly revoke: () => void, private readonly generateId: () => string = (): string => `pattern-${crypto.randomUUID()}`) {}
+  constructor(private readonly api: ConfigurationPort, private readonly revoke?: () => void, private readonly generateId: () => string = (): string => `pattern-${crypto.randomUUID()}`) {}
 
+  get allowed(): boolean { return !this.disposed; }
   get revision(): number { return this.value.revision; }
   get patterns(): readonly ReadonlyPattern[] { return this.value.patterns; }
   get playbooks(): readonly ReadonlySettings[] { return this.value.playbooks; }
@@ -39,7 +40,13 @@ export class ConfigurationState {
   get publishedPatterns(): readonly ReadonlyPattern[] { return this.saved?.patterns ?? []; }
   get publishedPlaybooks(): readonly ReadonlySettings[] { return this.saved?.playbooks ?? []; }
   get enabledPatternCount(): number { return this.patterns.filter((pattern): boolean => pattern.enabled).length; }
-  get selected(): ReadonlyPattern | undefined { return this.patterns.find((pattern): boolean => pattern.id === this.selection?.id); }
+  get creatingPattern(): boolean { return this.selection?.kind === 'new'; }
+  get editorMessage(): string { return this.selection?.kind === 'new' ? this.selection.message : ''; }
+  get selected(): ReadonlyPattern | undefined {
+    const selection = this.selection;
+    if (selection?.kind === 'new') return selection.pattern;
+    return this.patterns.find((pattern): boolean => pattern.id === selection?.id);
+  }
   get pendingCategory(): string { return this.selection?.pendingCategory ?? ''; }
   get editorDirty(): boolean {
     const selected = this.selected;
@@ -56,6 +63,9 @@ export class ConfigurationState {
     return activeReportingSettings(this.publishedPlaybooks, this.publishedPatterns).length ? 'configured' : 'off';
   }
   get reportingMode(): ReportingMode { return reportingMode(this.playbooks, this.patterns); }
+  get reportingNeedsEnabledPattern(): boolean {
+    return this.reportingMode === 'Off' && this.settings.some((setting): boolean => setting.enabled);
+  }
   get savedReportingMode(): ReportingMode {
     const latest = this.collision ?? this.saved;
     return reportingMode(latest?.playbooks ?? [], latest?.patterns ?? []);
@@ -69,9 +79,14 @@ export class ConfigurationState {
     this.selection = null;
   };
 
-  private failure = (error: unknown): void => {
+  private failure = (error: unknown, source: 'configuration' | 'pattern' = 'configuration'): void => {
     if (error instanceof AuthenticationRequiredError || (error instanceof HttpError && [401, 403].includes(error.status))) {
-      this.revoke();
+      this.dispose();
+      this.revoke?.();
+      return;
+    }
+    if (source === 'pattern' && this.selection?.kind === 'new') {
+      this.selection.message = 'Reporting defaults could not be loaded. Try again.';
       return;
     }
     const parsed = error instanceof HttpError && error.status === 409 ? conflictSchema.safeParse(error.body) : null;
@@ -84,7 +99,7 @@ export class ConfigurationState {
   };
 
   load = async (): Promise<void> => {
-    if (this.disposed || this.pending || this.dirty) return;
+    if (this.disposed || this.pending || this.dirty || this.creatingPattern) return;
     const request = new AbortController();
     this.request = request;
     this.pending = true;
@@ -133,14 +148,17 @@ export class ConfigurationState {
   editPattern = (id: string): void => {
     if (!this.editable) return;
     const pattern = this.patterns.find((item): boolean => item.id === id);
-    if (pattern) this.selection = { id, baseline: JSON.stringify(pattern), pendingCategory: '' };
+    if (pattern) this.selection = { kind: 'existing', id, baseline: JSON.stringify(pattern), pendingCategory: '' };
   };
 
   setPendingCategory = (value: string): void => {
     if (this.selection) this.selection.pendingCategory = value;
   };
 
-  closeEditor = (): void => { this.selection = null; };
+  closeEditor = (): void => {
+    if (this.busy) return;
+    this.selection = null;
+  };
 
   private firstSettingIsFull = (): boolean => (this.value.playbooks[0]?.pattern_ids.filter((id): boolean => this.patterns.some((pattern): boolean => pattern.id === id)).length ?? 0) >= 20;
 
@@ -153,8 +171,8 @@ export class ConfigurationState {
     });
   };
 
-  addPattern = async (): Promise<void> => {
-    if (!this.editable) return;
+  addPattern = (): void => {
+    if (!this.editable || this.creatingPattern) return;
     if (this.patterns.length >= 50) {
       this.notice = 'Up to 50 patterns are supported. Remove a pattern before adding another.';
       return;
@@ -168,6 +186,21 @@ export class ConfigurationState {
       this.notice = 'A unique pattern identifier could not be generated. Try again.';
       return;
     }
+    const pattern: BehaviourPattern = { id, name: '', description: '', assessment_prompt: '', inclusion_criteria: '', exclusion_criteria: '', categories: [], polarity: 'neutral', enabled: true };
+    this.selection = { kind: 'new', pattern, baseline: JSON.stringify(pattern), pendingCategory: '', message: '' };
+  };
+
+  savePatternEdit = async (): Promise<void> => {
+    if (!this.editable || !this.selection || !this.editorDirty) return;
+    if (this.selection.kind === 'existing') {
+      this.closeEditor();
+      return;
+    }
+    const parsed = patternSchema.safeParse(this.selection.pattern);
+    if (!parsed.success) {
+      this.selection.message = newPatternFeedback(parsed.error.issues);
+      return;
+    }
     if (!this.value.playbooks.length) {
       const request = new AbortController();
       this.request = request;
@@ -177,30 +210,33 @@ export class ConfigurationState {
         if (this.disposed || this.request !== request) return;
         this.value.playbooks = defaults.playbooks.map((setting): DiagnosticPlaybook => ({ ...setting, pattern_ids: [], allow_proactive: false }));
       } catch (error) {
-        if (!this.disposed && this.request === request) this.failure(error);
+        if (!this.disposed && this.request === request) this.failure(error, 'pattern');
         return;
       } finally {
         if (!this.disposed && this.request === request) this.pending = false;
       }
     }
-    if (this.disposed) return;
-    this.value.patterns.push({ id, name: '', description: '', assessment_prompt: '', inclusion_criteria: '', exclusion_criteria: '', categories: [], polarity: 'neutral', enabled: true });
-    this.attachPattern(id);
-    this.editPattern(id);
+    this.closeEditor();
+    this.value.patterns.push(parsed.data);
+    this.attachPattern(parsed.data.id);
   };
 
   updatePattern = <K extends Exclude<keyof BehaviourPattern, 'id'>>(id: string, key: K, value: BehaviourPattern[K]): void => {
     if (!this.editable) return;
-    this.value.patterns = this.value.patterns.map((pattern): BehaviourPattern => {
-      if (pattern.id !== id) return pattern;
+    const edit = (pattern: BehaviourPattern): BehaviourPattern => {
       const derivesPrompt = key === 'description' && (!pattern.assessment_prompt || pattern.assessment_prompt === pattern.description);
       return { ...pattern, [key]: value, ...(derivesPrompt ? { assessment_prompt: value as string } : {}) };
-    });
+    };
+    if (this.selection?.kind === 'new' && this.selection.pattern.id === id) {
+      this.selection.pattern = edit(this.selection.pattern);
+      return;
+    }
+    this.value.patterns = this.value.patterns.map((pattern): BehaviourPattern => pattern.id === id ? edit(pattern) : pattern);
   };
 
   addCategory = (id: string, input: string): string => {
-    const pattern = this.patterns.find((item): boolean => item.id === id);
-    if (!this.editable || !pattern) return 'The pattern cannot be edited right now.';
+    const pattern = this.selected;
+    if (!this.editable || pattern?.id !== id) return 'The pattern cannot be edited right now.';
     const tag = input.trim().toLowerCase().replace(/\s+/g, '-');
     if (!identifierSchema.safeParse(tag).success) return 'Start with a letter and use up to 64 letters, numbers, or hyphens.';
     if (pattern.categories.includes(tag)) return 'This category is already added.';
@@ -210,21 +246,14 @@ export class ConfigurationState {
   };
 
   removeCategory = (id: string, category: string): void => {
-    const pattern = this.patterns.find((item): boolean => item.id === id);
-    if (pattern) this.updatePattern(id, 'categories', pattern.categories.filter((tag): boolean => tag !== category));
+    const pattern = this.selected;
+    if (pattern?.id === id) this.updatePattern(id, 'categories', pattern.categories.filter((tag): boolean => tag !== category));
   };
 
   removePattern = (id: string): void => {
     if (!this.editable) return;
     this.value.patterns = this.value.patterns.filter((pattern): boolean => pattern.id !== id);
-    if (this.selection?.id === id) this.selection = null;
-  };
-
-  setReportingPolicy = (id: string, policy: ReportingPolicy): void => {
-    if (!this.editable) return;
-    this.value.playbooks = this.value.playbooks.map((setting): DiagnosticPlaybook => setting.id === id ? {
-      ...setting, enabled: policy !== 'off', allow_proactive: policy === 'off' ? setting.allow_proactive : policy === 'proactive'
-    } : setting);
+    if (this.selection?.kind === 'existing' && this.selection.id === id) this.selection = null;
   };
 
   updateSettings = <K extends 'collection_instructions' | 'allow_proactive' | 'enabled'>(id: string, key: K, value: DiagnosticPlaybook[K]): void => {
@@ -233,6 +262,7 @@ export class ConfigurationState {
   };
 
   dispose = (): void => {
+    if (this.disposed) return;
     this.disposed = true;
     this.request?.abort();
     this.pending = false;

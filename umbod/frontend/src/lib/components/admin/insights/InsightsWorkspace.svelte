@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { beforeNavigate } from '$app/navigation';
   import { onMount, onDestroy, untrack, type Snippet } from 'svelte';
   import '#lib/styles/insights.css';
   import InsightsFrame from '#lib/components/shared/workspace/InsightsFrame.svelte';
@@ -15,6 +16,18 @@
   const state = untrack(() => createState());
   const route = new InsightsNavigation(() => pathname);
   setInsightsState(state);
+
+  beforeNavigate(({ to, type, willUnload, shallow, cancel }): void => {
+    if (shallow) return;
+    const routeId = to?.route.id;
+    const legacyReporting = to?.url.searchParams.get('tab') === 'reporting'
+      && (routeId === '/admin/(agent-insights)/agent-diagnostics' || routeId === '/admin/(agent-insights)/insights/agent-behaviour/configuration');
+    if (!willUnload && !legacyReporting && routeId?.startsWith('/admin/(agent-insights)/')) return;
+    const configuration = state.behaviour.configuration;
+    if (!configuration.dirty && !configuration.editorDirty) return;
+    if (type === 'leave' || !window.confirm('Leave and lose your unsaved Agent diagnostics changes?')) cancel();
+  });
+
   onMount(state.start);
   onDestroy(state.dispose);
 </script>

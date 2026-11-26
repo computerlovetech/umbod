@@ -6,7 +6,7 @@ description: Actor-owned administration views and shared administration controls
 
 # Workspaces
 
-- [Insights](./insights/README.md) — Shared identity-scoped composition for Insights and Agent diagnostics.
+- [Insights](./insights/README.md) — Identity-scoped composition for behaviour findings, diagnostic patterns and log analytics.
 - [Agent behaviour](./agent-behaviour/README.md) — Definition forms and self-reported diagnostic report inspection.
 - [Log analytics](./analytics/README.md) — Administrator query form and results table.
 - [MCP connectors](./downstream-mcp-connectors/README.md) — Shared and personal MCP workspaces and capability controls.
@@ -14,7 +14,7 @@ description: Actor-owned administration views and shared administration controls
 - [Group management](./groups/README.md) — Central administrator group catalogue forms.
 - [Group permissions](./group-permissions/README.md) — Persistent permissions workspace and tab editors.
 - [Shared namespaces](./filesystem/README.md) — Namespace metadata and revision-safe group access management.
-- [System settings](./system-settings/SystemSettingsWorkspace.svelte) — Filesystem approval policy editor with draft changes and reset.
+- [System settings](./system-settings/SystemSettingsContent.svelte) — Instance-wide filesystem approval and diagnostic reporting settings.
 
 # Shared controls
 

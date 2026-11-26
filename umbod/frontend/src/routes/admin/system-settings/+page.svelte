@@ -1,19 +1,15 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { page } from '$app/state';
+  import { agentBehaviourApi } from '#lib/agent-behaviour/infrastructure/api.js';
   import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
   import AdminShell from '#lib/components/admin/AdminShell.svelte';
   import SubpageContainer from '#lib/components/shared/workspace/SubpageContainer.svelte';
-  import SystemSettingsWorkspace from '#lib/components/admin/system-settings/SystemSettingsWorkspace.svelte';
-  import { FilesystemSettingsState } from '#lib/components/admin/system-settings/filesystem-settings-state.svelte.js';
+  import SystemSettingsContent from '#lib/components/admin/system-settings/SystemSettingsContent.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  const state = new FilesystemSettingsState(adminApi().filesystemSettings);
-
-  onMount(() => {
-    void state.load();
-    return state.dispose;
-  });
+  const filesystemSettings = adminApi().filesystemSettings;
+  const diagnosticsConfiguration = agentBehaviourApi().configuration;
 </script>
 
 <svelte:head><title>System settings · Administration</title></svelte:head>
@@ -21,7 +17,13 @@
 <AdminShell activeItem="systemSettings" accountIdentity={data.accountIdentity} contentWidth="wide">
   <SubpageContainer title="System settings" lede="Manage policies that apply to everyone on this Umbod instance.">
     {#snippet actions()}<span class="scope">Instance-wide</span>{/snippet}
-    <SystemSettingsWorkspace {state} />
+    {#if data.accountIdentity.kind === 'visible'}
+      {#key data.accountIdentity.hiddenValues.id}
+        <SystemSettingsContent query={page.url.searchParams} {filesystemSettings} {diagnosticsConfiguration} />
+      {/key}
+    {:else}
+      <p class="admin-message admin-message--error" role="alert">Administration access is no longer available. Reload or sign in again.</p>
+    {/if}
   </SubpageContainer>
 </AdminShell>
 

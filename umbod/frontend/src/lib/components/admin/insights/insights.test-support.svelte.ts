@@ -9,7 +9,7 @@ export class InsightsHarnessState {
   pathname: string;
   identity = $state<HeaderAccountIdentityState>({ kind: 'visible', name: 'Administrator', email: null, picture: null, hiddenValues: { id: 'account-a' } });
 
-  constructor(pathname: string = '/admin/agent-diagnostics') {
+  constructor(pathname: string = '/admin/insights/agent-behaviour') {
     this.pathname = $state(pathname);
   }
 

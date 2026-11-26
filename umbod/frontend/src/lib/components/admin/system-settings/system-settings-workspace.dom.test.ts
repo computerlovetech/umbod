@@ -1,4 +1,4 @@
-import { mount, tick, unmount } from 'svelte';
+import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { FilesystemSettings } from '#lib/admin/system-settings/domain/filesystem-settings.js';
 import type { FilesystemSettingsAdministration } from '#lib/admin/system-settings/filesystem-settings-port.js';
@@ -25,7 +25,8 @@ function settings(value: boolean, source: ApprovalSource): FilesystemSettings {
 
 function mountWith(api: FilesystemSettingsAdministration): Promise<void> {
   state = new FilesystemSettingsState(api);
-  component = mount(SystemSettingsWorkspace, { target: document.body, props: { state } });
+  const diagnostics = createRawSnippet(() => ({ render: (): string => '<h2>Agent diagnostics</h2>' }));
+  component = mount(SystemSettingsWorkspace, { target: document.body, props: { state, section: 'filesystem', diagnosticsAllowed: true, diagnostics } });
   return state.load();
 }
 
@@ -41,13 +42,15 @@ function toggle(): HTMLInputElement {
   return input;
 }
 
-test('shows only Filesystem without a search or placeholder sections', async (): Promise<void> => {
+test('lists both settings sections and displays only Filesystem by default', async (): Promise<void> => {
   await mountWith({ get: async () => settings(true, 'built_in_default'), update: async () => settings(false, 'admin_override') });
   await tick();
 
   const sidebar = document.querySelector('aside[aria-label="Settings sections"]');
-  expect(sidebar?.querySelectorAll('li')).toHaveLength(1);
-  expect(sidebar?.querySelector('[aria-current="true"]')?.textContent).toContain('Filesystem');
+  expect(sidebar?.querySelectorAll('li')).toHaveLength(2);
+  expect(sidebar?.querySelector('a[aria-current="page"]')?.textContent).toContain('Filesystem');
+  expect(sidebar?.querySelector('a[href="/admin/system-settings?section=agent-diagnostics"]')?.textContent).toContain('Agent diagnostics');
+  expect(document.querySelector('section[aria-label="Agent diagnostics settings"]')).toBeNull();
   expect(document.querySelector('input[type="search"], [role="searchbox"]')).toBeNull();
   expect(document.body.textContent).not.toMatch(/Retention|Integrations/);
   expect(document.body.textContent).toContain('doesn’t grant delete permission or change the browser’s confirmation dialog');

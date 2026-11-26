@@ -56,7 +56,19 @@ const administratorWorkspaceNavigation: readonly WorkspaceNavigationItem[] = [
 ];
 
 export const agentBehaviourFindingsHref = '/admin/insights/agent-behaviour';
+export const systemSettingsHref = '/admin/system-settings';
 export const agentDiagnosticsHref = '/admin/agent-diagnostics';
+export const agentDiagnosticsReportingHref = `${systemSettingsHref}?section=agent-diagnostics`;
+
+export function legacyAgentDiagnosticsTarget(url: URL): string {
+  const params = new URLSearchParams(url.search);
+  const reporting = params.get('tab') === 'reporting';
+  const target = new URL(reporting ? agentDiagnosticsReportingHref : agentDiagnosticsHref, url.origin);
+  for (const [name, value] of params) {
+    if (name !== 'tab' && (!reporting || name !== 'section')) target.searchParams.append(name, value);
+  }
+  return `${target.pathname}${target.search}${new URL(url.href).hash}`;
+}
 
 export const administrationNavigation: readonly WorkspaceNavigationItem[] = [
   { id: 'connectors', label: 'Connectors', href: '/admin/connectors', icon: 'connectors' },
@@ -65,7 +77,7 @@ export const administrationNavigation: readonly WorkspaceNavigationItem[] = [
   { id: 'groupPermissions', label: 'Permissions', href: '/admin/group-permissions/connectors', icon: 'permissions' },
   { id: 'insights', label: 'Insights', href: agentBehaviourFindingsHref, icon: 'analytics' },
   { id: 'agentDiagnostics', label: 'Agent diagnostics', href: agentDiagnosticsHref, icon: 'administration' },
-  { id: 'systemSettings', label: 'System settings', href: '/admin/system-settings', icon: 'settings' }
+  { id: 'systemSettings', label: 'System settings', href: systemSettingsHref, icon: 'settings' }
 ];
 
 export const administrationPresentation = {

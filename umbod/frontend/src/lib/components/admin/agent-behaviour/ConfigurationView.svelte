@@ -1,26 +1,23 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
-  import SubpageNavigation, { type SubpageLink } from '#lib/components/shared/workspace/SubpageNavigation.svelte';
   import SubpageContainer from '#lib/components/shared/workspace/SubpageContainer.svelte';
-  import { agentBehaviourFindingsHref, agentDiagnosticsHref } from '#lib/workspace/navigation.js';
+  import { agentBehaviourFindingsHref, agentDiagnosticsReportingHref } from '#lib/workspace/navigation.js';
   import type { ConfigurationState } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
   import ConfigurationEditor from './ConfigurationEditor.svelte';
-  const links: readonly SubpageLink[] = [
-    { id: 'patterns', label: 'Patterns', href: agentDiagnosticsHref },
-    { id: 'reporting', label: 'Reporting settings', href: `${agentDiagnosticsHref}?tab=reporting` }
-  ];
-  let { state, section = 'patterns' }: { state: ConfigurationState; section?: 'patterns' | 'reporting' } = $props();
-  onDestroy((): void => state.closeEditor());
+
+  let { state }: { state: ConfigurationState } = $props();
 </script>
 
 <SubpageContainer title="Agent diagnostics">
   {#snippet actions()}
-    <a class="admin-back-link" href={agentBehaviourFindingsHref}>View findings <span aria-hidden="true">→</span></a>
+    <div class="actions">
+      <a class="admin-back-link" href={agentDiagnosticsReportingHref}>Reporting settings</a>
+      <a class="admin-back-link" href={agentBehaviourFindingsHref}>View findings <span aria-hidden="true">→</span></a>
+    </div>
   {/snippet}
-  <SubpageNavigation {links} activeId={section} label="Agent diagnostics subpages" />
-  <ConfigurationEditor {state} {section} />
+  <ConfigurationEditor {state} section="patterns" />
 </SubpageContainer>
 
 <style>
-  a { gap: .35rem; }
+  .actions { display: flex; flex-wrap: wrap; gap: .75rem 1rem; }
+  a { gap: .35rem; margin-bottom: 0; }
 </style>

@@ -18,11 +18,12 @@ describe('pattern editing', (): void => {
     return { api, state: new ConfigurationState(api.configuration, vi.fn(), (): string => 'pattern-stable') };
   }
   test('generates stable internal IDs and derives the assessment prompt', async (): Promise<void> => {
-    const { api, state } = setup(); await state.load(); await state.addPattern();
+    const { api, state } = setup(); await state.load(); state.addPattern();
     expect(state.selected?.id).toBe('pattern-stable');
     state.updatePattern('pattern-stable', 'name', 'New name');
     state.updatePattern('pattern-stable', 'description', 'Notice missing facts');
     state.updatePattern('pattern-stable', 'name', 'Renamed');
+    await state.savePatternEdit();
     expect(state.patterns[1].id).toBe('pattern-stable');
     expect(state.patterns[1].assessment_prompt).toBe('Notice missing facts');
     expect(state.dirty).toBe(true); await state.save();
@@ -83,10 +84,10 @@ describe('pattern editing', (): void => {
     expect(api.current.playbooks.every((setting): boolean => !setting.enabled && setting.allow_proactive)).toBe(true);
     reloaded.removePattern('fallback'); await reloaded.save(); reloaded.dispose();
     const afterRemoval = new ConfigurationState(api.configuration, vi.fn(), (): string => 'new-pattern'); await afterRemoval.load();
-    await afterRemoval.addPattern();
+    afterRemoval.addPattern();
     afterRemoval.updatePattern('new-pattern', 'name', 'New pattern');
     afterRemoval.updatePattern('new-pattern', 'description', 'Notice new facts');
-    await afterRemoval.save();
+    await afterRemoval.savePatternEdit(); await afterRemoval.save();
     expect(afterRemoval.reportingMode).toBe('Off');
     expect(api.current.patterns.map((pattern): string => pattern.id)).toEqual(['new-pattern']);
     expect(api.current.playbooks.every((setting): boolean => !setting.enabled && setting.allow_proactive && setting.pattern_ids.includes('fallback'))).toBe(true);
@@ -113,20 +114,30 @@ describe('pattern editing', (): void => {
     state.updateSettings('review', 'allow_proactive', false); expect(state.reportingMode).toBe('When requested');
     state.removePattern('fallback'); expect(state.reportingMode).toBe('Off');
   });
-  test('adding a pattern to empty settings fetches only default reporting settings, not default patterns', async (): Promise<void> => {
+  test('initializes only reporting defaults when the first pattern is saved in the editor', async (): Promise<void> => {
     const { api, state } = setup(); api.current = { revision: 1, patterns: [], playbooks: [] }; api.defaults.playbooks[0].allow_proactive = true;
-    await state.load(); await state.addPattern();
+    const defaults = vi.spyOn(api.configuration, 'defaults');
+    await state.load(); state.addPattern();
+    state.updatePattern('pattern-stable', 'name', 'Abandoned pattern');
+    state.closeEditor();
+    expect(state.selected).toBeUndefined(); expect(state.dirty).toBe(false);
+    expect(state.patterns).toEqual([]); expect(state.settings).toEqual([]); expect(defaults).not.toHaveBeenCalled();
+    state.addPattern();
+    state.updatePattern('pattern-stable', 'name', 'New pattern'); state.updatePattern('pattern-stable', 'description', 'Notice facts');
+    await state.savePatternEdit();
+    expect(defaults).toHaveBeenCalledOnce();
     expect(state.patterns.map((pattern): string => pattern.id)).toEqual(['pattern-stable']);
     expect(state.settings[0]).toEqual(expect.objectContaining({ pattern_ids: ['pattern-stable'], enabled: true, allow_proactive: false }));
-    state.updatePattern('pattern-stable', 'name', 'New pattern'); state.updatePattern('pattern-stable', 'description', 'Notice facts');
     await state.save(); expect(api.current.patterns).toHaveLength(1); expect(api.current.playbooks[0].pattern_ids).toEqual(['pattern-stable']);
   });
   test('uses pattern names and plain labels rather than internal validation paths', async (): Promise<void> => {
     const { state } = setup(); await state.load(); await state.updatePattern('fallback', 'categories', ['INVALID_CATEGORY']); await state.save();
     expect(state.message).toContain('Fallback'); expect(state.message).toContain('category labels');
     expect(state.message).not.toContain('patterns.'); expect(state.message).not.toContain('fallback'); expect(state.message).not.toContain('INVALID_CATEGORY');
-    state.discard(); await state.addPattern(); await state.save(); expect(state.message).toContain('New pattern: Add a name');
-    expect(state.message).not.toContain('assessment_prompt');
+    state.discard(); state.addPattern(); state.updatePattern('pattern-stable', 'description', 'Notice facts');
+    await state.savePatternEdit();
+    expect(state.editorMessage).toContain('Add a name'); expect(state.editorMessage).not.toContain('assessment_prompt');
+    expect(state.selected?.description).toBe('Notice facts'); expect(state.patterns).toHaveLength(1); expect(state.dirty).toBe(false);
   });
   test('does not repopulate a deliberately empty configuration on load', async (): Promise<void> => {
     const { api, state } = setup(); api.current = { revision: 3, patterns: [], playbooks: [] };
@@ -148,6 +159,8 @@ describe('pattern editing', (): void => {
     api.current = { ...configuration, revision: 2, playbooks: [{ ...configuration.playbooks[0], allow_proactive: true }] };
     await state.save();
     expect(state.patterns[0].name).toBe('Local edit'); expect(state.conflict).toBe(true);
+    state.addPattern(); state.closeEditor();
+    expect(state.message).toContain('Another administrator saved changes');
     expect(state.reportingMode).toBe('When requested');
     expect(state.savedReportingMode).toBe('Automatic reports allowed');
     state.discard(); expect(state.revision).toBe(2); expect(state.patterns[0].name).toBe('Fallback');
@@ -159,32 +172,35 @@ describe('pattern editing', (): void => {
   });
   test('rejects duplicate generated identifiers and pattern limits without truncation', async (): Promise<void> => {
     const { api, state } = setup(); api.current.patterns = Array.from({ length: 50 }, (_, index): Configuration['patterns'][number] => ({ ...configuration.patterns[0], id: `pattern-${index}` })); api.current.playbooks = [];
-    await state.load(); await state.addPattern(); expect(state.patterns).toHaveLength(50); expect(state.message).toContain('50');
-    state.removePattern('pattern-0'); await state.addPattern(); await state.addPattern();
-    expect(state.patterns).toHaveLength(50);
+    await state.load(); state.addPattern(); expect(state.patterns).toHaveLength(50); expect(state.message).toContain('50');
+    state.removePattern('pattern-0'); state.addPattern();
+    state.updatePattern('pattern-stable', 'name', 'Replacement'); state.updatePattern('pattern-stable', 'description', 'Notice facts');
+    await state.savePatternEdit();
+    state.addPattern(); expect(state.patterns).toHaveLength(50); expect(state.selected).toBeUndefined();
   });
   test('rejects invalid and duplicate generated IDs without adding patterns', async (): Promise<void> => {
     const api = new InMemoryAgentBehaviourApi(); api.current = structuredClone(configuration);
     for (const id of ['fallback', 'INVALID ID']) {
-      const state = new ConfigurationState(api.configuration, vi.fn(), (): string => id); await state.load(); await state.addPattern();
+      const state = new ConfigurationState(api.configuration, vi.fn(), (): string => id); await state.load(); state.addPattern();
       expect(state.patterns).toHaveLength(1); expect(state.message).toContain('identifier'); state.dispose();
     }
   });
   test('blocks additions beyond reporting capacity', async (): Promise<void> => {
     const { api, state } = setup(); api.current.patterns = Array.from({ length: 20 }, (_, index): Configuration['patterns'][number] => ({ ...configuration.patterns[0], id: `pattern-${index}` })); api.current.playbooks[0].pattern_ids = api.current.patterns.map((pattern): string => pattern.id);
-    await state.load(); await state.addPattern(); expect(state.patterns).toHaveLength(20); expect(state.message).toContain('20');
+    await state.load(); state.addPattern(); expect(state.patterns).toHaveLength(20); expect(state.message).toContain('20');
   });
   test('can replace removed patterns at capacity without losing reporting preferences', async (): Promise<void> => {
     const { api, state } = setup(); api.current.patterns = [];
     api.current.playbooks[0].pattern_ids = Array.from({ length: 20 }, (_, index): string => `retired-${index}`);
     api.current.playbooks[0].enabled = false;
     const settings = structuredClone(api.current.playbooks[0]);
-    await state.load(); await state.addPattern();
+    await state.load(); state.addPattern();
+    expect(state.playbooks[0]).toEqual(settings);
+    state.updatePattern('pattern-stable', 'name', 'Replacement'); state.updatePattern('pattern-stable', 'description', 'Notice replacement facts');
+    await state.savePatternEdit();
     expect(state.patterns).toHaveLength(1); expect(state.message).toContain('removed patterns were cleared');
-    const pattern = state.patterns[0];
-    state.updatePattern(pattern.id, 'name', 'Replacement'); state.updatePattern(pattern.id, 'description', 'Notice replacement facts');
     await state.save();
-    expect(api.current.playbooks[0]).toEqual({ ...settings, pattern_ids: [pattern.id] });
+    expect(api.current.playbooks[0]).toEqual({ ...settings, pattern_ids: ['pattern-stable'] });
     expect(state.reportingMode).toBe('Off');
   });
   test('rejects newly invented unknown references at the historical persistence boundary', async (): Promise<void> => {
@@ -197,7 +213,8 @@ describe('pattern editing', (): void => {
     const { api, state } = setup(); const response = deferred<Configuration>(); vi.spyOn(api.configuration, 'get').mockReturnValue(response.promise);
     const pending = state.load(); state.dispose(); response.resolve(configuration); await pending; expect(state.loaded).toBe(false); expect(state.patterns).toEqual([]);
     const second = setup(); second.api.current.playbooks = []; await second.state.load(); const defaults = deferred<Configuration>(); vi.spyOn(second.api.configuration, 'defaults').mockReturnValue(defaults.promise);
-    const adding = second.state.addPattern(); second.state.dispose(); defaults.resolve(configuration); await adding; expect(second.state.patterns).toEqual([]); expect(second.state.settings).toEqual([]);
+    second.state.addPattern(); second.state.updatePattern('pattern-stable', 'name', 'New pattern'); second.state.updatePattern('pattern-stable', 'description', 'Notice facts');
+    const adding = second.state.savePatternEdit(); second.state.dispose(); defaults.resolve(configuration); await adding; expect(second.state.patterns).toEqual([]); expect(second.state.settings).toEqual([]);
     const third = setup(); await third.state.load(); const published = deferred<Configuration>(); vi.spyOn(third.api.configuration, 'publish').mockReturnValue(published.promise);
     const saving = third.state.save(); third.state.dispose(); published.resolve(configuration); await saving; expect(third.state.loaded).toBe(false);
   });

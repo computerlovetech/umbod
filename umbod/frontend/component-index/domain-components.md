@@ -61,7 +61,7 @@ description: Dashboard charts, insights, file previews, connector and tool prese
 ## Scope and composition
 
 - [Namespace administration composition](../src/lib/components/admin/filesystem/README.md) — Feature-owned namespace inventory, metadata dialogs, and a separate group access editor; reuse the indexed controls, not the workflows.
-- [Agent behaviour composition](../src/lib/components/admin/agent-behaviour/README.md) — Feature-owned pattern editing and report inspection; reuse its canonical controls, not these administrator workflows.
+- [Agent behaviour composition](../src/lib/components/admin/agent-behaviour/README.md) — Feature-owned pattern editing, reporting settings, and report inspection; reuse its canonical controls, not these administrator workflows.
 - [Dashboard composition](../src/lib/components/dashboard/README.md) — Separate feature-owned usage and connector pages; reuse indexed controls, not either page workflow.
 - [Getting started composition](../src/lib/components/getting-started/README.md) — Feature-owned harness installer wizard and optional private script preparation.
 - [Account settings composition](../src/lib/components/settings/README.md) — Feature-owned profile and personal access navigation, token management, and telemetry setup.
