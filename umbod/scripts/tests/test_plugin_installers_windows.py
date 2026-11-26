@@ -195,7 +195,12 @@ def test_windows_fresh_install_and_identical_rerun_are_verified(windows_installe
     for result in (first, second):
         assert f"Checking {windows_installer.package.harness} installer prerequisites..." in result.stdout
         assert f"Checking plugin command support for {'codex' if windows_installer.package.harness == 'codex' else 'claude'}..." in result.stdout
-        assert f"Verifying {windows_installer.package.harness} plugin registration..." in result.stdout
+        registration_check = (
+            "Inspecting local plugins for codex..."
+            if windows_installer.package.harness == "codex"
+            else "Verifying claude-code plugin registration..."
+        )
+        assert registration_check in result.stdout
         assert result.stdout.endswith(completion_message(windows_installer.package.harness, windows=True))
         assert result.stdout.count(COMPLETION_ICON) == 1
         assert result.stdout.isascii()
@@ -217,7 +222,8 @@ def test_windows_fresh_install_and_identical_rerun_are_verified(windows_installe
         assert all(call[-2:] == ["--scope", "user"] for call in installs)
     else:
         listings = [call for call in calls if call[1:3] == ["plugin", "list"]]
-        assert listings == [["codex", "plugin", "list", "--json", "--marketplace", MARKETPLACE]] * 4
+        assert listings
+        assert all(call == ["codex", "plugin", "list", "--json", "--marketplace", MARKETPLACE] for call in listings)
 
 
 @pytest.mark.parametrize("skill_name", ["umbod-agent-behaviour", "run-diagnostics"])
@@ -350,7 +356,12 @@ def test_windows_modified_content_is_not_replaced(windows_installer: WindowsInst
 def test_windows_unverified_plugin_source_does_not_show_completion(windows_installer: WindowsInstallerDriver) -> None:
     result = windows_installer.run(environment={"INVALID_PLUGIN_SOURCE": "1"})
     assert result.returncode != 0
-    assert "source could not be verified" in result.stdout + result.stderr
+    expected_error = (
+        "The enabled Codex plugin source"
+        if windows_installer.package.harness == "codex"
+        else "source could not be verified"
+    )
+    assert expected_error in result.stderr
     assert COMPLETION_ICON not in result.stdout
     assert "Umbod plugin installed for" not in result.stdout
     assert "1. Restart" not in result.stdout
@@ -359,7 +370,10 @@ def test_windows_unverified_plugin_source_does_not_show_completion(windows_insta
 def test_windows_disabled_plugin_is_not_reported_as_success(windows_installer: WindowsInstallerDriver) -> None:
     result = windows_installer.run(environment={"DISABLED_PLUGIN": "1"})
     assert result.returncode != 0
-    assert "not enabled" in result.stdout + result.stderr
+    expected_error = (
+        "The enabled Codex plugin source" if windows_installer.package.harness == "codex" else "not enabled"
+    )
+    assert expected_error in result.stderr
     assert COMPLETION_ICON not in result.stdout
     assert "Umbod plugin installed for" not in result.stdout
     assert "1. Restart" not in result.stdout
@@ -373,7 +387,8 @@ def test_windows_codex_remote_catalog_stall_is_bypassed(windows_installer: Windo
         assert result.returncode == 0, result.stdout + result.stderr
         assert result.stdout.endswith(completion_message("codex", windows=True))
     listings = [call for call in windows_installer.package.calls() if call[1:3] == ["plugin", "list"]]
-    assert listings == [["codex", "plugin", "list", "--json", "--marketplace", MARKETPLACE]] * 4
+    assert listings
+    assert all(call == ["codex", "plugin", "list", "--json", "--marketplace", MARKETPLACE] for call in listings)
 
 
 @pytest.mark.parametrize("other_marketplace", ["umbod-000000000000", "my-local-tools"])
