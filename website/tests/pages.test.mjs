@@ -80,7 +80,7 @@ test('production build preserves routes, metadata, shared navigation and release
       assert.ok(html.includes(`${release.chartVersion} chart`));
       for (const [, fragment] of html.matchAll(/href="#([^"]+)"/g)) assert.ok(html.includes(`id="${fragment}"`), `missing anchor ${fragment}`);
     }
-    assert.match(pages[0], /Bring agents together<br><span>through one shared hub\.<\/span>/);
+    assert.match(pages[0], /Shared capabilities<br><span>for the agents you already use\.<\/span>/);
     for (const html of pages) {
       assert.match(html, /href="\/docs\/getting-started\/kubernetes-installation\/"/);
       assert.match(html, /href="\/docs\/using-umbod\/connectors\/"/);
@@ -140,7 +140,7 @@ async function verifyCloudflareRoutes(site) {
     const missing = await fetch(base + '/not-a-real-page');
     assert.equal(missing.status, 404, 'unknown routes must not silently serve the home page');
     const home = await fetch(base + '/');
-    assert.match(await home.text(), /Bring agents together/);
+    assert.match(await home.text(), /Shared capabilities/);
   } finally {
     const exited = new Promise(resolve => worker.once('exit', resolve));
     if (worker.exitCode === null) { worker.kill('SIGTERM'); await exited; }
