@@ -1,12 +1,13 @@
 # Kubernetes installation
 
-Install Umbod from its OCI Helm chart. Start with kind for a local evaluation, or use the chart on an existing Kubernetes cluster.
+Use Helm to install Umbod. Try it on your computer with kind, or skip to [setting up a shared installation](#configure-a-shared-installation) if you already have a Kubernetes cluster.
 
 ## Requirements
 
 - Kubernetes 1.25 or newer
 - Helm 3
 - `kubectl`
+- OpenSSL to generate the Umbod root secret
 - Docker and kind for the recommended local installation
 
 ## Create a local cluster
@@ -31,12 +32,20 @@ Install Umbod from its OCI Helm chart. Start with kind for a local evaluation, o
 
 ## Install Umbod locally
 
-Install chart `{{ release.chartVersion }}` (which deploys core and frontend images `{{ release.imageTag }}`) with development authentication:
+Make sure `kubectl config current-context` shows your local cluster. Create the Secret the first time you install Umbod. Keep the same Secret for upgrades: changing it invalidates credentials Umbod has already issued.
+
+```bash
+kubectl create secret generic umbod-secrets \
+  --from-literal=UMBOD_ROOT_SECRET="$(openssl rand -hex 32)"
+```
+
+Install chart `{{ release.chartVersion }}` with Umbod images `{{ release.imageTag }}`. The `local` profile and `dev` authentication are for evaluation on your own computer only.
 
 ```bash
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
   --version {{ release.chartVersion }} \
+  --set existingSecret=umbod-secrets \
   --set config.profile=local \
   --set config.authentication.mode=dev \
   --set-string config.publicOrigins.site=http://localhost:3000 \
@@ -44,25 +53,25 @@ helm upgrade --install umbod \
   --wait --timeout 5m
 ```
 
-Forward the frontend Service in one terminal:
+In one terminal, make the Umbod web interface available on your computer:
 
 ```bash
 kubectl port-forward service/umbod-frontend 3000:3000
 ```
 
-In a second terminal, forward the MCP Service:
+In a second terminal, make the MCP endpoint available to local agents:
 
 ```bash
 kubectl port-forward service/umbod-mcp 8011:8011
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and keep both port-forwards running. In the workspace navigation, open **Getting started** to copy `http://localhost:8011/mcp` and follow the instructions for your desktop agent. Configure it as a remote HTTP MCP server; the agent and the port-forwards must run on the same computer. After configuring a connector, publish its tools and grant access before checking the agent's available tools.
+Keep both terminals running and open [http://localhost:3000](http://localhost:3000). To test with a local agent, add `http://localhost:8011/mcp` as a remote HTTP MCP server in the agent's settings. [Set up a connector](../using-umbod/connectors.md), publish its tools, and grant group access. Confirm that the agent can see the tools you've allowed.
 
-The local setup uses development authentication. Hosted agents cannot reach your computer's `localhost`; use an HTTPS Ingress and production authentication for agents running elsewhere.
+An agent running elsewhere cannot reach your computer's `localhost`. For remote access, use HTTPS and production authentication.
 
 ## Validate the local installation
 
-Inspect the workloads and run the chart tests:
+Check that the Pods are ready and the Services exist, then run the chart tests:
 
 ```bash
 kubectl get pods,services
@@ -71,7 +80,7 @@ helm test umbod --logs --timeout 2m
 
 ## Configure a shared installation
 
-Create a namespace and the required Secret. Replace the OIDC client secret before running the command:
+Confirm that your current Kubernetes context is the cluster where you want to install Umbod. Create a namespace and a Kubernetes Secret. Replace the placeholder with the client secret from your OpenID Connect (OIDC) provider before running the command:
 
 ```bash
 kubectl create namespace umbod --dry-run=client -o yaml | kubectl apply -f -
@@ -113,9 +122,15 @@ ingress:
   host: umbod.example.com
 ```
 
-For deployments using S3 for file bytes, follow [S3 file-content storage](../operations/s3-file-storage.md). S3 does not replace the persistent application database.
+Before installing:
 
-Review the [generated Helm values reference](../reference/helm-values.md) before installing. In particular, confirm the ingress class, public origins, OIDC claims, storage class, and immutable image tags.
+- **HTTPS:** Set `ingress.tls` or use an HTTPS proxy in front of the Ingress. The chart does not set up TLS by default. Use the same addresses in `publicOrigins` that users and agents will use.
+- **Sign-in:** Set the OIDC domain, client ID, audience, and group claims to match your provider. Set up an [external gateway for browser sign-in](../operations/endpoints-and-ports.md#administration-api-clients); the chart does not install one.
+- **Storage and images:** Confirm that the storage class is available and keep the image tags shipped with the chart.
+
+See [Configuration](../operations/configuration.md) for what the settings do and the [Helm values reference](../reference/helm-values.md) for defaults.
+
+To store file contents in an S3 bucket, follow [S3 file storage](../operations/s3-file-storage.md). Keep the application database on persistent storage even if you use S3.
 
 Install or upgrade Umbod:
 
@@ -135,12 +150,14 @@ kubectl -n umbod get pods,services
 helm -n umbod test umbod --logs --timeout 2m
 ```
 
+Open the shared HTTPS address and sign in with an account in the administrator group. Check that you can open **Administration**. Then check that a signed-in non-administrator can open the workspace but cannot open **Administration**.
+
 !!! warning
-    The chart currently runs a single core replica backed by SQLite. Persistent storage preserves data across Pod replacements, but this remains a development and evaluation architecture rather than a production database architecture.
+    The chart runs one copy of the core service with a SQLite database. Persistent storage keeps data when Kubernetes replaces the Pod, but it does not make Umbod highly available. Use this chart for development and evaluation.
 
 ## Uninstall
 
-Remove the local release and kind cluster:
+Remove the local release and kind cluster. Deleting the cluster also removes data stored only in that cluster:
 
 ```bash
 helm uninstall umbod

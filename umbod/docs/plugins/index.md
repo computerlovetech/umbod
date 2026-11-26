@@ -1,21 +1,8 @@
 # Connector plugins
 
-Connector plugins add tools, prompts, and resources to Umbod. A plugin is a Python distribution packaged in a plugin-bundle container image.
+Install a connector plugin when your Umbod deployment needs custom tools, prompts, or resources. A plugin is a Python distribution delivered in a plugin-bundle container image. Install only images you trust: this code runs inside Umbod, not in a sandbox.
 
-For account ownership, administrator publication, and user sign-in, see [Shared and Personal connectors](../using-umbod/connectors.md). Personal account connections are distinct from installing a connector plugin.
-
-## Start with the SDK CLI
-
-Install the `umbod` SDK as a `uv` tool, then use these commands in a connector project:
-
-| Command | Purpose |
-| --- | --- |
-| `umbod connectors init --name ID --module PACKAGE.MODULE` | Preview a generated Hello World connector and its package entry point; add `--apply` to write both. |
-| `umbod connectors check` | Check entry-point metadata offline without loading connector code. |
-| `umbod connectors check --target RELEASE` | Check the declared SDK dependency against SDK-version metadata from published core and builder images. For older, unlabeled releases, use `--sdk-version VERSION` after reading the builder image's installed SDK version. |
-| `umbod skills list` / `umbod skills install draft-agent-connector --harness agents` | Optionally give a coding agent the bundled connector-authoring guidance. |
-
-See [Build a connector](build-a-connector.md) for the complete Hello World walkthrough, including project setup, CLI checks, image validation, and deployment. The SDK CLI does not build or publish a plugin image.
+If you only need to connect a downstream MCP server or let users sign in with their own accounts, see [Shared and Personal connectors](../using-umbod/connectors.md). Personal account connections do not require installing a connector plugin.
 
 ## Lifecycle
 
@@ -26,7 +13,7 @@ A connector passes through four separate states:
 3. **Configured**: an administrator supplies valid connector settings in Umbod.
 4. **Published**: an administrator publishes the connector, activates its capabilities, and grants the required group permissions.
 
-Installing a plugin image does not expose every connector in that image. The Helm availability list is the deployment-level allow-list. Configuration, publication, capability activation, and group permissions remain administrator actions.
+Installing an image does not expose every connector in it. Add only intended IDs to the Helm availability list. After installation, check the connector configuration, publish only what is needed, and verify discovery with a client in an intended group. Configuration, publication, capability activation, and group permissions remain separate administrator actions. See [installation](build-a-connector.md#install-with-helm) and [startup checks](build-a-connector.md#diagnose-startup-failures).
 
 ```mermaid
 flowchart LR
@@ -56,4 +43,15 @@ The core image supplies the Connector SDK. A plugin bundle contains connector co
 - Plugin images should use immutable tags. Floating tags such as `latest` are unsupported.
 - Structural validation does not verify credentials, external service availability, or the safety of connector operations.
 
-Continue with [Build a connector](build-a-connector.md) to package and deploy a connector using the public base image.
+## Start with the SDK CLI
+
+If you are maintaining the plugin code rather than installing a supplied image, install the `umbod` SDK as a `uv` tool and use these commands in the connector project:
+
+| Command | Purpose |
+| --- | --- |
+| `umbod connectors init --name ID --module PACKAGE.MODULE` | Preview a generated Hello World connector and its package entry point; add `--apply` to write both. |
+| `umbod connectors check` | Check entry-point metadata offline without loading connector code. |
+| `umbod connectors check --target RELEASE` | Check the declared SDK dependency against SDK-version metadata from published core and builder images. For older, unlabeled releases, use `--sdk-version VERSION` after reading the builder image's installed SDK version. |
+| `umbod skills list` / `umbod skills install draft-agent-connector --harness agents` | Optionally give a coding agent the bundled connector-authoring guidance. |
+
+See [Build a connector](build-a-connector.md) for the complete Hello World walkthrough, including project setup, CLI checks, image validation, and deployment. The SDK CLI does not build or publish a plugin image.

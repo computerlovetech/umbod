@@ -6,17 +6,23 @@ description: Additive individual file and folder grants within personal and shar
 
 # Filesystem sharing
 
-These contracts manage grants stored directly on a file or directory. New directory grants default to `recursive: true` when scope is omitted. Omitting scope on an existing grant preserves its persisted value; explicit true is required to widen a legacy false grant. Recursive directory grants apply to current and future descendants. Explicit `recursive: false` grants affect only the selected node; file grants always normalize to false. Effective permissions add direct and recursive ancestor grants without subtracting other grants. Item ownership never inherits or transfers. Namespace baseline rights also apply; item grants cannot narrow them. Shares require a node inside a registered namespace, and recursive inheritance stops at its root. Namespace roots use separate administration and cannot be shared through these item interfaces. Every operation checks current `discover` and `share` authority on the selected node, whether direct or inherited; administrator membership alone is insufficient. See [Files](../using-umbod/files.md) for the workspace controls and permission meanings.
+Use an item share to add access to a file or folder inside a registered namespace. To grant baseline access to a whole workspace, use [namespace administration](filesystem-namespaces.md#administration) instead; these item interfaces cannot share a namespace root.
 
-Moves immediately reevaluate inherited access from the destination ancestry while retaining the moved subtree's direct grants and ownership; no grant copies or move-preview APIs are involved.
+Before changing a share, check the following:
 
-Full node summaries separately report caller permissions and the containing namespace descriptor. Neither that descriptor nor manageable sharing summaries are complete effective-access audits. See [Homes and permissions](filesystem-homes-and-permissions.md) for private default upload destinations and the meaning of `visible_to`.
+- **Caller:** every sharing operation checks current `discover` and `share` on the selected node, whether direct or inherited. Administrator membership alone is not enough.
+- **Folder scope:** a new directory grant defaults to `recursive: true` if omitted. It covers current and future descendants within the namespace. Set `recursive: false` for the directory alone. Omitting scope on an existing grant preserves its stored value; set true explicitly to widen a legacy false grant. File grants always normalize to false.
+- **Other access:** direct grants and recursive ancestor grants add to namespace baseline rights. Removing one grant does not cancel rights from another source. Inheritance stops at the namespace root, and ownership never inherits or transfers.
+
+To check the result in the workspace, use [Files](../using-umbod/files.md#share-files-and-folders). Test discovery with the affected account: manageable sharing summaries show direct grants, not everyone with access. Full node summaries describe caller permissions and the containing namespace separately. See [Homes and permissions](filesystem-homes-and-permissions.md) for `visible_to` and why it is not an access audit.
+
+After a move, Umbod immediately checks inherited access using the new parent folders. Check the result at the new location. The moved subtree keeps its direct grants and ownership; no grants are copied, and there is no move-preview API.
 
 ## Recipient identity and discovery
 
 Groups must already be registered. User recipients come from Umbod's login-observed directory and resolve to an exact identity under the configured issuer. User discovery and user-scoped policy replacement require upstream-verified authentication under that issuer, including replacement with an empty grant list. Group-only discovery does not require user-directory authority.
 
-The directory can be incomplete or historical. Search is not an account-activity check. Do not send an email, subject, issuer, or display label as a mutation target; use the returned `type` and `group_id` or opaque `user_id`.
+If a person is missing from search, check that they have signed in with a verified identity under the configured issuer. The directory can be incomplete or contain old entries. Search cannot tell you whether an account is active. Do not send an email, subject, issuer, or display label as a mutation target; use the returned `type` and `group_id` or opaque `user_id`.
 
 See the [built-in tool reference](../reference/built-in-tools.md#filesystem-sharing-tools) for recipient search and additive sharing inputs, outputs, and schema compatibility.
 
@@ -34,13 +40,13 @@ Resource: `/api/me/filesystem/nodes/{node_id}/access`.
 
 ### Read
 
-`GET` accepts optional `recipient_type=group` or `recipient_type=user`; omission returns both types. The response contains `node_id`, `revision`, `grants`, and `blocked_recipients`. Each grant contains a labelled typed `recipient`, `permissions`, and the actual persisted `recursive` boolean. Read sharing summaries use the same grant contract. These lists describe manageable direct grants, not inherited audiences or provenance.
+`GET` accepts optional `recipient_type=group` or `recipient_type=user`; omission returns both types. The response contains `node_id`, `revision`, `grants`, and `blocked_recipients`. Each grant contains a labelled typed `recipient`, `permissions`, and the actual persisted `recursive` boolean. Read sharing summaries use the same grant contract. These lists describe manageable direct grants, not inherited access or where it came from.
 
 The response's strong quoted `ETag` is the revision to use for replacement. Even filtered reads carry the revision of the whole policy: a user-grant change can invalidate an editor showing only groups.
 
 ### Replace
 
-`PUT` requires exactly one `recipient_type` query value, either `group` or `user`, and an `If-Match` header copied from the latest GET's `ETag`. The body contains `grants`, each with an unlabelled typed `recipient`, a nonempty `permissions` list, and `recursive` scope (omission preserves existing scope, defaults true for new directories, always normalized false for files). Recipients must be unique and match the selected type. Display labels and caller-selected issuer/subject values are not accepted. Roundtrip every grant's returned recursive value explicitly when editing scope. Older clients omitting scope preserve existing legacy false grants. Replacement may explicitly widen or narrow the supplied scope; changing only scope changes the policy revision.
+`PUT` requires exactly one `recipient_type` query value, either `group` or `user`, and an `If-Match` header copied from the latest GET's `ETag`. The body contains `grants`, each with an unlabelled typed `recipient`, a nonempty `permissions` list, and `recursive` scope (omission preserves existing scope, defaults true for new directories, always normalized false for files). Recipients must be unique and match the selected type. Display labels and caller-selected issuer/subject values are not accepted. When editing scope, send back the returned `recursive` value for every grant you are not changing. Older clients omitting scope preserve existing legacy false grants. Replacement may explicitly widen or narrow the supplied scope; changing only scope changes the policy revision.
 
 Replacement affects only manageable grants of the selected type. An empty `grants` list clears that scope while preserving the other recipient type and protected grants. Inspect the updated response and `ETag` after success. Successful PUT responses additionally include `visible_to`; GET policy views retain their existing fields. Visibility can be restricted if the caller no longer has policy inspection authority after replacement.
 
@@ -51,7 +57,7 @@ Replacement affects only manageable grants of the selected type. An empty `grant
 | Stale revision | `412` |
 | Missing, repeated, or invalid PUT `recipient_type` | `422` |
 
-On a stale revision, reread and reconcile the policy before retrying. Do not blindly replay a replacement against a new revision.
+After `412`, get the current policy and compare it with your intended changes before retrying. Do not replay a replacement unchanged against the new revision.
 
 ### REST migration and boundaries
 

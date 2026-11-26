@@ -1,5 +1,6 @@
 site_name: Umbod
-site_description: Installation, user guides, operations, Helm values, and built-in MCP tool contracts for Umbod
+site_url: https://umbod.ai/docs/
+site_description: Administrator guides for installing Umbod, connecting tools, managing access, and running a deployment.
 site_dir: site
 
 theme:
@@ -43,24 +44,24 @@ nav:
   - Getting started:
       - Overview: getting-started/index.md
       - Kubernetes installation: getting-started/kubernetes-installation.md
-  - Using Umbod:
+  - Access and integrations:
+      - Connector setup and access: using-umbod/connectors.md
+      - File access and sharing: using-umbod/files.md
       - Codex CLI plugin: using-umbod/codex-plugin.md
-      - Shared and Personal connectors: using-umbod/connectors.md
-      - Files: using-umbod/files.md
-      - Log analytics: using-umbod/log-analytics.md
   - Operations:
-      - Service topology: operations/service-topology.md
       - Configuration: operations/configuration.md
+      - Services and storage: operations/service-topology.md
       - Application diagnostics: operations/application-diagnostics.md
       - Scheduled cleanup: operations/cleanup.md
-      - S3 file-content storage: operations/s3-file-storage.md
+      - S3 file storage: operations/s3-file-storage.md
       - Admin MCP: operations/admin-mcp.md
       - Endpoints and ports: operations/endpoints-and-ports.md
       - Filesystem namespaces: operations/filesystem-namespaces.md
       - File and folder sharing: operations/filesystem-sharing.md
       - Filesystem homes and permissions: operations/filesystem-homes-and-permissions.md
       - Filesystem upload transfers: operations/filesystem-upload-transfers.md
-      - Telemetry ingestion: operations/telemetry-ingestion.md
+      - Telemetry collection: operations/telemetry-ingestion.md
+      - Log analytics: using-umbod/log-analytics.md
       - Personal access tokens: operations/personal-access-tokens.md
   - Connector plugins:
       - Overview: plugins/index.md

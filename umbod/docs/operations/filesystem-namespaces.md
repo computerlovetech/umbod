@@ -6,9 +6,11 @@ description: Namespace discovery, administrator group assignments and authoritat
 
 # Filesystem namespaces
 
+Create a shared namespace when registered groups need baseline access to a file workspace. Start with no assignments; grant `read` or `read_write` only to the groups that need it. Use [file and folder sharing](filesystem-sharing.md) for item-level exceptions. Management authority does not grant content access.
+
 ## Access model
 
-Every accessible node belongs to one registered personal or shared namespace. Its policy supplies baseline access for the root and every descendant; item ownership and explicit shares can add permissions below that root. The hidden structural root and unmanaged entries are inaccessible regardless of old ownership or direct and recursive grants. Retiring access does not remove stored entries or bytes.
+Every accessible node belongs to one registered personal or shared namespace. The namespace policy applies to the root and every descendant. Below the root, ownership and item shares can add access. The hidden structural root and unmanaged entries remain inaccessible even if old ownership or grants exist. Removing access does not remove stored entries or bytes.
 
 Personal namespaces are private by default and bound to an exact trusted owner identity. Explicit file/folder shares allow recipient access; administrator status alone does not. Administrators manage shared namespaces and assign existing registered groups either `read` or `read_write` access. Management authority does not grant content access. Item ownership retains its existing permissions, including the authority to share individual files and folders.
 
@@ -21,6 +23,8 @@ Read grants `discover` and `read`. Read/write also grants `write` and `delete`, 
 MCP `filesystem_browse` operation `namespaces` provides the same discovery without a target. Namespace descriptions are included in both structured output and model-readable text. Operation `home` resolves the private default upload destination. Root and absolute-path targets refer to personal files. Use returned root UUIDs to select shared namespaces.
 
 ## Administration
+
+In **Group permissions → Filesystem**, create the namespace, then grant access to each intended group. Verify which namespaces an affected account can see through **Files** or the caller discovery routes above. If access remains after removing a group assignment, check other groups, ownership, and item shares before treating it as a policy failure.
 
 Administrator routes are:
 
@@ -37,9 +41,15 @@ Descriptions use the namespace root's `metadata.attributes.description`, matchin
 
 Omitting `description` when saving preserves it, including during grant-only updates. Supplying it requires the current `expected_root_revision` as well as `expected_revision`. This prevents administration from overwriting a concurrent root metadata edit through ordinary file operations. Name, description and assignment changes are atomic.
 
-Stale saves return `409` with `filesystem_policy_stale`; reread and reconcile rather than blindly replaying. Invalid assignments return `422`. Saved grants are bound to their configured trusted issuer; ordinary editing cannot silently rebind them after an issuer change. A referenced group cannot be deleted until its assignments are removed.
+If a save returns `409` with `filesystem_policy_stale`, reload and compare the current policy with your changes before retrying. Invalid assignments return `422`. Saved grants are tied to their configured trusted issuer; editing a grant cannot silently move it to a new issuer. Remove a group's assignments before deleting the group.
 
-In **Group permissions → Filesystem**, choose **Delete namespace** on the shared namespace’s row and confirm. Group assignments do not prevent deletion. Any stored child blocks it, including an empty folder or an entry the administrator cannot see. An active upload targeting the root also blocks deletion. The API returns `409` with `filesystem_namespace_not_empty` or `filesystem_namespace_active_uploads`, respectively. If the response is `filesystem_policy_stale`, reload the namespace and confirm again. Deletion is never recursive and does not remove stored bytes.
+In **Group permissions → Filesystem**, choose **Delete namespace** on the shared namespace's row and confirm. Group assignments do not block deletion. The API returns `409` when the namespace cannot be deleted:
+
+- `filesystem_namespace_not_empty`: a stored child remains, even if it is an empty folder or the administrator cannot see it.
+- `filesystem_namespace_active_uploads`: an active upload targets the root. Check the session before retrying.
+- `filesystem_policy_stale`: reload the namespace and confirm again.
+
+Deletion is never recursive and does not remove stored bytes.
 
 ## Boundaries
 

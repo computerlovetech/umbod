@@ -1,6 +1,16 @@
-# Shared and Personal connectors
+# Set up connectors
 
-Umbod distinguishes between **Shared** and **Personal** downstream MCP connectors. The distinction determines whose account authorizes access to the downstream server, not whether the connector is public.
+Use an OpenAPI connector for an HTTP API with an OpenAPI description, or add an MCP connector for an existing MCP server. In both cases, publish the connector and grant access only to the groups that need it.
+
+## OpenAPI connectors
+
+1. In **Administration**, open **Connectors**, choose **Add connector**, and select **OpenAPI**.
+2. Upload the OpenAPI JSON file or enter its HTTPS URL. Approve only the hostname the connector is allowed to call, and configure authentication if the API requires it.
+3. Review and enable the tools you want to offer. Publish the connector, then grant access in **Group permissions**. Verify that a member of an intended group can see the tools.
+
+## Shared and Personal connectors
+
+For an MCP server, choose **Shared** if authorized groups should use one account managed by an administrator. Choose **Personal** if each user should sign in to that server with their own account. Neither choice makes a connector public.
 
 | | Shared | Personal |
 | --- | --- | --- |
@@ -18,9 +28,9 @@ These labels apply to downstream MCP servers. They are not separate plugin packa
 
 Open the **MCP connectors** workspace at `/admin/downstream-mcp-connectors`. Its inventory contains both types, labelled Shared or Personal. Use **Add** and choose the appropriate type.
 
-Use Shared when authorized users should access a centrally managed downstream connection. Configure the endpoint and shared authentication, discover capabilities, publish the connector, activate the intended capabilities, and grant the necessary group permissions. Publication or activation alone does not grant access.
+For Shared, configure the endpoint and shared authentication, discover capabilities, publish the connector, activate the intended capabilities, and grant the necessary group permissions. Verify discovery with an account in an intended group. Publication or activation alone does not grant access.
 
-Use Personal when users must act through their own downstream accounts. Users cannot add arbitrary personal servers: administrators control the available server inventory.
+For Personal, register only servers you trust: users can connect only to servers administrators make available.
 
 ### Register a Personal connector
 
@@ -45,15 +55,11 @@ Keep the identity namespace and root secret stable. Changing identity authority 
 
 ## For normal users
 
-Your connector catalogue shows what your groups may access. Shared connector configuration is read-only for normal users; administrators manage the shared account and permissions.
+When supporting a user, check that the connector is published and their group has access before troubleshooting sign-in. Normal users see eligible connectors and cannot edit Shared configuration.
 
-For a Personal connector:
+For Personal connections, ask the user to check **Personal access**: they must choose **Enable access**, then **Sign in** to choose a downstream account and grant consent. Umbod sign-in alone is not enough. A pending provider flow must be completed or canceled before starting another.
 
-1. Open the connector's **Personal access** controls and choose **Enable access** for your account.
-2. Choose **Sign in**, then complete the downstream provider's account selection and consent flow. Signing into Umbod alone does not authorize that provider.
-3. Return to Umbod and check the saved authorization state. If the provider flow is still pending, complete or cancel that attempt before starting another.
-4. After successful browser sign-in, Umbod attempts to load your personal tools automatically. Authorization and successful tool loading are separate states. If loading fails, follow **Retry loading tools**; use **Refresh tools** to rediscover later. Discovery saves a private inventory for your account, not a catalogue shared with other users.
-5. Check for **Tools available** before using the connector through your MCP client. Your tools and downstream permissions are those of your own account.
+A successful sign-in triggers tool loading automatically, but does not guarantee it succeeds. Check for **Tools available**. If loading failed, use **Retry loading tools**; use **Refresh tools** for later discovery. The user sees a private inventory and runs tools with their own downstream permissions.
 
 ### Manage your connection
 
@@ -65,6 +71,6 @@ For a Personal connector:
 | Disable access | Stops personal access while retaining saved authorization |
 | Disconnect | Removes saved authorization and disables access; a pending sign-in cannot restore it |
 
-Umbod does not silently refresh credentials or retry a tool operation for you. Follow the displayed recovery action after expiry, authorization changes, or discovery failures. Disconnecting in Umbod does not promise provider-side token revocation; manage the provider's connected-app settings separately when needed.
+Umbod does not silently refresh credentials or retry tool calls. Ask the user to follow the displayed recovery action after expiry, authorization changes, or discovery failures. Disconnecting in Umbod does not guarantee provider-side token revocation; use the provider's connected-app settings when revocation is needed.
 
-If a connector disappears or stops working after an administrator changes publication, group access, or OAuth settings, contact your administrator. Personal authorization cannot bypass those controls. Previously saved connections can remain visible for cleanup after access is withdrawn.
+If a connector disappears or stops working, check recent changes to publication, group access, or OAuth settings. Personal authorization cannot bypass those controls. A saved connection may still appear for cleanup after access is withdrawn.

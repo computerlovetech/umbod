@@ -1,40 +1,64 @@
 ---
 type: User Guide
 title: Files
-description: Personal and shared file workspaces, ordinary file operations and namespace access administration.
+description: Set up shared file workspaces and troubleshoot file access and uploads.
 ---
 
 # Files
 
-Umbod's filesystem is a virtual workspace for files and folders, not access to the host computer's filesystem. Names, namespace policies and metadata live in the application database; file bytes can live in local storage or S3.
+Use shared namespaces when a group needs the same baseline access to a file workspace. Keep personal files in **My files**; use file or folder shares for exceptions. An administrator can manage shared namespaces without having access to their contents.
+
+Umbod's filesystem does not expose the host filesystem. Names, policies and metadata live in the application database; file bytes live in local storage or S3. Back up and restore both together.
+
+## Shared namespace administration
+
+Open **Group permissions → Filesystem** at `/admin/group-permissions/filesystem`. Use **+** to create a shared namespace with a name and an optional **Description**. Creation assigns no group access and does not depend on which group is selected. Use the namespace's edit action to change its name or description; clearing the description removes it.
+
+Descriptions appear when browsing the namespace and in REST and MCP namespace discovery. Check the namespace and its access with an account in the intended group, not just an administrator account. They use the same metadata as the namespace's root folder, so editing that folder's description updates the namespace description too.
+
+Select a group in the sidebar, then choose **No access**, **Read** or **Read and write** for existing namespaces. Changes remain local until you choose **Save permissions**. Switching between the Filesystem and Connectors tabs retains unsaved permission changes; switching groups asks you to discard those changes or cancel.
+
+Multiple groups can use the same namespace; switching groups changes whose access you edit, not the namespace itself. An assignment supplies baseline access to every descendant. Item ownership and explicit file or folder shares can add rights. Removing an assignment removes that group's baseline, not any independent right to an item. Editing a namespace's name or description does not save staged permission changes.
+
+Permission saves apply per namespace. If a save partially fails, successful changes remain saved and the remaining changes stay unsaved. If a revision conflict occurs, reload and review permissions before trying again. Discarding unsaved changes requires confirmation.
+
+Read permits discovery and content reading. Read/write also permits creation, uploads, metadata updates, renaming, moves within the namespace and file deletion. Management authority does not itself grant content access: administrators must also have an assigned group to browse its root, or independent item access to follow an individual shared link.
+
+Administrator REST clients use `/api/admin/filesystem/namespaces`. Updates replace group assignments and require the current `expected_revision`. Stale saves must be reloaded and reconciled. See [Namespace access](../operations/filesystem-namespaces.md).
+
+A bucket alone cannot restore namespace structure and policy. Local-content workers must share a content directory; S3 workers must share the bucket and configuration. See [Filesystem runtime configuration](../operations/configuration.md#filesystem-runtime) and [S3 file storage](../operations/s3-file-storage.md).
 
 ## Personal and shared files
 
-Open **Files** in the workspace navigation. **My files** is your personal namespace, private by default and provisioned on first use. Administrators have no automatic access; explicitly shared files and folders remain accessible to their recipients.
+To diagnose a missing location, check **Files → Locations** using the affected account. **My files** is private by default and created on first use. **Shared namespaces** only lists accessible workspaces; **Shared with me** lists eligible item shares, not extra namespace access. A shared item can be accessible even when the account cannot browse its namespace root.
 
-The **Locations** panel includes **My files**, **Shared with me**, and any **Shared namespaces** you can access. Select a namespace to open its root, or choose **Shared with me** to find files and folders shared with you. Locations appear beside the file browser on larger screens and above it on smaller screens. The page title stays **Files**, with file actions above the panel.
-
-Use the file list and breadcrumbs to navigate folders within a location. Breadcrumbs stop at that namespace's root and remain separate from location switching. Only accessible namespaces appear. Shared files follow the namespace's group policy, including files uploaded by you.
+Breadcrumbs stop at the namespace root. Files inside a shared namespace, including newly uploaded files, follow that namespace's group policy.
 
 There is no browsable global filesystem root. Entries outside registered namespaces are inaccessible, even when old ownership or sharing records remain. Removing legacy access does not move or delete stored entries or file bytes.
 
+## Share files and folders
+
+Sharing requires current discover and share permission on the item, not just administrator status. Namespace roots use namespace administration instead. The item's sharing dialog can add or remove grants for registered **Groups** or observed **Users**.
+
+Folder shares can **Include contents**, applying recursively to existing and future descendants within the namespace. Folder-only shares do not inherit. Permissions add together: removing a direct read grant cannot remove write access supplied by a namespace or another recursive share.
+
+Recipients can find explicitly shared items in **Files → Shared with me**, or open the original link while they still have access. Items stay in their original location; sharing a file does not add it to **My files** or reveal its private parent folder. To find items accessible only through a shared folder, browse that folder. Removing a share removes its listing unless another share still qualifies.
+
+Observed-user discovery uses verified identities and is not a complete or live identity-provider directory. Use returned opaque recipient IDs, not names or email addresses, as mutation targets.
+
+See [File and folder sharing](../operations/filesystem-sharing.md) for recipient, revision and API contracts.
+
 ## Create folders and upload files
 
-Use **New folder** or **Upload file** in an eligible directory. You can also drop a file into a writable directory; the UI handles one file at a time. Read-only shared namespaces do not offer write actions.
+If **New folder** or **Upload file** is unavailable, check write access to the destination. Read-only locations do not offer write actions. Drag and drop also requires a writable directory; the UI accepts one file at a time.
 
-An upload creates a staging session, transfers the original bytes, then publishes the file. Wait for completion before expecting it in the directory. Duplicate names are rejected rather than overwritten, including when a concurrent upload takes the name before completion. Zero-byte files are supported.
+The default upload limit is **10 MiB** per upload, not a storage quota. Operators can change it. Zero-byte files are supported. Uploads transfer the original bytes in a staging session and do not appear in the directory until publication. Sessions expire after one hour and cannot be resumed; start a new session once expiry is confirmed. A duplicate name, including one taken by a concurrent upload, is rejected rather than overwritten. See [Upload transfers](../operations/filesystem-upload-transfers.md) for transfer checks and safe retries.
 
-Namespace policy supplies baseline permissions for every descendant. Item ownership and explicit file/folder shares can add permissions. Changing namespace assignments removes that source of access, but does not revoke independent ownership or item grants.
+## Read, download and delete
 
-The default upload limit is **10 MiB**, configurable by the operator. Sessions expire after one hour and are not resumable. This limit is per upload, not a user storage quota.
+The Files view provides permission-dependent actions and previews for Markdown, PDF and supported raster images. `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES` bounds browser previews and complete-file MCP resource reads, not full authenticated REST downloads.
 
-## Descriptions and metadata
-
-Add an optional description when creating a folder or uploading a file, or choose **Edit description** on an existing item. An empty description clears it.
-
-Descriptions are stored in `metadata.attributes.description`, are visible to callers who can discover the node, and require write access to change. Descriptions do not grant access and must be treated as untrusted text.
-
-REST clients update nodes through `PATCH /api/me/filesystem/nodes/{id}` with the current quoted revision in `If-Match`. Attribute changes merge with existing attributes; unspecified fields remain unchanged. Changing content-type metadata does not change bytes. MCP clients use `update_filesystem_node` with `node_id`, `expected_revision` and the requested changes.
+File deletion requires permission and confirmation. It removes the file entry and associated policy records, not necessarily its stored bytes. It is not secure erasure or a promise of immediate storage-space recovery. Directory deletion is unsupported.
 
 ## Rename and move
 
@@ -46,23 +70,13 @@ REST node PATCH and MCP `update_filesystem_node` accept top-level `name`, `paren
 
 Namespace roots cannot be renamed, moved or deleted through ordinary file operations. Duplicate sibling names, non-directory destinations and moves into the item's own subtree are rejected.
 
-## Share files and folders
+## Descriptions and metadata
 
-Open an item's sharing dialog to share it with registered **Groups** or observed **Users**. Search recipients, choose permissions, and save. Remove grants through the same dialog. Sharing requires current discover and share permission on the item; namespace roots use namespace administration instead.
+Add an optional description when creating a folder or uploading a file, or choose **Edit description** on an existing item. An empty description clears it.
 
-Folder shares can **Include contents**, applying recursively to existing and future descendants within the namespace. Folder-only shares do not inherit. Permissions add together: removing a direct read grant cannot remove write access supplied by a namespace or another recursive share.
+Descriptions are stored in `metadata.attributes.description`, are visible to callers who can discover the node, and require write access to change. Descriptions do not grant access and must be treated as untrusted text.
 
-Recipients can find explicitly shared items in **Files → Shared with me**, or open them using the original link. Items stay in their original locations: sharing a file does not add it to **My files** or reveal its private parent folder. Open a shared folder to browse the contents you can access. If a share is removed, the item disappears from this list unless another share still qualifies; the original link works only while you still have access.
-
-Observed-user discovery uses verified identities and is not a complete or live identity-provider directory. Use returned opaque recipient IDs, not names or email addresses, as mutation targets.
-
-See [File and folder sharing](../operations/filesystem-sharing.md) for recipient, revision and API contracts.
-
-## Read, download and delete
-
-The Files view provides permission-dependent actions and previews for Markdown, PDF and supported raster images. `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES` bounds browser previews and complete-file MCP resource reads, not full authenticated REST downloads.
-
-File deletion requires permission and confirmation. It removes the file entry and associated policy records, not necessarily its stored bytes. It is not secure erasure or a promise of immediate storage-space recovery. Directory deletion is unsupported.
+REST clients update nodes through `PATCH /api/me/filesystem/nodes/{id}` with the current quoted revision in `If-Match`. Attribute changes merge with existing attributes; unspecified fields remain unchanged. Changing content-type metadata does not change bytes. MCP clients use `update_filesystem_node` with `node_id`, `expected_revision` and the requested changes.
 
 ## Agent access
 
@@ -74,29 +88,11 @@ Files have resource URIs of the form `umbod://filesystem/files/{node_id}`. Brows
 
 Known textual MIME types return UTF-8 text; binary or unspecified types return base64 blobs. Invalid UTF-8 in declared text fails rather than being silently replaced. Reads have no partial results or silent truncation. Use authenticated REST downloads for larger files.
 
-Full summaries report the caller's discover, read, write and supported file-delete permissions, plus the governing namespace. See [Homes and permissions](../operations/filesystem-homes-and-permissions.md) and [Upload transfers](../operations/filesystem-upload-transfers.md).
-
-## Shared namespace administration
-
-Open **Group permissions → Filesystem** at `/admin/group-permissions/filesystem`. Use **+** to create a shared namespace with a name and an optional **Description**. Creation assigns no group access and does not depend on which group is selected. Use the namespace's edit action to change its name or description; clearing the description removes it.
-
-Descriptions appear when browsing the namespace and in REST and MCP namespace discovery. They use the same metadata as the namespace's root folder, so editing that folder's description updates the namespace description too.
-
-Select a group in the sidebar, then choose **No access**, **Read** or **Read and write** for existing namespaces. Changes remain local until you choose **Save permissions**. Switching between the Filesystem and Connectors tabs retains unsaved permission changes; switching groups asks you to discard those changes or cancel.
-
-Multiple groups can use the same namespace; switching groups changes whose access you edit, not the namespace itself. An assignment supplies baseline access to every descendant. Individual item shares remain additive and cannot narrow that baseline. Editing a namespace's name or description does not save staged permission changes.
-
-Permission saves apply per namespace. If a save partially fails, successful changes remain saved and the remaining changes stay unsaved. A revision conflict requires reloading and reviewing permissions before trying again; discarding unsaved changes requires confirmation.
-
-Read permits discovery and content reading. Read/write also permits creation, uploads, metadata updates, renaming, moves within the namespace and file deletion. Management authority does not itself grant content access: administrators must also have an assigned group to browse its root, or independent item access to follow an individual shared link.
-
-Administrator REST clients use `/api/admin/filesystem/namespaces`. Updates replace group assignments and require the current `expected_revision`. Stale saves must be reloaded and reconciled. See [Namespace access](../operations/filesystem-namespaces.md).
-
-Preserve the application database and matching content storage together. A bucket alone cannot restore namespace structure and policy. Local-content workers must share a content directory; S3 workers must share the bucket and configuration. See [Filesystem runtime configuration](../operations/configuration.md#filesystem-runtime) and [S3 file storage](../operations/s3-file-storage.md).
+Full summaries report the caller's discover, read, write, supported file-delete and sharing permissions, plus visibility metadata about the governing namespace, not a complete list of everyone with access. See [Homes and permissions](../operations/filesystem-homes-and-permissions.md) and [Upload transfers](../operations/filesystem-upload-transfers.md).
 
 ## Current boundaries
 
-- Namespace and directory deletion are unsupported; ordinary deletion applies only to files.
+- Ordinary deletion applies only to files. Administrators can [delete an empty shared namespace](../operations/filesystem-namespaces.md#administration); personal namespace and ordinary directory deletion are unsupported.
 - Cross-namespace moves and content replacement are unsupported.
 - There is no automatic migration of unmanaged entries, storage quota or physical content garbage collection.
 - Failed publication and expired sessions can leave unreferenced stored bytes.

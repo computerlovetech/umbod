@@ -1,19 +1,18 @@
 # Build a connector
 
-The Umbod SDK CLI can generate a working Hello World connector and check its package metadata before you build an image. You no longer need to write the starter module or entry point by hand. The versioned connector-builder image supplies Python, `uv`, and the SDK used by the corresponding Umbod core image.
+If you already have a trusted plugin image, start with [Requirements](#requirements), then [Validate locally](#validate-locally) and [Install with Helm](#install-with-helm). Allow only the connector IDs you intend to use, then configure, publish, activate, and grant access in Umbod.
 
-The short path is: create a Hatch project with `uv`, run `umbod connectors init` (preview, then `--apply`), run `umbod connectors check`, build and validate a plugin image, and enable it in Helm. The CLI does not build or deploy the image for you.
+If you maintain connector code, the [SDK instructions](#create-the-python-distribution) below show how to create a Hatch project, preview and apply the generated connector with `umbod connectors init` and `--apply`, check metadata with `umbod connectors check`, and build a bundle. The connector-builder image supplies Python, `uv`, and the matching SDK. The SDK CLI does not build, publish, or deploy the image for you.
+
+Only install or validate trusted plugin images. Connector code runs inside the Umbod API and MCP processes with their filesystem, network, and environment access.
 
 ## Requirements
 
-- Python 3.14 or newer and `uv`
-- An Umbod SDK CLI release containing `connectors init` and `connectors check` (installed below)
-- Docker
-- Access to an OCI registry where you can push a plugin image
-- Helm 3 and `kubectl`
-- An Umbod installation and a published connector-builder and core image for the same release
+- For deployment: an Umbod installation, Helm 3, `kubectl`, an OCI registry reachable from the Kubernetes cluster, and the core image for the selected release. Configure Kubernetes image-pull credentials for a private registry.
+- For local validation: Docker and the matching core image.
+- For building a bundle: Python 3.14 or newer, `uv`, an Umbod SDK CLI release with `connectors init` and `connectors check`, Docker, push access to an OCI registry, and the connector-builder and core images for the same release.
 
-Set the published image and chart versions and the destination for your plugin image. The image release `{{ release.imageTag }}` uses SDK `{{ release.sdkVersion }}`; chart `{{ release.chartVersion }}` deploys those images by default:
+Set the published image and chart versions and the plugin image reference. The image release `{{ release.imageTag }}` uses SDK `{{ release.sdkVersion }}`; chart `{{ release.chartVersion }}` deploys those images by default:
 
 ```bash
 export UMBOD_RELEASE={{ release.imageTag }}
@@ -22,11 +21,91 @@ export UMBOD_CONNECTOR_BUILDER=ghcr.io/computerlovetech/umbod-connector-builder:
 export PLUGIN_IMAGE=registry.example.com/your-organization/my-umbod-connector:0.1.0
 ```
 
-Use the same immutable tag for the connector-builder, core, and frontend images. New canonical `umbod-v` tag pushes publish the SDK first, then all three images, then the Helm chart at one synchronized version. A `-beta.N` image and chart version corresponds to a `bN` PyPI SDK version; stable versions have the same spelling. The tag commit must be on `main` with successful exact-commit main-push CI. Older, independently released artifacts are not retroactively guaranteed to match; select their published chart version separately. The builder image contains the SDK source used by the core image; choose a compatible `umbod` dependency range in `pyproject.toml` that includes that SDK version. Check the selected builder image's SDK version before locking dependencies, and validate the bundle against the selected core image.
+Use the same immutable tag for the connector-builder, core, and frontend images. New canonical `umbod-v` tag pushes publish the SDK first, then all three images, then the Helm chart at one synchronized version. A `-beta.N` image and chart version corresponds to a `bN` PyPI SDK version; stable versions have the same spelling. The tag commit must be on `main` with successful exact-commit main-push CI. Older, independently released artifacts are not retroactively guaranteed to match; select their published chart version separately. If you build a bundle, choose an `umbod` dependency range in `pyproject.toml` that includes the builder image's SDK version. Check that version before locking dependencies, then validate the bundle against the selected core image.
+
+## Validate locally
+
+If you do not have an image yet, [build a plugin image](#create-the-plugin-image) first. Materialize the bundle and validate it with the matching core image:
+
+```bash
+mkdir -p .umbod-plugin-bundle
+
+docker run --rm \
+  --volume "$PWD/.umbod-plugin-bundle:/plugins" \
+  "$PLUGIN_IMAGE"
+
+docker run --rm \
+  --volume "$PWD/.umbod-plugin-bundle:/plugins:ro" \
+  "ghcr.io/computerlovetech/umbod:$UMBOD_RELEASE" \
+  umbod connectors validate --plugin-path /plugins
+```
+
+Validation imports connector code. Only validate plugin images you trust. Structural validation does not call external providers or verify live credentials.
+
+## Install with Helm
+
+Create `values.plugins.yaml` with the trusted plugin image and the connector IDs this deployment should allow. Only one plugin-bundle image can be configured per Umbod release; bundle the required distributions together if you need more than one.
+
+```yaml
+plugins:
+  image:
+    repository: registry.example.com/your-organization/my-umbod-connector
+    tag: 0.1.0
+    pullPolicy: IfNotPresent
+  availableConnectorIds:
+    - my-connector
+```
+
+Upgrade the existing release:
+
+```bash
+helm upgrade --install umbod \
+  oci://ghcr.io/computerlovetech/charts/umbod \
+  --version "$UMBOD_CHART_VERSION" \
+  --values values.plugins.yaml \
+  --reuse-values \
+  --set-string core.image.tag="$UMBOD_RELEASE" \
+  --set-string frontend.image.tag="$UMBOD_RELEASE" \
+  --wait --timeout 5m
+```
+
+For a release installed in another namespace, add the same `--namespace` option used during installation.
+
+Run the chart tests:
+
+```bash
+helm test umbod --logs --timeout 2m
+```
+
+## Diagnose startup failures
+
+The core Pod starts only after plugin materialization and validation succeed:
+
+```bash
+kubectl get pods
+kubectl describe pod -l app.kubernetes.io/component=core
+kubectl logs -l app.kubernetes.io/component=core -c connector-plugins
+kubectl logs -l app.kubernetes.io/component=core -c validate-connector-plugins
+```
+
+If the image cannot be pulled, check its tag, registry reachability, and image-pull credentials. If validation fails, check the core and builder SDK versions, distribution metadata, duplicate connector IDs, and whether every ID in `plugins.availableConnectorIds` exists in the installed bundle. Correct the image or allow-list, then rerun the upgrade and chart tests.
+
+## Configure and expose the connector
+
+After the workloads become ready:
+
+1. Open Umbod and go to **Connectors**.
+2. Select **Add connector**, then select the new connector.
+3. Supply its settings and check the configuration.
+4. Save and publish the connector.
+5. Open the connector, activate its required tools, prompts, and resources, then save the capability selection.
+6. Grant the connector and required capabilities to the calling agent's group under **Group permissions**.
+
+Verify discovery with a client in the intended group. If it cannot see the connector, check installation and `plugins.availableConnectorIds` first, then configuration, publication, activation, and group permissions. Structural validation does not verify credentials or external services.
 
 ## Create the Python distribution
 
-Install the SDK CLI in its own tool environment and create a Python project with uv:
+Use this section and the remaining SDK steps if you need to build the bundle rather than deploy an existing one. Install the SDK CLI in its own tool environment and create a Python project with uv:
 
 ```bash
 uv tool install --python 3.14 --prerelease allow umbod
@@ -95,7 +174,7 @@ export UMBOD_SDK_VERSION="$(docker run --rm "$UMBOD_CONNECTOR_BUILDER" \
 umbod connectors check --sdk-version "$UMBOD_SDK_VERSION"
 ```
 
-`--sdk-version` is an offline declaration check, not image verification. Do not infer the SDK version from an old image tag. `--target` and `--sdk-version` cannot be combined. Neither mode proves runtime loading or external-service compatibility; validate the completed bundle with the core image below. If the check fails, adjust the `umbod` dependency range in `pyproject.toml` to include the actual SDK version and rerun it.
+`--sdk-version` is an offline declaration check, not image verification. Do not infer the SDK version from an old image tag. `--target` and `--sdk-version` cannot be combined. Neither mode proves runtime loading or external-service compatibility; [validate the completed bundle](#validate-locally) with the matching core image. If the check fails, adjust the `umbod` dependency range in `pyproject.toml` to include the actual SDK version and rerun it.
 
 Generate or refresh the lock file using uv inside the builder image:
 
@@ -151,7 +230,7 @@ def say_hello(
 plugin = connector
 ```
 
-The `plugin` object matches the `my_umbod_connector.hello_world:plugin` entry point added by `init`. Umbod injects `configuration`; the agent supplies only `name`. The `my-connector` ID also matches `plugins.availableConnectorIds` in the Helm values below. Build and validate the image using the next steps. After deployment, configure, publish, activate `say_hello`, and grant access to the calling agent's group.
+The `plugin` object matches the `my_umbod_connector.hello_world:plugin` entry point added by `init`. Umbod injects `configuration`; the agent supplies only `name`. The `my-connector` ID also matches `plugins.availableConnectorIds` in the Helm values below. Build the image below, then [validate it](#validate-locally). After deployment, configure, publish, activate `say_hello`, and grant access to the calling agent's group.
 
 For connectors that call an external API, put credentials in the configuration model as `SecretStr`, perform a safe live configuration check, and keep HTTP requests in a separate client module. The [Connector SDK distribution guide](https://github.com/computerlovetech/umbod/tree/main/packages/umbod-sdk) covers entry points and distribution details.
 
@@ -207,83 +286,3 @@ docker push "$PLUGIN_IMAGE"
 ```
 
 The registry must be reachable from the Kubernetes cluster. Configure Kubernetes image-pull credentials when using a private registry.
-
-## Validate locally
-
-Materialize the bundle and validate it with the matching core image:
-
-```bash
-mkdir -p .umbod-plugin-bundle
-
-docker run --rm \
-  --volume "$PWD/.umbod-plugin-bundle:/plugins" \
-  "$PLUGIN_IMAGE"
-
-docker run --rm \
-  --volume "$PWD/.umbod-plugin-bundle:/plugins:ro" \
-  "ghcr.io/computerlovetech/umbod:$UMBOD_RELEASE" \
-  umbod connectors validate --plugin-path /plugins
-```
-
-Validation imports connector code. Only validate plugin images you trust. Structural validation does not call external providers or verify live credentials.
-
-## Install with Helm
-
-Create `values.plugins.yaml`:
-
-```yaml
-plugins:
-  image:
-    repository: registry.example.com/your-organization/my-umbod-connector
-    tag: 0.1.0
-    pullPolicy: IfNotPresent
-  availableConnectorIds:
-    - my-connector
-```
-
-Upgrade the existing release:
-
-```bash
-helm upgrade --install umbod \
-  oci://ghcr.io/computerlovetech/charts/umbod \
-  --version "$UMBOD_CHART_VERSION" \
-  --values values.plugins.yaml \
-  --reuse-values \
-  --set-string core.image.tag="$UMBOD_RELEASE" \
-  --set-string frontend.image.tag="$UMBOD_RELEASE" \
-  --wait --timeout 5m
-```
-
-For a release installed in another namespace, add the same `--namespace` option used during installation.
-
-Run the chart tests:
-
-```bash
-helm test umbod --logs --timeout 2m
-```
-
-## Diagnose startup failures
-
-The core Pod starts only after plugin materialization and validation succeed:
-
-```bash
-kubectl get pods
-kubectl describe pod -l app.kubernetes.io/component=core
-kubectl logs -l app.kubernetes.io/component=core -c connector-plugins
-kubectl logs -l app.kubernetes.io/component=core -c validate-connector-plugins
-```
-
-Typical failures include an unavailable image, an SDK version mismatch, missing distribution metadata, duplicate connector IDs, or an unavailable ID in `plugins.availableConnectorIds`.
-
-## Configure and expose the connector
-
-After the workloads become ready:
-
-1. Open Umbod and go to **Connectors**.
-2. Select **Add connector**, then select the new connector.
-3. Supply its settings and check the configuration.
-4. Save and publish the connector.
-5. Open the connector, activate its required tools, prompts, and resources, then save the capability selection.
-6. Grant the connector and required capabilities to the calling agent's group under **Group permissions**.
-
-The connector is agent-facing only after it is installed, deployment-available, configured, published, activated, and authorized.

@@ -6,9 +6,15 @@ description: Run all registered retention jobs through the operational CLI again
 
 # Scheduled cleanup
 
-`umbod cleanup` runs all cleanup jobs registered by the installed Umbod version once, sequentially. The job list is maintained in application composition; operators do not select individual jobs. Later versions can extend that list without changing the command.
+Before rollout, schedule `umbod cleanup` hourly against the same SQLite database your servers use. Disable overlapping runs and alert on both failed and missed runs. Neither Docker Compose nor the Helm chart installs this schedule. Starting or restarting API and MCP, serving requests, and collecting background usage do not delete expired data.
 
-API and MCP server startup, request processing and background usage collection do not run retention cleanup. Deploying this change therefore requires an external cleanup schedule to retain physical data deletion.
+Each invocation runs all cleanup jobs in the installed Umbod version once, in order. You cannot select individual jobs, and later versions can add jobs without changing the command.
+
+## Deployment requirements
+
+1. Use the same pinned application image and persistence configuration as the servers. Set `UMBOD_CONNECTOR_STORE=sqlite` and keep `UMBOD_DATA_DIR` and any explicit `UMBOD_CONNECTOR_STORE_SQLITE_PATH`. The command does not support in-memory persistence.
+2. Mount the same database volume and preserve the working directory if the path is relative. A new empty volume or a different working directory will not clean the live database. Choose storage and worker placement that support the servers' SQLite locking. Do not mount a ReadWriteOnce volume into an incompatible worker placement.
+3. Use the deployment's normal configuration and secret delivery. Keep secrets out of command arguments and scheduler logs. Monitor the command's exit status. It readies the database before running jobs and closes its database runtime before exiting, without starting HTTP or metrics listeners.
 
 ## Included jobs
 
@@ -17,18 +23,10 @@ API and MCP server startup, request processing and background usage collection d
 
 This command does not delete analytics telemetry, filesystem contents, orphan objects or incomplete multipart uploads.
 
-## Deployment requirements
-
-Run the command from the same pinned application image as the servers, with their application persistence configuration and access to the same database volume. Set `UMBOD_CONNECTOR_STORE=sqlite`; preserve `UMBOD_DATA_DIR` and any explicit `UMBOD_CONNECTOR_STORE_SQLITE_PATH`. A new empty volume or a different relative working directory does not clean the running deployment's database. In-memory persistence is not supported by this operational command.
-
-Preserve normal configuration and secret delivery without placing secrets in command arguments or scheduler logs. The command prepares persistence through the normal readiness boundary and closes its runtime before exiting. It does not start HTTP servers or metrics listeners.
-
-Configure an external scheduler to run `umbod cleanup` hourly, with overlapping invocations disabled and exit-status monitoring enabled. For SQLite, use storage and placement that support the same database file and locking semantics as the servers. Do not mount a ReadWriteOnce volume into an incompatible worker placement.
-
-Neither Docker Compose nor the Helm chart installs a cleanup schedule automatically. An operator-managed task is required before rollout; restarting the servers is not a substitute. Monitor missed runs as well as failed runs to prevent unnoticed data growth.
-
 ## Failures and retries
 
-Each job has a bounded execution budget: `UMBOD_CLEANUP_JOB_TIMEOUT_SECONDS` defaults to 5 seconds and accepts positive finite values up to 3600 seconds. An ordinary job failure does not prevent later jobs from running. A failed or timed-out invocation can have committed partial cleanup; the command does not promise an all-jobs transaction. Inspect the per-job outcome and sanitized structured failure diagnostics. Exit status zero means all registered jobs completed; a nonzero exit means configuration, initialization or execution failed.
+Check the exit status and the sanitized outcome for each job. Exit status zero means every job completed; nonzero means configuration, startup, or execution failed. An ordinary failure does not stop later jobs, so a failed or timed-out run may already have deleted some data. The jobs do not share one transaction.
+
+Set `UMBOD_CLEANUP_JOB_TIMEOUT_SECONDS` only if jobs need a different time budget. The default is 5 seconds per job; the value must be positive and finite, up to 3600 seconds.
 
 Cleanup can still contend with normal server writes. After a failed run, retry with a bounded scheduler backoff rather than a tight loop; alert after repeated failures. Retention deletion can safely run again against the current cutoff. Do not enable raw exception messages or HTTP debug payloads to investigate failures. See [safe application diagnostics](application-diagnostics.md).

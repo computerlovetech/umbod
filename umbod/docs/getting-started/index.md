@@ -1,9 +1,10 @@
 # Getting started
 
-Use this section to install Umbod from the published OCI Helm chart and confirm that its Kubernetes workloads are healthy.
+Use the [Kubernetes installation guide](kubernetes-installation.md) to install Umbod with Helm and check that it is running.
 
 ## Deployment option
 
-Umbod is currently distributed as a versioned Helm chart with versioned container images. Install it on a local kind cluster for evaluation or on an existing Kubernetes cluster.
+- **Try it locally:** Use kind to run a Kubernetes cluster on your computer. Use development sign-in only for local evaluation.
+- **Set it up for a team:** Use an existing Kubernetes cluster. Configure your sign-in provider, HTTPS addresses, and persistent storage before sharing access.
 
-Follow the [Kubernetes installation guide](kubernetes-installation.md) for the complete installation and validation steps. After Umbod is running, use the [connector plugin guide](../plugins/index.md) to understand plugin bundles or [build a connector](../plugins/build-a-connector.md).
+Once Umbod is running, [set up a connector and grant access](../using-umbod/connectors.md).

@@ -1,6 +1,6 @@
 # Built-in MCP tools
 
-This page documents the input and output contracts currently covered by these docs. It is not a complete built-in tool catalogue. The connected server's MCP `tools/list` response supplies the authoritative `inputSchema` and `outputSchema`, including required fields, constraints, references, and alternative branches. Tool visibility depends on the caller's permissions and enabled features.
+Use this reference to check what the file-sharing and administrator tools accept and return. For the full list available to your account, call `tools/list` on your Umbod MCP endpoint. The response includes each tool’s `inputSchema` and `outputSchema`, with the required fields and valid values. Which tools you see depends on your permissions and the features enabled on the server.
 
 ## Filesystem sharing tools
 
@@ -27,9 +27,9 @@ Each result has `type`, `label`, and either `group_id` or `user_id`. Discovery n
 | `permissions` | Nonempty list drawn from `discover`, `read`, `write`, `delete`, and `share`. |
 | `recursive` | Optional boolean. Omission preserves existing scope, defaults true for new directories. Files always normalize to false. |
 
-For ordinary read access, request both `discover` and `read`. The operation unions the requested permissions with the recipient's existing manageable direct grant. It preserves other permissions and recipients, is idempotent, and cannot revoke access. Recursive scope is additive too: an existing true scope remains true even when false is requested. Widening a legacy false grant to true counts as a change even when permissions are unchanged.
+For ordinary read access, request both `discover` and `read`. The tool adds permissions to the recipient’s existing manageable share. It does not remove permissions or change other recipients, and repeating a request does not add another share. It can extend a share to the contents of a folder (`recursive: true`), but cannot undo that with `false`. Extending the share counts as a change even when the permissions stay the same.
 
-The response contains `node_id`, `recipient`, `permissions`, required `recursive`, `changed`, and `visible_to`. Returned permissions are the authoritative recipient union, not the caller's own permissions or just the requested additions. Visibility identifies the containing namespace, not a complete audience or the direct grants.
+The response contains `node_id`, `recipient`, `permissions`, required `recursive`, `changed`, and `visible_to`. The returned permissions are the recipient’s updated direct grant, not your own permissions or just the permissions you added. `visible_to` describes the storage area (namespace) containing the item. It does not list everyone with access or show direct grants.
 
 Legacy requests using top-level `group_id` instead of `recipient` remain supported, returning `node_id`, `group_id`, `permissions`, required `recursive`, `changed`, and `visible_to`. Do not mix legacy and canonical target fields.
 

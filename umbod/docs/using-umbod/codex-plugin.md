@@ -1,18 +1,18 @@
 # Codex CLI plugin
 
-The Umbod plugin bundles a remote MCP connection and skills for connected-app access, user-requested diagnostics, and obstacle self-reporting. Both reporting paths use the current Umbod playbook. Only proactive reporting requires the playbook's proactive setting and user/client authorization. It connects to an existing Umbod deployment; it does not install the Umbod server or copy credentials into Codex.
+Use this plugin to connect Codex CLI to an existing Umbod deployment. Before directing users to **Getting started**, check that the page advertises the intended public MCP endpoint and that sign-in is configured for that origin. The plugin installs per user through a local marketplace; it does not install the server or copy credentials into Codex.
 
-This local-marketplace installation is verified with Codex CLI 0.167.0. Update Codex if `codex plugin` is unavailable. It does not require an OpenAI public-directory submission or a ChatGPT desktop installation.
+The package includes the remote MCP connection and skills for connected-app access, user-requested diagnostics, and proactive reporting of obstacles. Both reporting paths use the current Umbod playbook. Only proactive reporting requires the playbook's proactive setting and user/client authorization.
+
+Local-marketplace installation was verified with Codex CLI 0.167.0. Update Codex if `codex plugin` is unavailable. An OpenAI public-directory submission and ChatGPT desktop are not required.
 
 ## Install from Getting started
 
-Open **Getting started → Connect your harness**, select your operating system and **Codex**, then copy and run the installation command. macOS and Linux use Bash with Python 3.8 or later and curl. Native Windows uses PowerShell 5.1 or later with its included .NET runtime; no separate download or hashing utility is required. Codex must already be installed. Use the Linux choice inside WSL.
+Direct users to **Getting started → Connect your harness** to select their operating system and **Codex**, then copy and run the installation command. macOS and Linux use Bash with Python 3.8 or later and curl. Native Windows uses PowerShell 5.1 or later with its included .NET runtime; no separate download or hashing utility is required. Codex must already be installed. Use the Linux choice inside WSL.
 
 The command contains a single installer URL. Its script already includes the instance's package location, MCP endpoint and selected harness, so no additional configuration arguments are needed. The installer downloads a credential-free package, verifies its checksum and endpoint, stores it in a persistent user-owned directory, registers the marketplace, and installs the plugin. Administrator access is not required. **Inspect installer** opens the same configured script before you run it.
 
-After verifying the installed plugin, the terminal displays the Umbod icon and numbered next steps for restarting Codex, opening `/mcp`, signing in when prompted, and discovering connected apps. These steps appear in the terminal rather than on the Getting started page.
-
-Installation does not authenticate or verify connected-app access. Complete any requested sign-in using your normal Umbod account. Telemetry tokens do not authenticate MCP. Empty discovery results can mean no matching published tools are available to your account; they do not necessarily mean authentication failed. Do not run write operations merely to test installation.
+The terminal, not the Getting started page, displays the Umbod icon and verification steps: restart Codex, open `/mcp`, sign in if prompted, and discover connected apps. Installation itself does not authenticate or verify tool access. Use a normal Umbod account, not a telemetry token, to sign in. Verify with tool discovery rather than a write operation. Empty results can mean the account has no matching published tools, even when sign-in worked.
 
 ## Existing installations
 

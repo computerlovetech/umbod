@@ -81,8 +81,10 @@ test('production build preserves routes, metadata, shared navigation and release
       for (const [, fragment] of html.matchAll(/href="#([^"]+)"/g)) assert.ok(html.includes(`id="${fragment}"`), `missing anchor ${fragment}`);
     }
     assert.match(pages[0], /Bring agents together<br><span>through one shared hub\.<\/span>/);
-    assert.match(pages[0], /Connect agents to your internal systems/);
-    assert.match(pages[0], /Share results\. Give the next agent a head start\./);
+    for (const html of pages) {
+      assert.match(html, /href="\/docs\/getting-started\/kubernetes-installation\/"/);
+      assert.match(html, /href="\/docs\/using-umbod\/connectors\/"/);
+    }
     assert.equal((pages[0].match(/<article class="capability-card">/g) || []).length, 6);
     assert.equal((pages[0].match(/<svg viewBox="0 0 320 200"/g) || []).length, 6);
     assert.match(pages[0], /id="how-it-works"/);

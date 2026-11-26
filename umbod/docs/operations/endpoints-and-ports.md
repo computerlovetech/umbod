@@ -1,5 +1,7 @@
 # Endpoints and ports
 
+Use the local port-forwards below for a local Helm installation. For a shared installation, configure [Ingress routing](#ingress-routing) for the frontend, REST API, and ordinary MCP. Keep administrator MCP, telemetry ingestion, and Prometheus metrics off public Ingress.
+
 ## Local access
 
 After installing Umbod with the local Helm profile and setting `config.publicOrigins.mcp=http://localhost:8011`, forward the frontend and MCP Services in separate terminals:
@@ -32,6 +34,8 @@ The core Pod also declares API metrics port `8001` and MCP metrics port `8012`. 
 
 ## Ingress routing
 
+Set `ingress.host`, `ingress.className`, annotations, and TLS values for the target cluster. Set `config.publicOrigins.site`, `config.publicOrigins.api`, and `config.publicOrigins.mcp` to the origins that browsers and clients actually use.
+
 When `ingress.enabled=true`, the chart routes three configurable paths:
 
 | Helm value | Default path | Destination |
@@ -44,9 +48,11 @@ The `/api` prefix is retained: administration requests reach `/api/admin`, not `
 
 The chart never adds a public `/v1` ingestion route. Public REST excludes `/v1/*` and `/api/v1/*`. When `telemetry.enabled=true`, authenticated OTLP HTTP JSON and protobuf logs, metrics, and traces use the private collector ClusterIP Service. `telemetry.port` and `telemetry.servicePort` independently configure its listener and Service ports. See [telemetry ingestion](telemetry-ingestion.md) for authentication, limits, and client compatibility.
 
-Set `ingress.host`, `ingress.className`, annotations, and TLS values for the target cluster. Set `config.publicOrigins.site`, `config.publicOrigins.api`, and `config.publicOrigins.mcp` to the corresponding browser- and client-visible origins.
-
 ## Administration API clients
+
+Use browser sign-in through a same-origin gateway or send a bearer credential in `Authorization` from a native client. Production bearer tokens must meet the configured issuer, audience, and administrator membership requirements. Native clients handle their own sign-in and token acquisition.
+
+The browser gateway must forward verifiable credentials to Python, preserve the original cookie and Origin headers, and return API authentication failures without redirecting to a login page. Cookie-bearing writes require `X-Umbod-Web-Request: 1` and a trusted Origin. Cross-origin cookie authentication is not enabled; CORS supports configured browser origins using bearer credentials.
 
 - `/api/me/profile` returns authenticated identity under `user` and effective UI permissions under `capabilities`, for both ordinary users and administrators.
 - `capabilities.administration` controls administration entry points; identity display does not require administration access.
@@ -55,9 +61,5 @@ Set `ingress.host`, `ingress.className`, annotations, and TLS values for the tar
 - `/api/admin/connectors/catalog`, `/api/admin/connectors/openapi`, `/api/admin/connectors/mcp`, and `/api/admin/mcp-permissions` expose the shared administration resources.
 - `POST /api/admin/connectors/openapi/setup` creates, imports, and configures an OpenAPI connector in one backend operation, with compensation on failure rather than a guaranteed database transaction.
 - Administration API requests use `/api/admin` only; legacy `/admin` API requests return 404. Private system runtime endpoints are not part of the public client API.
-
-Native clients send bearer credentials in `Authorization`. Production tokens must satisfy configured issuer, audience, and administrator membership requirements. Obtaining tokens and implementing native login remain client responsibilities.
-
-The website can use same-origin gateway-managed sessions. The gateway must forward verifiable credentials to Python, retain the original cookie and Origin headers, and return API authentication failures without a login-page redirect. Cookie-bearing writes require `X-Umbod-Web-Request: 1` and a trusted Origin. Cross-origin cookie authentication is not enabled; CORS supports configured browser origins using bearer credentials.
 
 The frontend's `/system/health` checks static hosting only, not backend availability. `/app-config.json` supplies public runtime addresses and is not a secret store.

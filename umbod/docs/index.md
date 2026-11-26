@@ -2,12 +2,12 @@
 
 <div class="umbod-intro" markdown>
 
-Connect your tools. Control agent access.
+Install and run Umbod
 
-Install, configure, and run Umbod on your own infrastructure. Start with a local Kubernetes cluster, then connect your first API or MCP server.
+This guide is for administrators. Learn how to install Umbod, connect internal tools, and decide which groups can use them. Try it on your computer before setting up a shared Kubernetes installation.
 
 [Install Umbod :material-arrow-right:](getting-started/kubernetes-installation.md){ .md-button .md-button--primary }
-[Explore the architecture](operations/service-topology.md){ .umbod-secondary-link }
+[See how it runs](operations/service-topology.md){ .umbod-secondary-link }
 
 </div>
 
@@ -19,37 +19,40 @@ Install, configure, and run Umbod on your own infrastructure. Start with a local
 
     Learn how services connect, where data lives, and which ports to expose.
 
-    [Service topology :material-arrow-right:](operations/service-topology.md)
+    [Services and storage :material-arrow-right:](operations/service-topology.md)
 
 -   :material-tune: **Configure Umbod**
 
-    Set up profiles, public origins, persistence, and secrets for your environment.
+    Set the URLs people and agents use, configure sign-in, and keep data across restarts.
 
     [Configuration guide :material-arrow-right:](operations/configuration.md)
 
--   :material-puzzle-outline: **Build a connector**
+-   :material-puzzle-outline: **Connect tools and grant access**
 
-    Create a connector plugin and deploy it with the versioned builder image.
+    Decide whether to use a shared connection or let users connect their own accounts.
 
-    [Connector guide :material-arrow-right:](plugins/index.md)
+    [Connector setup :material-arrow-right:](using-umbod/connectors.md)
 
 -   :material-code-braces: **Look up a setting**
 
-    Find Helm configuration defaults and built-in MCP tool input and output contracts.
+    Find Helm setting names and defaults, or check what a built-in MCP tool accepts and returns.
 
     [Helm values](reference/helm-values.md) · [Built-in MCP tools](reference/built-in-tools.md)
 
 </div>
 
-## Connect accounts and work with files
+## Run and maintain Umbod
 
-- [Shared and Personal connectors](using-umbod/connectors.md): administrator setup, user access, and personal account authorization.
-- [Files](using-umbod/files.md): private uploads, folders, sharing, and agent access.
-- [S3 file-content storage](operations/s3-file-storage.md): configure Helm deployments to keep file bytes in an S3 bucket.
+- [Endpoints and ports](operations/endpoints-and-ports.md): check which addresses to expose and which to keep private.
+- [Files](using-umbod/files.md): understand upload limits, sharing, and agent access.
+- [S3 file storage](operations/s3-file-storage.md): store file contents in an S3 bucket without replacing the application database.
+- [Scheduled cleanup](operations/cleanup.md): set up regular removal of expired records.
+- [Application diagnostics](operations/application-diagnostics.md): find and interpret service logs.
+- [Connector plugins](plugins/index.md): build and deploy a custom connector when you need one.
 
 ## Early beta
 
-Umbod is in early beta. These guides cover installation, everyday use, operations, and connector development. Questions or feedback? [Join the community on Discord](https://discord.gg/Njy4GnurpE) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).
+Umbod is in early beta. The current Helm chart is for evaluation, not a highly available deployment. Questions or feedback? [Join the community on Discord](https://discord.gg/Njy4GnurpE) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).
 
 ## About the name
 

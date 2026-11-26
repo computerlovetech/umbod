@@ -6,7 +6,7 @@ description: Authenticated issuance and management of opaque personal tokens wit
 
 # Personal access tokens
 
-Personal access token management belongs to the authenticated user's API, independently of the feature that consumes a token. Requested resource permissions determine its access. There is no default permission grant.
+Have users create, list, and revoke their own tokens while signed in. A personal access token cannot sign a user in or manage other tokens. The only supported grant is `telemetry` at level `write`, for sending data to the collector. Users must request that permission and enter an expiry; Umbod grants nothing by default. Save the secret when it is issued, and revoke the token if it is no longer needed or may have been exposed.
 
 ## Endpoints
 
@@ -16,7 +16,9 @@ Personal access token management belongs to the authenticated user's API, indepe
 | GET | /api/me/personal-access-tokens | List all tokens owned by the authenticated user |
 | DELETE | /api/me/personal-access-tokens/{token_id} | Delete an owned token and invalidate its credential |
 
-These endpoints require the authenticated user's sign-in identity, not a personal access token. Management requires an upstream-verified issuer and subject by default, including in production. Only explicitly configured local development (`runtime.profile=local`, `runtime.auth=dev`, administrator authentication mode `simulation`, environment `development`, and a nonblank configured simulated user ID) also permits the server-established simulated user. Its issuer must be exactly `urn:umbod:local` and its subject must exactly match that configured ID. Other simulated, semantic, test, unavailable and deployment identities remain denied; provenance is never relabeled as verified. The local workspace uses the same create, list and revoke endpoints as ordinary users, without a separate login form. Cookie-bearing mutations require a trusted Origin and `X-Umbod-Web-Request: 1`.
+Use the authenticated user's sign-in identity. In production and by default, the issuer and subject must be verified upstream. Writes carrying a cookie require a trusted Origin and `X-Umbod-Web-Request: 1`.
+
+For local development, token management allows the server-established simulated user only when all of the following are set: `runtime.profile=local`, `runtime.auth=dev`, administrator authentication mode `simulation`, environment `development`, and a nonblank configured simulated user ID. The issuer must be exactly `urn:umbod:local` and the subject must exactly match that ID. This user uses the same create, list, and revoke endpoints without a separate login form. Umbod does not treat simulated identities as verified; all other simulated, semantic, test, unavailable, and deployment identities remain denied.
 
 ## Creation contract
 
@@ -28,9 +30,9 @@ Creation requires all of these fields:
 | expires_at | Explicit timezone-aware expiry in the future |
 | permissions | Nonempty mapping of supported resource names to permission levels |
 
-The server resolves requested permissions through its supported access catalogue. Clients cannot supply an owner, raw audience, raw scopes, endpoint URLs, HTTP methods, wildcard grants or unsupported permission names or levels. Invalid requests return 422 rather than receiving broader or default access.
+Request only supported resource names and permission levels. The server determines the owner, audience, and scopes. Clients cannot supply those directly, specify URLs or HTTP methods, or use wildcards. Invalid requests return 422; Umbod never substitutes a broader or default grant.
 
-The initial supported grant is:
+The supported grant is:
 
 | Resource | Level | Effective audience | Effective scope | Permitted operations |
 | --- | --- | --- | --- | --- |
@@ -44,13 +46,15 @@ The permission selection follows the resource-permission approach of [GitHub fin
 
 Successful creation returns 201 with `metadata` and the plaintext `token`. Metadata records the effective audience and scopes, owner, token ID, label, creation time, expiry and status. Audience and scopes are the canonical persisted access representation; there is no second independently mutable permission record.
 
-The secret is returned only during issuance. Listing returns metadata without secrets or hashes and does not filter out owned records by audience. Revocation permanently deletes the owned token's stored hash and metadata and returns 204. Deleted tokens no longer appear in listings or pass verification. Missing, previously deleted and foreign IDs return the same 404 response. Legacy records with a revoked status remain readable and can be deleted through the same endpoint. The old telemetry-specific management route is not retained as an alias or redirect. Existing token hashes, audiences and scopes are unchanged, so previously issued telemetry tokens remain verifiable.
+Store the secret securely at issuance; Umbod does not return it again. Listing shows metadata for all owned tokens across all audiences, without secrets or hashes. Revoke a token to permanently delete its stored hash and metadata. A successful revocation returns 204, and the token no longer appears in listings or passes verification. Missing, already deleted, and other users' IDs all return the same 404. Legacy revoked records can still be read and deleted through the same endpoint.
+
+Use the general management endpoint for existing telemetry tokens. The old telemetry-specific route has no alias or redirect, but previously issued tokens remain verifiable with the same hashes, audiences, and scopes.
 
 Management responses are not cacheable. Required storage failures return sanitized 503 responses; failed writes are never acknowledged as successful. Tokens expire at the recorded instant and revocation is authoritative on subsequent verification requests, without a cross-request authorization cache.
 
 ## Storage and verification
 
-Clients should retain the actual bearer token in a local secret store; the Rust client and platform adapters are not implemented by this API. Backend application persistence retains only SHA-256 token hashes and metadata. Tokens contain 256 bits of cryptographically secure random secret material. Verification uses a public token ID primary-key lookup, constant-time hash comparison, and audience, scope, expiry and revocation checks.
+Keep the bearer token in a local secret store. This API does not implement a Rust client or platform adapters. Umbod stores only SHA-256 token hashes and metadata. Tokens contain 256 bits of cryptographically secure random secret material. Verification uses a public token ID primary-key lookup, constant-time hash comparison, and audience, scope, expiry and revocation checks.
 
 The existing backend-neutral Database interface and its in-memory and SQLite drivers provide persistence. Business-logic tests use the in-memory driver; low-level SQLite tests cover durability and cross-runtime revocation.
 

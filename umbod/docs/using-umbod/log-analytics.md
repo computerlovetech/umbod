@@ -1,14 +1,18 @@
 ---
 type: User Guide
 title: Log analytics
-description: Review reported tool calls, file-tool calls and skill activations by session, or build a custom log query.
+description: Set up log analytics, check ingestion, and interpret reported activity.
 ---
 
 # Log analytics
 
 Administrators can open **Log analytics** in workspace navigation or visit `/admin/analytics`. This view and its API cover the whole instance, including unowned exports. Signed-in users can query their own log counts through `POST /api/me/telemetry/log-counts`.
 
-This explorer counts accepted OTLP log records, not application stdout, metrics, traces, tokens or costs. Historical stdout is not imported. The analytics backend and authenticated private collector must both be enabled before new client exports can appear. The API host shares one analytics runtime between collector writes and administrator queries; an external `umbod telemetry serve` deployment owns separate storage whose history is not automatically visible here. See [telemetry ingestion](../operations/telemetry-ingestion.md).
+To see new exports, enable both the analytics backend and the authenticated private collector, then configure clients to export to that collector. Application and Helm defaults leave analytics disabled; see [Development storage](#development-storage) for the Compose defaults and [telemetry ingestion](../operations/telemetry-ingestion.md) for setup.
+
+Check a time range when a configured client was exporting. If no rows appear, check that the client is exporting, that ingestion is enabled, and that the range and filters match. A disabled or failed analytics backend returns an error, not a zero. An external `umbod telemetry serve` deployment has separate storage; its history is not automatically visible to the API host, where collector writes and administrator queries use the same analytics runtime.
+
+Reports count accepted OTLP log records, not application stdout, metrics, traces, tokens or costs. Historical stdout is not imported.
 
 ## Session activity reports
 
@@ -58,8 +62,6 @@ If the time range changes, select **Refresh values** before choosing more filter
 Results show the executed range and filters, with grouping and interval settings beneath the table. Counts and group summaries describe loaded rows, not query-wide totals.
 
 Only observed groups and buckets are shown; absent intervals are not filled with zeroes. A single ungrouped, unbucketed total can be zero. **Missing attribute** and **Empty string** are distinct values. These counts describe stored records, not deduplicated events: exporter retries can increase them.
-
-An empty result can mean no clients have exported logs, ingestion is disabled, or the selected range and filters do not match. Analytics being available does not prove that clients are exporting. A disabled or failed analytics backend returns an error, never a fabricated zero.
 
 ## Development storage
 

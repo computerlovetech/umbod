@@ -6,19 +6,18 @@ description: Diagnostic field contracts, privacy boundaries, and investigation o
 
 # Safe application diagnostics
 
-Application diagnostics explain failures without copying the data being processed. Public error messages and internal diagnostic records are separate contracts. A generic client response does not justify a generic internal failure reason.
+Start with the server-generated request ID and the sanitized failure record. Check where the failure occurred, whether the downstream service returned a response, and whether the operation may already have completed. Do not replay a write just because its response failed. Keep raw exceptions, credentials, and payloads out of logs, even when debugging.
 
-## Signal-owned side effects
+## Investigating a failure
 
-Application operations publish typed failure events; logging, metrics, and audit adapters own the corresponding side effects. Reuse the existing application-local signal system rather than introducing a global event bus or invoking a logging helper inside an operation.
+1. Find the invocation completion record. Match it to related records by trace, connector, tool, and operation. Audit and invocation records can describe the same failure; do not count them as separate incidents.
+2. Check origin, stage, reason, and downstream response evidence before interpreting HTTP status. If the downstream status is missing, do not infer it from Umbod's public error. Public errors and internal records serve different purposes: a generic public error can still have a specific internal cause.
+3. If the reason is generic, inspect sanitized exception types, frames, and nested causes. Do not relax redaction or replay production writes for more detail. Even a precise diagnosis does not prove whether an upstream OAuth exchange or tool write completed.
+4. If a known condition was lost, have a maintainer locate the branch that discarded it, reproduce it with a disposable scripted dependency, and verify that an approved reason reaches the final record.
 
-Capture and sanitize failure evidence at the failure point, before cleanup can replace it. Publish an immutable snapshot with approved context, not a live exception, traceback object, request, payload, or credential. Every receiver, not only the logging receiver, must receive safe data.
+Expected argument validation, authorization and approval denials, known domain rejections, and explicit tool-error results use WARNING in invocation and audit logs. Their failure outcomes and metrics remain unchanged. Categories are `validation`, `authorization`, or `tool_error`; rejected client input carries `client_input` origin without exception frames. Authentication denials also use WARNING in audit logs.
 
-REST composition constructs a configured failure channel for its application and injects its publishing port into metrics middleware. MCP telemetry composition constructs its channel before the audit recorder and shares that publishing port with audit and OpenAPI lookup adapters. Logging is a named receiver registered during composition; application instances do not share subscriptions. Producers depend on the generic publishing port, not a logger or the full MCP signal collection.
-
-Delivery uses the existing synchronous, receiver-isolating signals. These are transient diagnostic notifications, not durable messages or a new background queue. A failed receiver must not change the operation's result or prevent other receivers from running. Failures in ordinary MCP invocation or inventory receivers publish safe notifications to the separate application-failure channel, so other diagnostic receivers can observe them. Only the terminal failure handler of that diagnostic channel may log a sanitized failure directly; it must never republish through the failing channel. Bootstrap failures before channel construction need the same minimal nonrecursive fallback discipline.
-
-Existing invocation completion signals continue to drive invocation logging, metrics, and audit. Intentional OTLP export remains an explicit data-delivery operation, not a best-effort side effect: export failures must still be reported to the caller.
+Unexpected exceptions, storage and sharing-configuration failures, transport failures, result-classifier failures, and invalid output contracts remain ERROR and alertable. An explicit error result backed by unexpected exception evidence remains a server fault rather than becoming `tool_error`. Invalid or unresolved server-side argument schemas remain contract failures, not client validation errors. Gateway and code-mode audit records retain the strongest nested invocation failure category within their request, so sanitizing a backend error result does not downgrade its audit severity. Downstream origin alone never makes a failure expected. Do not suppress all tool or filesystem errors to reduce alert volume.
 
 ## Required diagnostic context
 
@@ -87,6 +86,8 @@ Investigate by correlating the request ID and connector fingerprint, then inspec
 
 ## Privacy rules
 
+Set protections on ingress, proxies, collectors, and error reporters as well as Umbod. In particular, protect credentials and OAuth callback query strings before they reach any logs. Umbod's application formatter cannot protect upstream logs.
+
 Never include credentials, tokens, authorization headers, OAuth codes or state, request/response bodies, tool arguments/results, personal data, or unrestricted endpoint URLs in application logs. Provider error descriptions are untrusted input: truncation does not make them safe. Map recognized provider codes to approved local reasons; use a fixed fallback for unknown codes.
 
 Use normalized route identities rather than request paths or query strings. Existing approved connector and tool correlation is not permission to log arbitrary owner identities or private inventory metadata.
@@ -95,9 +96,11 @@ The [shared logging boundary](https://github.com/computerlovetech/umbod/blob/mai
 
 Validated OTLP exports are a separate data-delivery contract, not application failure diagnostics. The stdout telemetry sink preserves those caller-supplied payloads through a dedicated typed export path; ordinary log metadata cannot bypass application limits by using a telemetry field name. Do not copy application secrets into telemetry exports. Destination access and retention policy still apply to accepted telemetry data.
 
-Do not enable raw exception messages, HTTP debug bodies, or unsafe debug logging to investigate a generic fallback. Debug severity does not relax privacy rules. Ingress, reverse proxies, collectors, and external error reporters need their own credential and OAuth callback-query protections; application formatting cannot protect earlier logs. See [operator configuration](configuration.md).
+Do not enable raw exception messages, HTTP debug bodies, or unsafe debug logging to investigate a generic fallback. Debug severity does not relax privacy rules. See [operator configuration](configuration.md).
 
 ## Conversation-visible response diagnostics
+
+Use the response headers to identify the serving build and match a failure to its request. For built-in tool failures, follow the retry guidance and inspect state before retrying any write that may have started.
 
 REST and MCP HTTP responses include `X-Umbod-Version`, `X-Umbod-Revision`, and a server-generated `X-Request-ID`. Release images stamp the release and revision during the build; source-development runs explicitly report `development` and `unknown`. MCP initialization, the server card, and REST OpenAPI use the same release identity. These identify the serving build, not the negotiated MCP protocol or connector SDK version.
 
@@ -111,17 +114,17 @@ Successful observed tool results are validated against their advertised output s
 
 Filesystem errors retain stable codes and add bounded recovery guidance. Argument errors identify declared schema fields and approved corrections without copying submitted values, arbitrary attribute keys, or validator messages. The same argument-error adapter covers class-based and function-based filesystem tools before invocation work begins. Missing and inaccessible nodes remain indistinguishable, and errors do not list hidden destinations or echo exception details. Use `filesystem_browse` with operation `home` to resolve the caller's private upload destination, then inspect current permissions rather than inventing paths or identifiers.
 
-## Investigating a failure
+## Signal-owned side effects
 
-1. Select the invocation completion record and correlate by trace, connector, tool, and operation. Audit and invocation records describe different aspects of the same failure; their record counts are not independent incident counts.
-2. Inspect origin, stage, reason, and downstream response evidence before interpreting HTTP status. Missing status must not be guessed from Umbod's public response.
-3. For generic fallbacks, inspect sanitized exception types, frames, and nested causes. Identify the adapter branch that discarded a known condition, then reproduce it with a disposable scripted dependency.
-4. Extend the allowlisted reason at that failure point and verify its propagation to serialized output. Do not broaden redaction exceptions or replay production writes to obtain more detail.
-5. Preserve conservative uncertainty and no-replay behavior for OAuth exchanges and tool calls. More precise diagnostics do not establish whether an upstream mutation completed.
+Umbod reports application failures through typed events. The logging, metrics, and audit receivers handle those records; the operation itself does not log them. Reuse the existing application-local signal system rather than introducing a global event bus or invoking a logging helper inside an operation.
 
-Expected argument validation, authorization and approval denials, known domain rejections, and explicit tool-error results use WARNING in invocation and audit logs. Their failure outcomes and metrics remain unchanged. Categories are `validation`, `authorization`, or `tool_error`; rejected client input carries `client_input` origin without exception frames. Authentication denials also use WARNING in audit logs.
+Capture and sanitize failure evidence at the failure point, before cleanup can replace it. Publish an immutable snapshot with approved context, not a live exception, traceback object, request, payload, or credential. Every receiver, not only the logging receiver, must receive safe data.
 
-Unexpected exceptions, storage and sharing-configuration failures, transport failures, result-classifier failures, and invalid output contracts remain ERROR and alertable. An explicit error result backed by unexpected exception evidence remains a server fault rather than becoming `tool_error`. Invalid or unresolved server-side argument schemas remain contract failures, not client validation errors. Gateway and code-mode audit records retain the strongest nested invocation failure category within their request, so sanitizing a backend error result does not downgrade its audit severity. Downstream origin alone never makes a failure expected. Do not suppress all tool or filesystem errors to reduce alert volume.
+REST composition constructs a configured failure channel for its application and injects its publishing port into metrics middleware. MCP telemetry composition constructs its channel before the audit recorder and shares that publishing port with audit and OpenAPI lookup adapters. Logging is a named receiver registered during composition; application instances do not share subscriptions. Producers depend on the generic publishing port, not a logger or the full MCP signal collection.
+
+Delivery uses the existing synchronous, receiver-isolating signals. These are transient diagnostic notifications, not durable messages or a new background queue. A failed receiver must not change the operation's result or prevent other receivers from running. Failures in ordinary MCP invocation or inventory receivers publish safe notifications to the separate application-failure channel, so other diagnostic receivers can observe them. Only the terminal failure handler of that diagnostic channel may log a sanitized failure directly; it must never republish through the failing channel. Bootstrap failures before channel construction need the same minimal nonrecursive fallback discipline.
+
+Existing invocation completion signals continue to drive invocation logging, metrics, and audit. Intentional OTLP export remains an explicit data-delivery operation, not a best-effort side effect: export failures must still be reported to the caller.
 
 ## Verification and enforcement
 
@@ -133,4 +136,4 @@ The shared [production design rules](https://github.com/computerlovetech/umbod/b
 
 ## Rollout scope
 
-The implementation hardens shared exception formatting, routes metrics, connector-name lookup, and audit-write failures through application-local typed signals, retains a direct terminal signal-delivery failure fallback, restricts authentication and MCP debug records to approved categories, presence booleans and counts, and adds personal MCP transport diagnostics. Personal connector OAuth failures now preserve typed evidence through service publication and controlled public guidance. OpenAPI execution diagnostics, filesystem conflict classification, and storage-provider evidence require subsequent migrations to the same standard; they must not be described as fixed by the shared formatter alone.
+These protections cover shared exception formatting, metrics failures, connector-name lookup, audit-write failures, and personal MCP transport and OAuth diagnostics. Authentication and MCP debug records are limited to approved categories, presence flags, and counts. A terminal signal-delivery failure can still log through the sanitized fallback. OpenAPI execution diagnostics, filesystem conflict classification, and storage-provider evidence do not yet have the same coverage. Do not assume the shared formatter provides it.

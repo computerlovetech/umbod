@@ -1,190 +1,177 @@
 # Configuration
 
-Configure Umbod through Helm values and Kubernetes Secrets. Review the [generated Helm values reference](../reference/helm-values.md) for every supported value, default, and schema constraint.
+Use Helm values for deployment settings and Kubernetes Secrets for credentials. See the [generated Helm values reference](../reference/helm-values.md) for the full list of values, defaults, and allowed inputs.
 
 ## Profiles
 
-| Helm value | Default | Purpose |
+| Helm value | Default | When to change it |
 | --- | --- | --- |
-| `config.profile` | `production` | Selects local or production behavior |
-| `config.authentication.mode` | `auth0` | Selects development authentication or an OIDC provider |
-| `config.logLevel` | `info` | Sets application logging verbosity |
+| `config.profile` | `production` | Set to `local` for local evaluation. |
+| `config.authentication.mode` | `auth0` | Set to `dev` for local evaluation; use OIDC on shared installations. |
+| `config.logLevel` | `info` | Choose how much detail Umbod writes to its logs. |
 
-For local evaluation, set `config.profile=local` and `config.authentication.mode=dev`. Application services emit OpenTelemetry-compatible JSON logs to standard output for collection by the Kubernetes container runtime.
+For local evaluation, set both `config.profile=local` and `config.authentication.mode=dev`. Collect OpenTelemetry-compatible JSON logs from container standard output.
 
 ## Public origins
 
-Set origins without a trailing path:
+Use the addresses that browsers and agents actually reach, not internal Kubernetes Service addresses. Include `https://` (or `http://` for local testing), the hostname, and the port if needed. Leave off paths such as `/api` and `/mcp`.
 
-| Helm value | Purpose |
+| Helm value | Which address to use |
 | --- | --- |
-| `config.publicOrigins.site` | Browser-facing Umbod origin |
-| `config.publicOrigins.api` | Browser-facing REST API origin |
-| `config.publicOrigins.mcp` | Agent-facing MCP origin |
+| `config.publicOrigins.site` | Where people open Umbod in a browser |
+| `config.publicOrigins.api` | Where clients reach Umbod’s REST API |
+| `config.publicOrigins.mcp` | Where agents connect to Umbod |
 
-These values drive API and MCP URLs, allowed browser origins, OIDC metadata, and authentication redirects. They must match the URLs visible to users and MCP clients.
+If redirects fail or the browser blocks API requests, check these addresses against your deployment. They also determine MCP URLs and OIDC metadata.
 
 ## Harness plugin installation
 
-Getting started supplies Bash installers for macOS/Linux and PowerShell for Windows, with separate Codex and Claude Code packages. Bash requires Python 3.8 or later, curl and the selected harness; Windows requires PowerShell 5.1 or later and the selected harness; downloads, hashing and ownership checks use the included .NET runtime. Installation is user-scoped and does not authenticate or verify connected-app access.
+The **Getting started** page in Umbod offers plugins for Codex and Claude Code. On macOS and Linux (including WSL), the installer needs Bash, Python 3.8 or later, and curl. On Windows, it needs PowerShell 5.1 or later. Install Codex or Claude Code first. The plugin is installed for the current user only. The installer does not sign users in or check connected-app access. Use the supplied URL as-is; the inspect link opens the same configured script.
 
-The shared API serves `install.sh`, `install.ps1`, `package.zip`, `package.sha256`, `marketplace.txt` and `endpoint.txt` beneath `/api/install/v1/codex/` and `/api/install/v1/claude-code/`. Allow GET/HEAD to these exact paths and POST to `telemetry/redeem` beneath those two paths without browser-session authentication. The POST authenticates with a one-time bearer code supplied in the `Authorization` header; expose it over HTTPS outside loopback and forward that header without logging it. Keep `/api/me/telemetry/install-claims` and other protected API routes behind normal authentication. Docker Compose supplies finite public routing rules; custom ingress authentication policies must preserve this access explicitly.
+On custom ingress, allow unauthenticated GET/HEAD for `install.sh`, `install.ps1`, `package.zip`, `package.sha256`, `marketplace.txt`, and `endpoint.txt` under both `/api/install/v1/codex/` and `/api/install/v1/claude-code/`. Allow POST to `telemetry/redeem` under both paths without a browser session; it authenticates with a one-time bearer code. Forward `Authorization` without logging it. Keep `/api/me/telemetry/install-claims` and other protected routes behind normal authentication. Docker Compose supplies these routing rules.
 
-Getting started displays one installer URL selected by harness and shell. The response contains the maintained installer with the selected harness, package base and expected MCP endpoint already bound; no additional URL arguments are required. Bash detects macOS or Linux, including WSL. The inspect link opens the same configured script.
+If downloads fail, verify that the installing machine can reach `UMBOD_PUBLIC_API_ORIGIN` plus `/api/install/v1`, even if the browser fetched the script through a different `PUBLIC_API_BASE_URL` gateway. Scripts use `UMBOD_PUBLIC_MCP_ORIGIN` for the MCP URL and refuse mismatched package endpoints. Request headers and query parameters cannot override the configured URLs. Remote downloads and redemption require HTTPS; HTTP loopback is supported for development. Checksums detect corruption, not compromise of a server hosting both the package and checksum.
 
-When a signed-in user opts into telemetry, the copied install command contains a short-lived, single-use setup code. The installer exchanges it only after verifying the plugin registration. The resulting telemetry-only access token can be revoked under Settings → Access tokens. The Codex installer shows the current and proposed settings without exposing credentials. Choose **Save Umbod telemetry as my Codex default** to replace the user telemetry settings in `config.toml`, or finish without configuring telemetry. Neither choice starts Codex. Saving redeems the setup code and stores the token in the protected user config; don't sync or share that file. The installer reports the backup location if it replaced a config. To undo, restore the backed-up telemetry settings without discarding later edits, and revoke the token in Umbod. Tokens expire after 30 days; run a fresh opt-in install to renew. If managed, project, environment-provided, or unverifiable settings prevent a safe save, the installer leaves them untouched. Claude Code stores logs-only settings in its protected user configuration; restart it after installation.
+Telemetry is opt-in. The setup code is short-lived and single-use; the installer checks registration before redeeming it. In Codex, review the proposed changes and choose **Save Umbod telemetry as my Codex default** to replace user telemetry settings in `config.toml`, or finish without changing them. Neither choice starts Codex. Managed, project, environment-provided, or unverifiable settings are left untouched if a save would be unsafe. Claude Code writes logs-only settings to its protected user configuration; restart it after installation. Do not share or sync files containing tokens. To undo a Codex change, use the reported backup to restore telemetry settings without losing later edits, then revoke the token under **Settings → Access tokens**. Telemetry-only tokens expire after 30 days; run a fresh opt-in install to renew.
 
-Scripts derive their package base from `UMBOD_PUBLIC_API_ORIGIN` plus `/api/install/v1` and their MCP URL from `UMBOD_PUBLIC_MCP_ORIGIN`, never request headers or query parameters. Configure a publicly reachable API origin that exposes anonymous artifact downloads. The browser's `PUBLIC_API_BASE_URL` chooses the initial script URL and may use a different gateway, but the embedded API origin must remain reachable from the installing machine. Installers still refuse mismatched package endpoints. Remote downloads require HTTPS; loopback HTTP is supported for development. Checksums detect package corruption, not compromise of the host serving both package and checksum. Existing standalone Umbod MCP connections and conflicting marketplace registrations require manual review; installers do not replace them.
-
-Codex inventory checks are scoped to configured local marketplaces instead of querying its signed-in remote catalog. The installer checks every discovered local marketplace for conflicting Umbod plugins and verifies the selected marketplace after installation. An enabled Codex plugin from a previous verified Umbod install for the same instance can be upgraded in place. The installer keeps the old package and attempts to restore its registration if the upgrade fails. Progress identifies the active check. Bash harness commands run noninteractively with a 45-second timeout; `UMBOD_INSTALL_COMMAND_TIMEOUT` accepts an integer from 1 to 300 seconds when a slower environment requires a different bound. Package downloads retain their separate 120-second HTTP limit.
+Review standalone Umbod MCP connections and conflicting marketplace registrations manually; installers do not replace them. Codex checks all configured local marketplaces, not the signed-in remote catalog, and verifies the selected marketplace after installation. An enabled plugin previously verified for the same Umbod instance can upgrade in place; if the upgrade fails, the installer keeps the old package and attempts to restore registration. Bash harness commands run noninteractively. If a step times out, check the last progress message and set `UMBOD_INSTALL_COMMAND_TIMEOUT` to an integer from 1 to 300 seconds if needed (default `45`). Downloads have a separate 120-second HTTP limit.
 
 ## Administrator MCP hosting
 
-`core.mcp.administrator.hosting` defaults to `separate`, hosting privileged tools on the private MCP-owned listener; select `shared` to place them on the public MCP endpoint. Its `port` defaults to `8013` and `baseUrl` to `http://localhost:8013`. `config.features.mcp.administratorEnabled` independently controls availability and must be enabled to start the separate listener. Helm manages the administrator environment variables consistently in API and MCP for inspection and validation; only MCP starts the listener, binds inside the container to `0.0.0.0`, and creates no public ingress. See [administrator MCP](admin-mcp.md#hosting-and-deployment) for environment defaults, port collision checks, Compose shared-hosting opt-in and private access.
+Keep `core.mcp.administrator.hosting=separate` (the default) to serve privileged tools on a private MCP listener with no public ingress. Its `core.mcp.administrator.port` defaults to `8013` and `core.mcp.administrator.baseUrl` to `http://localhost:8013`. Use `shared` only if you intend to host privileged tools on the public MCP endpoint. `config.features.mcp.administratorEnabled` must be enabled (the default) to make the tools available and start the separate listener. If the private listener is unreachable, check the feature flag and see [administrator MCP hosting](admin-mcp.md#hosting-and-deployment) for private access, port conflicts, environment defaults, and Compose shared-hosting opt-in.
 
 ## Persistence
 
-Umbod uses SQLite for development and evaluation. Persistence is disabled by default, so data is lost when the core Pod is replaced.
+SQLite is intended for development and evaluation. By default, persistence is off and data is lost when the core Pod is replaced. Set `persistence.enabled=true` to create a ReadWriteOnce PersistentVolumeClaim. Set `persistence.size`, `persistence.storageClass`, and `persistence.accessModes` to suit your storage, or set `persistence.existingClaim` to reuse a ReadWriteOnce claim.
 
-Set `persistence.enabled=true` to create a ReadWriteOnce PersistentVolumeClaim. Configure `persistence.size`, `persistence.storageClass`, and `persistence.accessModes` as required, or set `persistence.existingClaim` to use an existing ReadWriteOnce claim.
+Umbod does not migrate SQLite schemas or stored documents between incompatible versions. Back up any data you need and reset persistent storage before installing an incompatible version. Schedule `umbod cleanup` against the same persistent database before rollout. The servers do not automatically purge usage history or agent-behaviour data; see [scheduled cleanup](cleanup.md).
 
-Umbod does not migrate SQLite schemas or persisted documents between incompatible versions. Reset persistent storage before installing an incompatible Umbod version.
-
-Physical usage-history and agent-behaviour retention runs only through `umbod cleanup`, not server lifecycles. Configure an external schedule against the same persistent database before rollout; see [scheduled cleanup](cleanup.md).
-
-Signed-in users can list their diagnostic reports at `GET /api/me/agent-behaviour/reports` and fetch an owned report by ID. These reads match the issuer and subject recorded when MCP accepted the report. With `UMBOD_AUTH=dev`, REST and MCP use the `sub` from `UMBOD_MCP_TEST_BEARER_TOKEN` as the local user; the default is `local-test-user`. If you customize the token, supply the same value to both services and omit `iss` or set it to `urn:umbod:local`. The former `UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_ID` setting is no longer used.
+Signed-in users can list their own diagnostic reports at `GET /api/me/agent-behaviour/reports` and retrieve a report by ID. If reports accepted by MCP are missing in REST, check that the issuer and subject match. With `UMBOD_AUTH=dev`, both services use the `sub` from `UMBOD_MCP_TEST_BEARER_TOKEN` (default subject `local-test-user`). If you customize the token, use the same token in both services and omit `iss` or set it to `urn:umbod:local`. `UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_ID` is no longer used.
 
 ## Analytics backend
 
-The chart configures the SQLite analytics backend separately from application persistence:
+Enable analytics to store and query telemetry logs in the API. SQLite is the only supported backend.
 
-| Helm value | Default | Purpose |
+| Helm value | Default | API environment variable |
 | --- | --- | --- |
-| `config.telemetryAnalytics.enabled` | `false` | Enable analytical log storage and queries in the API |
-| `config.telemetryAnalytics.sqlitePath` | `/app/data/analytics.sqlite3` | Analytics-only SQLite file beneath the mounted data directory |
+| `config.telemetryAnalytics.enabled` | `false` | `UMBOD_TELEMETRY_ANALYTICS_ENABLED` |
+| `config.telemetryAnalytics.sqlitePath` | `/app/data/analytics.sqlite3` | `UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH` |
 
-These values map to `UMBOD_TELEMETRY_ANALYTICS_ENABLED` and `UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH` in the API container only. The SQLite driver is currently the only analytics backend. The chart rejects nonboolean enablement, unsupported settings, noncanonical or unmounted paths, memory databases, and the default application database or its sidecars.
+Use a canonical file path under the mounted data directory, not an in-memory database, the application database, its sidecar files, or aliases to them. `core.api.env` overrides take precedence but must keep the files separate. Both database files use the same volume, not separate claims. Enable `persistence.enabled` to retain analytics across core Pod replacements.
 
-Analytics has its own database file, schema preparation, connections and runtime lifecycle. It does not use the application database, application migrations or application `PersistenceRuntime`. Both files currently use the same Kubernetes data volume; this is database separation, not a separate analytics PVC. With `persistence.enabled=false`, both are ephemeral. Enable persistence to retain analytics across core Pod replacements, or select an existing claim.
-
-Telemetry collection still requires `UMBOD_OTLP_ENABLED=true` through `core.api.env` and the dedicated `UMBOD_OTLP_BEARER_TOKEN` in `existingSecret`. Enabling analytics does not enable ingestion or change its authentication. Existing `core.api.env` overrides remain final and render each analytics setting once; advanced path overrides must preserve the mounted location and database separation. The application additionally rejects file aliases and collisions at startup. Do not put credentials in chart values. See [telemetry ingestion](telemetry-ingestion.md) for normalization, ownership, acknowledgement, retention and retry limitations.
+Enabling analytics does not start the log receiver. If logs are missing, check [collector setup for your chart version](telemetry-ingestion.md#helm-collector-deployment) and verify that clients can reach it. Keep the ingestion token in a Kubernetes Secret, not in chart values.
 
 ## Advertised telemetry endpoint
 
-`UMBOD_OTLP_PUBLIC_BASE_URL` defaults to blank and maps to `endpoints.collector_base_url`, separately from collector listener settings. Helm manages it through `telemetry.publicBaseUrl`; Docker Compose supplies `http://localhost:14318` by default. Declaring this address does not enable the receiver or expose an ingress. Instance configuration inspection labels it **Public collector base URL**. Set the externally reachable base URL, including any proxy path prefix, rather than the full logs path. Only absolute HTTPS or HTTP loopback (`localhost`, IPv4 loopback, or `::1`) is accepted; credentials, query, fragment, controls, whitespace and malformed host/port values are rejected. Trailing slashes are normalized.
+Set `telemetry.publicBaseUrl` (`UMBOD_OTLP_PUBLIC_BASE_URL`, blank by default) to tell clients where to send logs. Compose defaults to `http://localhost:14318`. Use the externally reachable base URL, including any proxy prefix, but omit `/v1/logs`; Umbod appends it. Only absolute HTTPS URLs and HTTP loopback URLs (`localhost`, IPv4 loopback, or `::1`) are accepted. Do not include credentials, a query, a fragment, whitespace, control characters, or an invalid host or port. Trailing slashes are removed.
 
-Authenticated ordinary users discover the backend-derived full logs endpoint through `GET /api/me/telemetry/setup`. An enabled receiver with a configured base returns only `status: available` and `logs_endpoint`, with `/v1/logs` appended by the backend. Disabled receivers return `status: unavailable` with `reason: disabled` first; enabled receivers with a blank URL return `reason: not_configured`. Responses are no-store and use personal access token owner eligibility without reading token persistence. Availability does not probe connectivity. No URL is inferred from request headers, origins, listener addresses or other service URLs. Existing receiver configurations without a public URL remain valid. See [telemetry ingestion](telemetry-ingestion.md#authenticated-setup-discovery) for the complete discovery boundary.
+Setting this URL does not enable the receiver or open ingress. Check **Public collector base URL** in configuration inspection or call `GET /api/me/telemetry/setup` as an authenticated user eligible to own personal access tokens. It returns `status: available` and `logs_endpoint` when enabled and configured, or `status: unavailable` with `reason: disabled` if the receiver is off, otherwise `reason: not_configured` if the URL is blank. Responses are not cached. `available` does not test reachability; check the URL and ingress from the client network. Umbod does not guess a URL from other settings or request headers. Existing receivers can still run with a blank public URL. See [telemetry setup discovery](telemetry-ingestion.md#authenticated-setup-discovery).
 
 ## Filesystem runtime
 
-The application environment contract selects local or S3 file-content storage independently of the application database backend. Local storage remains the default for operator deployments. Namespace, ownership and grants use the existing application database; content storage does not create another database runtime. Embedded hosts constructing `AppConfig` directly default to in-memory content.
+File content can live on local disk or S3. The application database still stores file names, ownership, and access grants. Keep the database and matching content storage together to preserve access to files.
 
 ### File size limits
 
-| Environment variable | Default | Contract |
-| --- | --- | --- |
-| `UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES` | `10485760` | Positive maximum filesystem upload size in bytes; independent of the MCP connector file-input limit |
-| `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES` | `1048576` | Maximum raw bytes for browser previews and complete MCP resource reads; positive integer up to `9007199254740991` |
+| Environment variable | Helm value | Default | Controls |
+| --- | --- | --- | --- |
+| `UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES` | `config.filesystem.uploadMaxBytes` | `10485760` bytes (10 MiB) | File uploads, independently of MCP connector file-input limits |
+| `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES` | `config.filesystem.previewMaxBytes` | `1048576` bytes (1 MiB) | Raw bytes for browser previews and complete MCP resource reads, not full REST downloads |
 
-Upload and preview/read limits remain independent: the upload limit controls accepted file size, while the preview/read limit bounds browser previews and complete MCP resource reads. Full REST downloads are not capped by the preview limit.
+Use positive integers. The preview environment variable and both Helm values have a maximum of `9007199254740991`. Helm applies the limits to API and MCP and sends the preview limit to the frontend. Do not override them in `core.api.env` or `core.mcp.env`; the chart rejects it. Replace the retired `config.filesystemPreviewMaxBytes` key with `config.filesystem.previewMaxBytes`. Restart affected services and reload the browser; check the frontend preview limit at `/app-config.json`.
 
-Helm groups both values under `config.filesystem.uploadMaxBytes` and `config.filesystem.previewMaxBytes`, with defaults matching the environment contract. Both chart values require positive integers up to `9007199254740991` so byte counts remain exact during rendering. These managed settings apply consistently to API and MCP workers; the frontend receives the preview limit only. Per-service overrides through `core.api.env` or `core.mcp.env` are rejected. The former flat `config.filesystemPreviewMaxBytes` key is no longer accepted. Environment variable names are unchanged.
-
-The frontend exposes its validated numeric preview limit through `/app-config.json`; preview messages and MCP discovery descriptions reflect that value. Restart affected services and reload the browser after changes.
+If a large upload fails despite the API limit, check every gateway on the upload path. The frontend nginx proxy limits the entire request body to 12 MiB; direct API ingress does not pass through that proxy. The upload limit is not a storage quota.
 
 ### Content storage
 
-| Environment variable | Default | Contract |
+| Environment variable | Default | When to set it |
 | --- | --- | --- |
-| `UMBOD_FILESYSTEM_CONTENT_BACKEND` | `local` | Content driver: `local` or `s3` |
-| `UMBOD_FILESYSTEM_CONTENT_DIRECTORY` | derived | Nonblank local directory override; otherwise `filesystem-content` beneath `UMBOD_DATA_DIR`, whose default is `.data`. Ignored by S3 storage; retained as the migration source |
-| `UMBOD_FILESYSTEM_S3_BUCKET` | empty | Required pre-existing general-purpose bucket when selecting S3 |
-| `UMBOD_FILESYSTEM_S3_REGION` | `us-east-1` | S3 signing region |
-| `UMBOD_FILESYSTEM_S3_ENDPOINT_URL` | empty | AWS endpoint resolution, or an explicit credential-free HTTP(S) S3-compatible endpoint |
-| `UMBOD_FILESYSTEM_S3_PREFIX` | empty | Optional relative prefix without leading/trailing slashes, empty segments, or dot segments |
-| `UMBOD_FILESYSTEM_S3_ADDRESSING_STYLE` | `auto` | `auto`, `virtual`, or `path`; compatible services may require `path` |
+| `UMBOD_FILESYSTEM_CONTENT_BACKEND` | `local` | Set to `s3` to store content in a bucket. |
+| `UMBOD_FILESYSTEM_CONTENT_DIRECTORY` | `filesystem-content` under `UMBOD_DATA_DIR` (default `.data`) | Set a nonblank local directory to override it. S3 ignores it during normal operation but can use it as the migration source. |
+| `UMBOD_FILESYSTEM_S3_BUCKET` | empty | Required for S3. Use a pre-existing general-purpose bucket. |
+| `UMBOD_FILESYSTEM_S3_REGION` | `us-east-1` | Set the signing region. |
+| `UMBOD_FILESYSTEM_S3_ENDPOINT_URL` | empty | Leave empty for AWS endpoint resolution, or set a credential-free HTTP(S) endpoint for an S3-compatible service. |
+| `UMBOD_FILESYSTEM_S3_PREFIX` | empty | Use a relative prefix with no leading or trailing slash and no empty, `.` or `..` segments. |
+| `UMBOD_FILESYSTEM_S3_ADDRESSING_STYLE` | `auto` | Choose `auto`, `virtual`, or `path`. Compatible services may require `path`. |
 
-Directory configuration is normalized during operator-to-runtime assembly, preserving relative paths and expanding the home directory. Configuration does not create directories or inspect their contents. Retain the content directory alongside the application database to preserve file references across restarts. Workers sharing a namespace database must also share the same content directory. Instance configuration inspection exposes upload and preview limits but omits the host directory. Content storage settings remain application environment settings without dedicated Helm values.
+For local storage, relative paths stay relative and `~` expands to the home directory. Workers sharing one application database must share the same content directory. For S3, use identical bucket, region, endpoint, prefix, and addressing style in API and MCP. Use HTTPS outside trusted local test networks. Nondefault S3 settings cannot be used with the local backend.
 
-For S3, configure identical bucket, region, endpoint, prefix, and addressing style for API and MCP workers. Credentials use the AWS SDK provider chain; environment access keys, profiles, and workload identities are not copied into Umbod configuration. Provision the bucket, encryption policy, and permissions separately. Application credentials need `s3:GetObject`, `s3:PutObject`, and `s3:AbortMultipartUpload` on the selected object prefix; bucket encryption may require additional KMS permissions. The driver does not require bucket creation or listing. Use HTTPS outside trusted local test networks. An explicit local directory may remain configured with S3; normal S3 storage ignores it. Nondefault S3 settings cannot be combined with local storage. For local-to-S3 cutover, stop both services, run the [offline migration](s3-file-storage.md#migrate-existing-local-content), then configure both services for S3 and restart them. Other backend, bucket or prefix changes require a separately planned content migration preserving existing logical keys; there is no automatic migration or fallback.
+In Helm, set storage variables in both `core.api.env` and `core.mcp.env`; there are no dedicated values. Provide credentials through `existingSecret` or workload identity. Umbod uses the AWS SDK credential chain, including environment credentials and profiles. Compose forwards storage settings and AWS access-key, secret-key, and session-token variables to both services. Provision the bucket and encryption policy separately. Grant `s3:GetObject`, `s3:PutObject`, and `s3:AbortMultipartUpload` on the selected object prefix, plus any required KMS permissions. Bucket creation and listing permissions are not needed.
 
-Supply content storage settings through both `core.api.env` and `core.mcp.env` in Helm, and provider credentials through the shared `existingSecret` or externally managed workload identity. Docker Compose forwards content settings and AWS access-key, secret-key, and session-token environment variables to both services. S3 does not replace the application database or its persistence requirements. See [S3 file-content storage](s3-file-storage.md) for Helm configuration, credentials, and operational boundaries.
+To switch from local storage to S3, stop API and MCP, run the [offline migration](s3-file-storage.md#migrate-existing-local-content), then configure both services for S3 and restart them. For other backend, bucket, or prefix changes, plan a migration that preserves the content keys recorded in the database. There is no automatic migration or fallback. See [S3 file-content storage](s3-file-storage.md) for setup and permissions.
 
-REST uploads create an authenticated session, transfer raw bytes, and explicitly complete publication. Zero-byte uploaded files are allowed. Files remain invisible until completion and duplicate names are rejected without overwriting. New files are owned by their creator and inherit applicable recursive ancestor grants; folder-only grants do not inherit. S3 remains a low-level driver: transfers still pass through Umbod, without presigned URLs or client-side multipart coordination. The byte limit is not a storage quota. Content is stored before namespace publication, so failed publication can leave unreferenced immutable objects; automatic garbage collection is not implemented. Configure bucket lifecycle rules for abandoned multipart uploads because process termination or failed abort requests may leave incomplete parts.
+If an uploaded file is missing, check that the upload session completed: storing the file does not make it visible in Umbod. Zero-byte uploads are allowed; duplicate names are rejected rather than overwritten. The creator owns the file, which inherits applicable recursive grants, not folder-only grants. Failed publication can leave unreferenced content; Umbod does not automatically remove it. Configure S3 bucket lifecycle rules to abort abandoned multipart uploads.
 
-The frontend nginx proxy limits the entire request body to 12 MiB. Increasing the API file limit requires corresponding gateway/proxy configuration. Direct API ingress does not pass through that frontend limit.
-
-Downloads use the stable authenticated node-content endpoint and return attachments with no-store caching. Clients must tolerate a future temporary redirect to a short-lived storage URL without forwarding API credentials to another origin.
+On versions that support direct S3 transfers, clients upload to storage and receive short-lived download URLs after Umbod checks access. Do not forward Umbod credentials to storage or log signed URLs. See [S3 file storage](s3-file-storage.md) for release availability, [direct uploads](s3-file-storage.md#direct-upload-sessions), and [direct downloads](s3-file-storage.md#direct-downloads).
 
 ## Authentication and secrets
 
-Shared installations require an OIDC provider and stable secrets. Configure non-secret authentication settings with the typed `config` Helm values, including:
+Use OIDC for shared installations. Configure the provider under `config.authentication.oidc.domain`, `config.authentication.oidc.clientId`, `config.authentication.oidc.audience`, and `config.authentication.oidc.requiredScopes`. Configure access under `config.authorization.adminGroup`, `config.authorization.adminMembershipClaim`, and `config.authorization.mcpPermissionClaim`.
 
-- `config.authentication.oidc.domain`
-- `config.authentication.oidc.clientId`
-- `config.authentication.oidc.audience`
-- `config.authentication.oidc.requiredScopes`
-- `config.authorization.adminGroup`
-- `config.authorization.adminMembershipClaim`
-- `config.authorization.mcpPermissionClaim`
-
-Create a Kubernetes Secret containing `UMBOD_ROOT_SECRET` and `UMBOD_OIDC_CLIENT_SECRET`, then set `existingSecret` to its name. Do not place secret values directly in a Helm values file.
+Create a Kubernetes Secret containing `UMBOD_ROOT_SECRET` and `UMBOD_OIDC_CLIENT_SECRET`, then set `existingSecret` to its name. Do not put secret values in a Helm values file.
 
 !!! warning
-    `UMBOD_ROOT_SECRET` is the sole derivation root for backend security secrets. Rotating it invalidates derived credentials.
+    `UMBOD_ROOT_SECRET` is the source of all derived backend security secrets. Rotating it invalidates derived credentials.
 
 ### Server startup requirement
 
-Every API and MCP server profile, including `local`/`dev`, requires a nonblank `UMBOD_ROOT_SECRET` from the environment or `.env`. Configure a persistent secret yourself; Umbod never generates one. API and MCP must use the same value, stable across restarts. Missing, empty or whitespace-only values fail startup before application composition, persistence or metrics listeners.
+Set a nonblank `UMBOD_ROOT_SECRET` in the environment or `.env` even for `local`/`dev`. Umbod does not generate it. API and MCP must use the same value and keep it stable across restarts. If either service refuses to start, check for a missing, empty, or whitespace-only value. `umbod api serve` and `umbod mcp serve` check before binding HTTP ports, including in reload mode. This cannot prevent sockets managed outside Umbod from binding. Default Compose rejects missing or empty values before starting services; Umbod rejects whitespace-only values at startup.
 
-The supported `umbod api serve` and `umbod mcp serve` commands check this before calling Uvicorn, including before its reload parent can bind HTTP sockets. Normal ASGI factory/lifespan startup also rejects an absent or blank root. Externally prebound sockets and an external Uvicorn reload parent's socket binding are outside the application's guarantee. Default Docker Compose configuration rejects missing or empty values before services or mapped ports start; whitespace-only values are rejected by application startup.
-
-`umbod config show` and `umbod config validate` retain configuration inspection and structural validation semantics: a secretless local configuration can still be inspected or validated. Existing production validation remains strict. Explicit embedding with a typed `AppConfig` containing derived secrets does not reload operator settings or require a root field on `AppConfig`.
+`umbod config show` and `umbod config validate` can inspect or validate a local configuration without a secret. That does not mean the servers can start. Production validation remains strict.
 
 ## Personal connections identity policy
 
-For administrator setup, user sign-in, discovery, and access controls, see [Shared and Personal connectors](../using-umbod/connectors.md).
+Personal connections let users authorize a published connector against their own downstream account. See [Shared and Personal connectors](../using-umbod/connectors.md) for publishing, sign-in, and tool discovery.
 
-| Environment variable | Default | Contract |
+| Environment variable | Default | When to set it |
 | --- | --- | --- |
-| `UMBOD_PERSONAL_CONNECTIONS_ENABLED` | `auto` | Automatically enable authenticated personal catalogue selection when an identity namespace is supplied or derived for local/dev; `false` explicitly opts out |
-| `UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE` | empty | Stable identity authority; local/dev automatic selection derives `test:umbod-local` only when exactly empty; otherwise explicit when enabled |
-| `UMBOD_PERSONAL_CONNECTIONS_OAUTH_ENABLED` | `auto` | Automatically enable durable personal authorization when selection, persistent SQLite and encryption are configured; `false` explicitly opts out |
+| `UMBOD_PERSONAL_CONNECTIONS_ENABLED` | `auto` | Set to `false` to disable personal registration, or `true` to require it and fail validation if prerequisites are missing. |
+| `UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE` | empty | Set a stable namespace for the identity authority. Use the same value in REST and MCP. |
+| `UMBOD_PERSONAL_CONNECTIONS_OAUTH_ENABLED` | `auto` | Set to `false` to disable downstream authorization, or `true` to require it and fail validation if prerequisites are missing. |
 
-Both switches accept `auto`, `true` or `false`. No extra feature opt-in is needed on configured deployments: supplying the stable namespace enables selection, and durable SQLite plus a nonblank root secret additionally enables authorization. Ordinary `local`/`dev` startup enables personal MCP server registration by default: automatic selection with an exactly empty namespace derives the stable `test:umbod-local` authority. Set `UMBOD_PERSONAL_CONNECTIONS_ENABLED=false` to opt out. Explicit modes and supplied namespaces are never replaced; explicit `true` still requires an explicit namespace. Real providers and production never receive a fallback and require an explicit namespace to enable registration. Missing durability or encryption leaves automatic OAuth unavailable without disabling selection. This default does not generate a root secret, change OAuth/provider requirements or provide real-account sign-in under development authentication. Malformed supplied namespaces or unsafe authentication fail validation rather than silently disabling the feature. Explicit `true` still rejects missing prerequisites. Selection `false` prevents automatic OAuth; explicitly requesting OAuth with selection disabled is invalid. Inspection reports resolved booleans, not operator mode strings. Embedded hosts constructing `AppConfig` directly still supply resolved booleans explicitly. Docker Compose forwards the same modes, namespace and optional SQLite path to API and MCP services.
+Both switches accept `auto`, `true`, or `false`. Automatic registration needs a namespace. Only `local`/`dev` automatic selection with an exactly empty namespace uses `test:umbod-local`; explicit `true` requires a supplied namespace. Production and real providers have no fallback. Development semantic JWT verification or simulation requires a `test:` namespace with a nonblank suffix and does not provide real-account sign-in. Production rejects development verification and simulation. An invalid namespace or unsafe authentication fails validation. Compose forwards the modes, namespace, and optional SQLite path to API and MCP.
 
-An enabled policy requires non-disabled REST and MCP authentication. Production requires real REST JWT verification, `UMBOD_OIDC_ISSUER_URL`, `UMBOD_OIDC_AUDIENCE`, a configured or derived `UMBOD_ADMIN_JWKS_URL`, MCP OIDC and a supported Google, Auth0 or Entra provider. An Auth0 domain may derive the upstream issuer. Development semantic JWT verification or simulation requires a namespace beginning `test:` with a nonblank suffix, derived only for the local/dev automatic case above; production rejects those modes. A development REST authentication environment selects semantic verification even when JWT mode, an OIDC recipe and complete OIDC settings are configured; the same restrictions apply to direct application composition. Direct application configuration constructors enforce the same constraints.
+Registration requires REST and MCP authentication. Production needs real REST JWT verification, `UMBOD_OIDC_ISSUER_URL`, `UMBOD_OIDC_AUDIENCE`, a configured or derived `UMBOD_ADMIN_JWKS_URL`, MCP OIDC, and Google, Auth0, or Entra. An Auth0 domain can supply the issuer. Present issuers must match the configured upstream issuer exactly; only Google upstream tokeninfo claims can omit `iss`. Google and Auth0 require a verified nonblank `sub`. Entra uses the configured tenant and verified `oid`, requires a matching `tid` and delegated `scp`, and does not use `sub` for ownership. Machine-only identities are not supported.
 
-Choose a distinct namespace for each identity authority and preserve it across REST and MCP and restarts. The local/dev fallback is deterministic and shared by both services; retain an existing explicit namespace for ownership continuity. Changing it changes ownership; never derive it from a request issuer, email, client ID or the outer MCP proxy URL. Google and Auth0 use verified nonblank string `sub`; Entra uses the configured tenant plus verified `oid`, requires a matching `tid` and delegated `scp`, and ignores application-specific `sub`. Known machine-only identities are rejected. Present issuers must exactly match the configured upstream issuer; only Google upstream tokeninfo claims may omit `iss`. The current FastMCP access-token context supplies upstream verified claims, not the outer proxy JWT. Missing or invalid canonical identities cannot access personal state. Do not enable personal writes while older workers remain active. Personal authorization is available automatically when its prerequisites are met and requires a persistent, non-memory SQLite path shared by all API workers with the same nonblank root secret and SQLite-compatible locking/storage semantics. Separate pod-local databases are unsupported. In-memory storage remains useful for port contracts, not exposed authorization. SQLite retains its development/evaluation deployment limitations. The callback base is derived only from `UMBOD_PUBLIC_API_ORIGIN` and `/api/oauth/downstream-mcp/callback`, not forwarded headers. Providers advertising issuer-bearing callbacks use this generic route; otherwise Umbod binds the redirect to `/api/oauth/downstream-mcp/callback/issuer/<digest>`, where the digest is the lowercase SHA-256 hex digest of the exact discovered issuer. Preconfigured provider applications must register the exact selected redirect URI. Expose both callback route forms. Expose the callback without gateway authentication and redact its query at ingress/reverse-proxy/tracing/error-reporting boundaries: application redaction cannot protect earlier logs. Provider support requires protected-resource/issuer metadata and S256 PKCE. Generic callbacks require a matching issuer parameter; issuer-specific callbacks may omit it only when the route matches the saved issuer binding. Production callbacks require HTTPS; trusted local/dev simulation may use validated HTTP loopback callbacks. Administrator policy supplies requested scopes and either public dynamic registration or a preconfigured public/confidential client pinned to its issuer. Confidential methods are explicit Basic or POST; there is no registration or authentication fallback. Scoped grants may narrow but never exceed the requested set. Suppress or redact secret-bearing administrator request bodies and Authorization headers in proxies, tracing and error reporting as well. Administrator publication and connector-level group grants, explicit per-user enablement, downstream sign-in, and a valid private tool inventory remain mandatory; automatic feature availability never connects accounts or grants consent. After completed browser sign-in, the UI attempts initial private tool discovery automatically; users can explicitly refresh tools or retry loading after a failure. Eligible users can execute tools from their private inventory. Personal connector grants cover all tools exposed to that downstream user, including tools added after explicit rediscovery; administrator per-tool approval and activation are not personal execution prerequisites.
+Choose a distinct namespace per identity authority and keep it across restarts and upgrades. Changing it changes who owns saved connections. Do not derive it from request issuer, email, client ID, or the outer MCP proxy URL. Do not enable personal writes while older workers still run.
+
+If registration is available but downstream authorization is not, check that all API workers share the same persistent, non-memory SQLite database, SQLite-compatible locking, and the same nonblank `UMBOD_ROOT_SECRET`. Separate Pod-local databases are unsupported. In `auto`, missing storage or encryption disables authorization without disabling registration. Registration set to `false` also disables automatic authorization; explicitly enabling authorization while registration is off is invalid. Configuration inspection shows the resulting on/off values.
+
+For downstream OAuth setup:
+
+- Use a provider with protected-resource and issuer metadata and S256 PKCE. Set requested scopes and choose public dynamic registration or a preconfigured public or confidential client pinned to its issuer. For a confidential client, choose Basic or POST explicitly; there is no registration or authentication fallback. Granted scopes cannot exceed requested scopes.
+- Expose `/api/oauth/downstream-mcp/callback` and `/api/oauth/downstream-mcp/callback/issuer/<digest>` under `UMBOD_PUBLIC_API_ORIGIN` without gateway authentication. The callback base comes from this setting, not forwarded headers. The generic route requires a matching issuer parameter. For providers without issuer-bearing callbacks, Umbod uses the issuer-specific route, where `<digest>` is the lowercase SHA-256 hex digest of the exact discovered issuer. That route can omit the issuer parameter only when it matches the saved issuer binding. Register the exact selected URI with preconfigured clients. Use HTTPS in production; trusted local/dev simulation can use validated HTTP loopback.
+- Redact callback queries, secret-bearing administrator request bodies, and `Authorization` headers in ingress, proxies, tracing, and error reporting. Application redaction cannot protect earlier logs.
+- If users still cannot run tools, check administrator publication and connector-level group grants, then user enablement, downstream sign-in, and private tool discovery. Umbod attempts initial private tool discovery after sign-in; users can retry or refresh tools. Personal connector grants cover all tools the downstream user can discover, including newly discovered tools; per-tool administrator approval or activation is not required. Automatic feature availability does not connect accounts or grant consent.
 
 ## Optional user-profile enrichment
 
-The application environment contract supports optional enrichment of `/api/me/profile`; the Helm chart has no dedicated profile values. The endpoint returns the same `user` and `capabilities` envelope for administrators and ordinary authenticated users. `user` contains `id`, `email`, `name`, and `picture`; `id` always comes from the verified access subject. Missing email and picture values are explicitly null; unavailable names use `unknown`. `capabilities.administration` reflects the configured administrator membership policy using verified access claims, or effective unrestricted administration when administrator authentication is explicitly disabled. Profile tokens never grant capabilities. Unauthenticated requests receive 401; ordinary authenticated users receive 200 with administration false. Responses are not cacheable. The retired `/api/admin/users` route is no longer exposed.
+Keep `access_claims` unless your gateway can supply a separate ID token for Umbod to verify and use for display fields. These environment settings have no dedicated Helm values.
 
-| Environment variable | Default | Contract |
+| Environment variable | Default | Purpose |
 | --- | --- | --- |
-| `UMBOD_USER_PROFILE_MODE` | `access_claims` | `access_claims` or `id_token` |
-| `UMBOD_USER_PROFILE_JWT_HEADER` | `X-Auth-Request-ID-Token` | Dedicated ID-token header, never Authorization or the configured access header |
-| `UMBOD_USER_PROFILE_NAME_CLAIM` | `name` | Exact literal display-name claim key |
-| `UMBOD_USER_PROFILE_EMAIL_CLAIM` | `email` | Exact literal email claim key |
-| `UMBOD_USER_PROFILE_PICTURE_CLAIM` | `picture` | Exact literal picture claim key |
+| `UMBOD_USER_PROFILE_MODE` | `access_claims` | Select `access_claims` or `id_token`. |
+| `UMBOD_USER_PROFILE_JWT_HEADER` | `X-Auth-Request-ID-Token` | Dedicated raw ID-token header; never use Authorization or the configured access header. |
+| `UMBOD_USER_PROFILE_NAME_CLAIM` | `name` | Display-name claim key |
+| `UMBOD_USER_PROFILE_EMAIL_CLAIM` | `email` | Email claim key |
+| `UMBOD_USER_PROFILE_PICTURE_CLAIM` | `picture` | Picture claim key |
 
-Mappings apply to the selected profile source and support namespaced keys without dot traversal. Blank mappings and invalid or conflicting header names fail startup. ID-token mode requires real production JWT authentication, a configured OIDC issuer, admin JWKS URL, and OIDC client ID. It is rejected with development semantic verification, simulation, or disabled authentication.
+Claim mappings use literal keys, including namespaced keys, not dot paths. Blank mappings and invalid or conflicting header names prevent startup. `id_token` requires real production JWT authentication, an OIDC issuer, admin JWKS URL, and OIDC client ID. It is incompatible with development verification, simulation, and disabled authentication.
 
-ID tokens require RS256, exact issuer, client-ID audience (not the API audience), and `iss`, `aud`, `exp`, and `sub`. Multiple audiences require `azp` matching the client ID; any present `azp` must match. Verified ID issuer and subject must match verified access issuer and subject. The dedicated header has no Authorization fallback and expects the raw ID token.
+Gateways must overwrite client-supplied credential headers and keep profile tokens out of browser responses. Compose sends ID tokens separately, leaves Authorization and the access header for access tokens, and defaults to `access_claims` so development authentication still works. The dedicated ID-token header does not fall back to Authorization.
 
-Missing profile headers preserve access-only clients. Present invalid, expired, incorrectly addressed, or identity-mismatched profile tokens are ignored in full; a structured warning records only a rejection category, and verified access claims provide the fallback. Profile failures never cause their own 401 or grant permissions. Valid ID tokens with unavailable fields return `unknown` name and nullable email/picture rather than mixing sources. No UserInfo network lookup is performed. Profile verification shares a root-lifespan JWKS cache through Starlette's yielded lifespan state mapping and request-state dependencies, with single-flight locking, a five-minute TTL, five-second unknown-key/failure refresh cooldown, and a three-second fetch timeout. A new key ID can trigger an early refresh; concurrent requests reuse its result. `/profile` executes synchronous profile lookups in FastAPI's threadpool so key-fetch delays do not block unrelated event-loop requests. Authentication debug mode logs only credential-presence booleans, including configured access/profile headers, not tokens, header values, identity fields, or decoded JWT contents.
+If `/api/me/profile` shows access-token fields instead of ID-token fields, check the header and token. The ID token must use RS256, include `iss`, `aud`, `exp`, and `sub`, and use the client ID as audience, not the API audience. Its issuer and subject must match the verified access token. `azp` is required for multiple audiences and, whenever present, must match the client ID. Missing or rejected ID tokens fall back to verified access claims. Rejection logs show only a category, not the token; authentication debug logs report only credential presence.
 
-Gateways must overwrite client-supplied credential headers and prevent profile token exposure in browser responses. Compose exports ID tokens separately while keeping Authorization and the access header bound to access tokens; its default mode stays `access_claims` so development authentication continues to work.
+The response is not cacheable. The access subject always determines `user.id`. `capabilities.administration` reflects the administrator policy and verified access claims, or unrestricted administration if administrator authentication is explicitly disabled. Unauthenticated requests get 401; a missing or rejected profile token does not cause a 401 by itself or grant access. A valid ID token with missing fields yields `unknown` for name and null for email or picture, without mixing sources or calling UserInfo. Use `/api/me/profile`, not the retired `/api/admin/users` route.
 
 ## Images
 
-The chart selects the released core and frontend images through `core.image` and `frontend.image`. Use the image tags shipped with the chart release. Do not use floating tags.
+Set `core.image` and `frontend.image` to the images shipped with the chart release. Do not use floating tags.
 
 ## Connector plugins
 
-Configure a plugin-bundle image with `plugins.image` and allow its connector IDs with `plugins.availableConnectorIds`. See [Connector plugins](../plugins/index.md) for the lifecycle and security model.
+Set `plugins.image` to the plugin-bundle image and `plugins.availableConnectorIds` to the connector IDs you want to allow. See [Connector plugins](../plugins/index.md) for the lifecycle and security model.
 
 ## Source of truth
 
-The published chart values and the [generated Helm values reference](../reference/helm-values.md) are the source of truth for supported operator configuration.
+The published chart and [generated Helm values reference](../reference/helm-values.md) define the supported Helm settings.

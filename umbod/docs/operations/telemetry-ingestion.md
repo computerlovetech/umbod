@@ -1,18 +1,22 @@
 # Telemetry ingestion
 
-Umbod receives agent telemetry using OTLP/HTTP JSON or binary protobuf. This receiver is independent of Umbod's Prometheus metrics and administrator authentication.
+Enable telemetry only if agents need to send logs, metrics, or traces to Umbod. Before turning it on, restrict collector access, provision an ingestion credential, and decide who can read the exported data and how long to keep it. Use the private collector, not the public REST API. The collector accepts OTLP/HTTP JSON or binary protobuf and is separate from Umbod's Prometheus metrics and administrator sign-in.
 
-## Endpoints
+## Sensitive data
 
-| Method | Path | OTLP request |
-| --- | --- | --- |
-| POST | /v1/logs | ExportLogsServiceRequest |
-| POST | /v1/metrics | ExportMetricsServiceRequest |
-| POST | /v1/traces | ExportTraceServiceRequest |
+Before enabling collection, configure log access controls, retention, and any required downstream filtering. Leave client content-export options off unless explicitly approved. Exported payloads may contain personal information, prompts, tool arguments, outputs, and raw API content. Umbod logs accepted payloads without client-specific filtering, but does not include authentication headers. Do not rely on this as a complete transcript or an exactly-once audit stream.
 
-Requests use `application/json` or `application/x-protobuf`; media types are case-insensitive and optional parameters are accepted. Uncompressed and gzip bodies are supported for both encodings, with the same wire and decompressed size limits. Binary protobuf uses the signal-specific OTLP export request schema. gRPC is not supported.
+## Helm collector deployment
 
-These routes exist only on the collector listener, default port 4318. Public REST excludes all `/v1/*` ingestion routes, and `/api/v1/*` is not rewritten to them. The Helm chart exposes the collector through a private ClusterIP Service when `telemetry.enabled=true`, never through public Ingress. Direct collector Service access and port-forwards use the same `/v1/*` paths. Development Compose forwards container port 4318 only on `127.0.0.1:14318`.
+Check `helm show values` for your chart version before using the settings below. Chart `0.0.1-beta.9` has no `telemetry.*` values or separate collector Service. On that release, ingestion uses the API Service: set `UMBOD_OTLP_ENABLED=true` through `core.api.env` and supply `UMBOD_OTLP_BEARER_TOKEN` through `existingSecret`. The bundled Ingress routes `/v1` to the API. Leave ingestion off unless your deployment keeps that route private.
+
+Point `telemetry.bearerTokenSecret` at an existing Secret containing the ingestion credential: set `telemetry.bearerTokenSecret.name` to the Secret name and use `telemetry.bearerTokenSecret.key` if the key is not `UMBOD_OTLP_BEARER_TOKEN` (the default). Only the API container receives this key; MCP does not.
+
+Turn on `telemetry.enabled` by setting `telemetry.enabled=true`. This starts the private collector in the existing API container and creates a ClusterIP Service targeting the core Pod. Set `telemetry.port` for the listener and `telemetry.servicePort` for the Service; both default to 4318. There is no separate collector Deployment, image, resource allocation, or PVC, and no public `/v1` Ingress route.
+
+If clients need setup discovery, set `telemetry.publicBaseUrl` to the collector base URL they can reach. It defaults to blank, maps to `UMBOD_OTLP_PUBLIC_BASE_URL` in API only, and does not add public ingress. Enabling ingestion does not enable analytics.
+
+Configure the shared analytics runtime through `config.telemetryAnalytics.enabled` and `config.telemetryAnalytics.sqlitePath`. Analytics is disabled by default and uses a separate SQLite file on the core data volume. Core `persistence` settings govern durability. Accepted logs stored by this listener are available to the same API's administrator queries. The retired `telemetry.image`, `telemetry.analytics`, and `telemetry.persistence` settings are not supported.
 
 ## Configuration
 
@@ -26,15 +30,37 @@ These routes exist only on the collector listener, default port 4318. Public RES
 | UMBOD_OTLP_ALLOW_UNAUTHENTICATED | false | Explicit local-profile development access |
 | UMBOD_OTLP_MAX_REQUEST_BYTES | 10485760 | Maximum wire and decompressed body size |
 
-An enabled authenticated receiver requires a nonblank token without whitespace. Send it using the `Authorization` bearer scheme. Administrator and MCP credentials are not substitutes. Store the token in a deployment Secret; Helm injects the dedicated `telemetry.bearerTokenSecret` key only into API. Do not override chart-managed receiver settings through container environment values. Connections exposed beyond a trusted local boundary must use HTTPS.
+Set `UMBOD_OTLP_ENABLED` to `true` to enable the API-hosted collector outside Helm. For authenticated ingestion, provision a nonblank token without whitespace and store it in a deployment Secret. Clients send it using the `Authorization` bearer scheme. Administrator and MCP credentials are not substitutes. With Helm, use the chart settings rather than overriding chart-managed receiver settings through container environment values. Use HTTPS for connections exposed beyond a trusted local boundary.
 
 Unauthenticated access is forbidden outside the local profile. With ingestion disabled, the API host does not start the collector listener. A separately composed disabled receiver returns 503. Configuration inspection excludes the bearer token.
 
-The bind address selects network interfaces, not authorization. Restrict collector reachability separately and retain bearer authentication. Private Tailscale access requires separately configured Serve and ACLs, not public Funnel; Umbod does not configure Tailscale.
+Restrict who can reach the collector and keep bearer authentication enabled. The bind address only selects network interfaces. For private Tailscale access, configure Serve and ACLs, not public Funnel. Umbod does not configure Tailscale for you.
+
+## Client compatibility
+
+For Claude Code, enable telemetry, select the desired OTLP exporters, and set the protocol explicitly to `http/json`. Its shared HTTP endpoint is the base URL preceding `/v1`; signal-specific endpoints must contain their full signal paths.
+
+For Codex, set up logs, metrics, and traces independently. Select its HTTP exporter with the `json` protocol and supply a complete endpoint URL for each signal. A configured Codex endpoint is not automatically suffixed.
+
+Both clients can attach a personal telemetry token or the dedicated shared ingestion credential through exporter headers. Their signal activation, event attributes, and privacy options vary by version.
+
+HTTP/protobuf exporters, including Hermes monitoring, can use the same signal endpoints with the `http/protobuf` protocol and the dedicated bearer credential in exporter headers. Protocol compatibility does not establish that a client emits session or tool events; the analytics dimensions still depend on its exported fields.
+
+## Endpoints
+
+| Method | Path | OTLP request |
+| --- | --- | --- |
+| POST | /v1/logs | ExportLogsServiceRequest |
+| POST | /v1/metrics | ExportMetricsServiceRequest |
+| POST | /v1/traces | ExportTraceServiceRequest |
+
+Requests use `application/json` or `application/x-protobuf`; media types are case-insensitive and optional parameters are accepted. Uncompressed and gzip bodies are supported for both encodings, with the same wire and decompressed size limits. Binary protobuf uses the signal-specific OTLP export request schema. gRPC is not supported.
+
+These routes exist only on the collector listener, default port 4318. Public REST excludes all `/v1/*` ingestion routes, and `/api/v1/*` is not rewritten to them. The Helm chart exposes the collector through a private ClusterIP Service when `telemetry.enabled=true`, never through public Ingress. Direct collector Service access and port-forwards use the same `/v1/*` paths. Development Compose forwards container port 4318 only on `127.0.0.1:14318`.
 
 ## Authenticated setup discovery
 
-`GET /api/me/telemetry/setup` uses normal user authentication, not administrator authorization, and the same owner eligibility as personal access token management, including its strict local-development gate. All responses are `Cache-Control: no-store`.
+Set `UMBOD_OTLP_PUBLIC_BASE_URL` if you want signed-in users to discover the logs endpoint through `GET /api/me/telemetry/setup`. This endpoint uses the same eligibility rules as personal access token management, including its strict local-development gate. It does not require administrator access. All responses are `Cache-Control: no-store`.
 
 When the receiver is enabled and `UMBOD_OTLP_PUBLIC_BASE_URL` is configured, the response contains only `status: available` and `logs_endpoint`. The backend normalizes trailing slashes, preserves any reverse-proxy path prefix, and appends `/v1/logs` exactly once during derivation. Clients use this full endpoint without appending a signal path.
 
@@ -46,7 +72,7 @@ Token creation, expiry and revocation remain on the generic personal access toke
 
 ## Personal telemetry tokens
 
-The API-hosted collector also accepts personal access tokens with audience `umbod:telemetry` and scope `telemetry:write`. These credentials authorize only ingestion on `/v1/logs`, `/v1/metrics`, and `/v1/traces`. They cannot authenticate REST, administrator analytics, or MCP requests.
+Use a personal access token when logs should be attributed to a user on the API-hosted collector. The token must have audience `umbod:telemetry` and scope `telemetry:write`. It authorizes only ingestion on `/v1/logs`, `/v1/metrics`, and `/v1/traces`, not REST, administrator analytics, or MCP requests.
 
 Authenticated users create and manage tokens through the general [personal access token API](./personal-access-tokens.md) at `/api/me/personal-access-tokens`. Creation explicitly requests the `telemetry` permission at level `write`; the server resolves that request to the audience and scope above. Management is not tied to the collector and lists or revokes all tokens owned by the caller. Production requires an upstream-verified user. Explicit local development additionally allows only the configured simulated subject with the exact `urn:umbod:local` issuer, under the full local/dev/simulation/development configuration gate described in the token API reference. That local user receives real tokens through the same endpoints and workspace controls; the collector validates them normally and revocation takes effect immediately. Other simulated, semantic, test and deployment identities cannot manage tokens. Collector verification separately rejects tokens owned by `urn:umbod:local` outside that full gate, even if application persistence is reused after switching to production. Custom embedding must supply application settings to the verifier installer; the full configuration gate controls local-namespace tokens without affecting genuinely verified-user tokens. The former telemetry-specific management route is removed.
 
@@ -56,13 +82,15 @@ The legacy shared bearer and its required deployment configuration remain suppor
 
 ## Serving applications
 
-`umbod api serve` delegates to `umbod.hosting.api_server.run_api_server`. One serving process and asynchronous event loop run public REST and, only when `UMBOD_OTLP_ENABLED=true`, the private collector. The public application never mounts ingestion routes. The host creates and readies one application persistence runtime shared by token management and verification, plus a separate analytics runtime shared by administrator reads and collector writes. It closes both only after both listener lifespans drain.
+Run `umbod api serve` to serve public REST and, only when `UMBOD_OTLP_ENABLED=true`, the private collector. Both use one process and event loop under `umbod.hosting.api_server.run_api_server`. The public application never mounts ingestion routes. Token management and verification share the application's database runtime. The collector and administrator reads share a separate analytics runtime. Both stay open until the enabled listeners finish shutting down.
 
-`umbod.hosting.listeners` supervises the primary HTTP listeners. The parent enters each ASGI lifespan and forwards its yielded state to requests. Readiness requires every enabled primary listener to start successfully; startup failure or an unexpected listener exit stops its siblings. The existing embedded Prometheus listener remains separate and does not install signal handlers; the host owns shutdown signals. Cooperative listener cleanup and analytics shutdown have deadlines. The CLI also arms a 60-second process shutdown deadline on a stop request or host failure; if cancellation-resistant work prevents exit, it terminates the serving process with status 1.
+All enabled primary listeners must start before Umbod reports ready. If one fails to start or exits unexpectedly, the host stops the other. The host handles shutdown signals, not the separate embedded Prometheus listener. Listener cleanup and analytics shutdown have deadlines. On a stop request or host failure, the CLI allows up to 60 seconds for process shutdown, then terminates a stuck process with status 1.
+
+`umbod.hosting.listeners` supervises the primary HTTP listeners. The parent manages each ASGI application's startup and shutdown and passes its lifespan state to requests.
 
 `umbod api serve --reload` uses Uvicorn's ChangeReload watcher around the same serving child. The development watcher adds a process, but both HTTP ports still belong to one child PID. If the child fails, the watcher waits for the next edit according to standard reloader behavior.
 
-`umbod telemetry serve` serves the collector-only FastAPI app in an independent Uvicorn process. `--host`, `--port`, and `--reload` control that process; host and port otherwise use the collector settings above. The command loads only runtime, receiver, and analytics settings. Production collection needs its dedicated ingestion token, not REST OIDC configuration, connector storage, or the application root secret.
+Run `umbod telemetry serve` for a standalone collector with no REST API. It runs the collector-only FastAPI app in its own Uvicorn process. Set `--host`, `--port`, or `--reload` as needed; host and port otherwise use the collector settings above. The command loads only runtime, receiver, and analytics settings. For production, supply the dedicated ingestion token; you do not need REST OIDC configuration, connector storage, or the application root secret.
 
 The collector app exposes `/health` and `/ready` alongside `/v1/*`, but no administrator or connector routes. The supported `umbod.hosting.create_telemetry_app` factory accepts `TelemetryAppConfig` and can be mounted under an ASGI parent. The parent must explicitly enter the child's lifespan because ASGI mounts do not run child startup and shutdown automatically. Hosts own logging configuration; INFO telemetry output must remain enabled.
 
@@ -70,27 +98,9 @@ Mounting an ASGI app does not create another listener. The API host instead bind
 
 Standalone collection owns its analytics database lifecycle. Administrator queries remain on REST and are not remotely forwarded to a collector. Independently deployed hosts do not automatically share collected history: use collector-local durable storage, not SQLite over network storage.
 
-## Helm collector deployment
-
-The chart's `telemetry.enabled` value enables the private collector listener as an additional port on the existing API container and creates a ClusterIP Service targeting the same core Pod. `telemetry.port` controls the listener; `telemetry.servicePort` controls the Service port. Both default to 4318. `telemetry.publicBaseUrl` separately declares the client-reachable collector base URL for onboarding and maps to `UMBOD_OTLP_PUBLIC_BASE_URL` in API only; it defaults to blank and never adds public ingress. There is no separate collector Deployment, image, resource allocation, or PVC, and no public `/v1` Ingress route.
-
-Set `telemetry.bearerTokenSecret.name` to an existing Secret containing the ingestion credential. `telemetry.bearerTokenSecret.key` defaults to `UMBOD_OTLP_BEARER_TOKEN`. Only the API container receives this dedicated Secret key; MCP does not. Enabling telemetry enables authenticated ingestion, not analytics.
-
-Configure the shared analytics runtime through `config.telemetryAnalytics.enabled` and `config.telemetryAnalytics.sqlitePath`. Analytics is disabled by default and uses a separate SQLite file on the core data volume. Core `persistence` settings govern durability. Accepted logs stored by this listener are available to the same API's administrator queries. The retired `telemetry.image`, `telemetry.analytics`, and `telemetry.persistence` settings are not supported.
-
 ## Serialization dependencies
 
 The API project's reusable `telemetry-serialization` dependency group contains `opentelemetry-proto`, `protobuf`, and `googleapis-common-protos`. The API group includes it; standalone packaging can select it without the API or MCP dependency groups. The monolithic wheel retains these runtime requirements. No gRPC runtime, exporter SDK, or protobuf compiler is required by the receiver.
-
-## Client compatibility
-
-Claude Code requires telemetry enabled, the desired OTLP exporter selectors, and the explicit `http/json` protocol. Its shared HTTP endpoint is the base URL preceding `/v1`; signal-specific endpoints must contain their full signal paths.
-
-Codex configures logs, metrics, and traces independently. Select its HTTP exporter with the `json` protocol and supply a complete endpoint URL for each signal. A configured Codex endpoint is not automatically suffixed.
-
-Both clients can attach a personal telemetry token or the dedicated shared ingestion credential through exporter headers. Their signal activation, event attributes, and privacy options vary by version.
-
-HTTP/protobuf exporters, including Hermes monitoring, can use the same signal endpoints with the `http/protobuf` protocol and the dedicated bearer credential in exporter headers. Protocol compatibility does not establish that a client emits session or tool events; the analytics dimensions still depend on its exported fields.
 
 ## Stdout behavior
 
@@ -118,7 +128,9 @@ Limits are enforced while reading, including when Content-Length is missing. Lar
 
 ## Analytical reads
 
-The separate `umbod.core.telemetry.analytics` module defines asynchronous, backend-neutral readers and normalized log writers. The SQLite analytics driver in `umbod.infrastructure.telemetry` persists normalized `/v1/logs` records and executes counts, filters, grouping and time buckets inside SQLite. Metrics and traces continue to use stdout only. Administrators can use the [log analytics explorer](../using-umbod/log-analytics.md) for aggregate queries. Historical stdout backfill is not provided.
+Enable analytics if administrators need to query stored logs in the [log analytics explorer](../using-umbod/log-analytics.md). Metrics and traces still go only to stdout. Umbod cannot backfill from historical stdout.
+
+The separate `umbod.core.telemetry.analytics` module defines asynchronous, backend-neutral readers and normalized log writers. The SQLite analytics driver in `umbod.infrastructure.telemetry` persists normalized `/v1/logs` records and executes counts, filters, grouping and time buckets inside SQLite.
 
 Queries require an explicit instance or owner scope, a half-open UTC time range, exact-match dimension filters, ordered grouping, explicit time bucketing, and explicit offset pagination. Owner scopes contain trusted server-established owner IDs, not client-reported emails or resource attributes. Callers must authorize and construct scopes before invoking a reader. The current shared ingestion token does not establish these owners.
 
@@ -157,13 +169,15 @@ The API host owns shared analytics startup and shutdown independently of applica
 
 ### Raw log archive
 
+Decide who can access raw logs and how long to keep them before enabling capture. The archive can contain private data analytics deliberately omits, such as prompts, file paths, and skill names. Restrict access to the analytics database, sidecar files, and backups to trusted services and operators; Umbod does not set separate archive permissions. The default Compose volume is shared by API and MCP. Use a dedicated API-only analytics mount if that is too broad.
+
 Development Docker Compose enables raw capture by default when analytics is enabled. Set `UMBOD_TELEMETRY_ANALYTICS_RAW_ARCHIVE_ENABLED=false` to opt out. Outside development Compose, capture remains opt-in: set `UMBOD_TELEMETRY_ANALYTICS_RAW_ARCHIVE_ENABLED=true`, or on Helm set it in `core.api.env` and enable `config.telemetryAnalytics.enabled`. When capture is enabled, the SQLite transaction writes the validated, decompressed request bytes for each nonempty `/v1/logs` export together with its normalized rows. Umbod records the encoding, receipt time, authentication-established ownership, and the source position of each row. Metrics, traces, rejected exports, and historical analytics rows are not archived. A failed SQLite transaction saves neither the raw batch nor its normalized rows.
 
-The archive can contain private data that analytics deliberately omits, including prompts, file paths, and skill names. Before enabling capture, make sure only trusted services and operators can read the analytics database, sidecar files, and backups. Umbod does not apply separate archive file permissions. The default Compose data volume is shared by API and MCP; use a dedicated API-only analytics mount if that access is too broad. Analytics queries do not return raw data. Expiry removes archived batches without changing analytics counts; it does not erase backups, old SQLite pages, or stdout copies. Turning off capture does not disable cleanup while the analytics runtime is active.
+Analytics queries do not return raw data. Expiry removes archived batches without changing counts, but does not erase backups, old SQLite pages, or stdout copies. Turning off capture does not disable cleanup while the analytics runtime is active.
 
 ### Backfill retained logs
 
-Use the server CLI's `umbod telemetry backfill` with either `--batch-id` or both `--from` and `--to`. The time window selects by server receipt time, includes its start, excludes its end, and requires timestamps with explicit offsets. If the selection exceeds the command’s batch limit, narrow the window or adjust `--limit`; the command never silently skips the excess. The command uses the server's configured analytics database and retention policy. Run it with access to that database and its SQLite sidecar files.
+Preview the retained batches before applying a backfill. Run `umbod telemetry backfill` with either `--batch-id` or both `--from` and `--to`. The time window selects by server receipt time, includes its start, excludes its end, and requires timestamps with explicit offsets. If the selection exceeds the command’s batch limit, narrow the window or adjust `--limit`; the command never silently skips the excess. The command uses the server's configured analytics database and retention policy. Run it with access to that database and its SQLite sidecar files.
 
 Preview opens the database read-only and leaves its contents unchanged. SQLite can still need to open or create WAL sidecar files, so run preview with the API active or allow SQLite to create those files in the database directory. Add `--apply` to replace normalized records using the normalizer in the installed Umbod version. The command preserves original receipt time and ownership, never migrates or purges the database, and reports only batch metadata and counts. Each batch commits independently; on failure the command stops and reports how many batches completed. Repeating an apply does not add duplicate rows or resubmit the batch to stdout.
 
@@ -243,12 +257,6 @@ Producer-reported `model` and Codex `slug` remain distinct claimed identifiers; 
 Usage mappings follow the [Claude API and accounting documentation](https://code.claude.com/docs/en/monitoring-usage) and the pinned Codex [event producers](https://github.com/openai/codex/blob/5f2ce5e02c56905cebcb5781ec198b676f32f27c/codex-rs/otel/src/events/session_telemetry.rs), [shared model metadata](https://github.com/openai/codex/blob/5f2ce5e02c56905cebcb5781ec198b676f32f27c/codex-rs/otel/src/events/shared.rs) and [response usage decoding](https://github.com/openai/codex/blob/5f2ce5e02c56905cebcb5781ec198b676f32f27c/codex-rs/codex-api/src/sse/responses.rs). Fixtures are contract-derived test data, not captured client exports or guarantees of released-client availability.
 
 Metrics, traces and cumulative protocol token updates remain separate signals. They are not converted into extra usage observations or combined with request logs. Existing exports can be retransmitted, so normalized evidence does not provide exactly-once billing totals. This feature supplies retained normalized evidence, not a new token/cost aggregation API, pricing engine or billing report.
-
-## Sensitive data
-
-Accepted payloads are logged without client-specific filtering. Authentication headers are never included. Exported payloads can contain personal information, prompts, tool arguments, outputs, and raw API content.
-
-Keep client content-export options disabled unless explicitly approved. Configure log access controls, retention, and any required downstream filtering before enabling collection. Do not use telemetry as a complete transcript or an exactly-once audit stream.
 
 ## Verification
 

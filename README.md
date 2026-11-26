@@ -26,17 +26,20 @@ Connect your internal APIs and MCP servers to the agents your teams use. Umbod g
 
 ## Get started
 
-Try Umbod on a local Kubernetes cluster. You’ll need [Docker](https://docs.docker.com/get-docker/), [kind](https://kind.sigs.k8s.io/), [kubectl](https://kubernetes.io/docs/tasks/tools/), and [Helm 3](https://helm.sh/docs/intro/install/).
+Try Umbod on a local Kubernetes cluster. You’ll need [Docker](https://docs.docker.com/get-docker/), [kind](https://kind.sigs.k8s.io/), [kubectl](https://kubernetes.io/docs/tasks/tools/), [Helm 3](https://helm.sh/docs/intro/install/), and OpenSSL.
 
-Create the cluster and install Umbod:
+Create the cluster and a Secret for Umbod, then install it. Keep the Secret unchanged when upgrading.
 
 ```bash
 kind create cluster --name umbod --wait 2m
+kubectl --context kind-umbod create secret generic umbod-secrets \
+  --from-literal=UMBOD_ROOT_SECRET="$(openssl rand -hex 32)"
 
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
   --version 0.0.1-beta.9 \
   --kube-context kind-umbod \
+  --set existingSecret=umbod-secrets \
   --set config.profile=local \
   --set config.authentication.mode=dev \
   --set-string config.publicOrigins.site=http://localhost:3000 \
@@ -48,7 +51,7 @@ kubectl --context kind-umbod port-forward \
 
 Open **[localhost:3000](http://localhost:3000)**. Keep the port-forward running while you explore.
 
-This local setup uses development authentication. For a shared cluster, follow the [installation guide](https://umbod.ai/docs/getting-started/kubernetes-installation/) to configure identity, ingress, and storage.
+This local setup uses development authentication. For a shared cluster, follow the [installation guide](https://umbod.ai/docs/getting-started/kubernetes-installation/) to set up sign-in, HTTPS, and persistent storage.
 
 ## Give your agents something to work with
 
@@ -68,7 +71,7 @@ Need a custom integration? **[Build a connector →](https://umbod.ai/docs/plugi
 | [Architecture](https://umbod.ai/docs/operations/service-topology/) | Understand the services, data flow, and storage. |
 | [Configuration](https://umbod.ai/docs/operations/configuration/) | Configure authentication, public origins, and persistence. |
 | [Helm reference](https://umbod.ai/docs/reference/helm-values/) | Find chart settings and defaults. |
-| [Endpoints and ports](https://umbod.ai/docs/reference/endpoints-and-ports/) | Connect clients and configure routing. |
+| [Endpoints and ports](https://umbod.ai/docs/operations/endpoints-and-ports/) | Connect clients and configure routing. |
 
 ## Project status
 

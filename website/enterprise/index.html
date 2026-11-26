@@ -27,7 +27,7 @@
       <div class="hero-copy">
         <p class="eyebrow">Umbod for platform teams</p>
         <h1 id="hero-title">Manage agent access.<br><span>On your own infrastructure.</span></h1>
-        <p class="hero-description">Connect internal APIs and MCP servers, manage access by group, and run Umbod on your Kubernetes cluster. Keep your connectors and access rules independent of your choice of agent vendor.</p>
+        <p class="hero-description">Connect internal APIs and MCP servers, and choose which groups can use each tool. Run Umbod on your Kubernetes cluster and keep your setup when you switch to another compatible agent.</p>
         <div class="actions hero-actions"><a class="button" href="/#how">Get started <span aria-hidden="true">↗</span></a><a class="text-link" href="mailto:hello@computerlove.tech?subject=Umbod%20for%20our%20team">Get in touch <span aria-hidden="true">↗</span></a></div>
         <p class="hero-note">Early beta for evaluation. See the <a href="#status-title">current limits</a>.</p>
       </div>
@@ -52,8 +52,8 @@
     </section>
 
     <div class="principles wrap" aria-label="Deployment principles">
-      <span>Self-hosted</span><span>MCP-compatible</span><span>Independent of your agent vendor</span>
-      <a href="/docs/operations/service-topology/">Explore the architecture <span aria-hidden="true">↗</span></a>
+      <span>Self-hosted</span><span>MCP-compatible</span><span>Keep your choice of agent</span>
+      <a href="/docs/operations/service-topology/">See how Umbod runs <span aria-hidden="true">↗</span></a>
     </div>
 
 
@@ -61,7 +61,7 @@
       <div class="wrap">
         <div class="section-head">
           <div><p class="eyebrow">See how it works</p><h2 id="walkthrough-title">From connected tools<br>to controlled access.</h2></div>
-          <p class="section-lead">A quick look at connecting tools, granting group access, and choosing your agent in Umbod.</p>
+          <p class="section-lead">See how to connect a tool, give a group access, and check that an agent can use it.</p>
         </div>
         <figure class="walkthrough-video">
           <video controls playsinline preload="metadata" poster="/umbod-overview-poster.jpg" aria-label="Umbod Kubernetes edition overview">
@@ -80,12 +80,12 @@
       <div class="wrap">
         <div class="section-head">
           <div><p class="eyebrow">Why Umbod</p><h2 id="product-title">One place to manage<br>who can use which tools.</h2></div>
-          <p class="section-lead">Direct connections work well to get started. As more teams and agents need access, connector configuration and permissions become harder to keep consistent. Umbod gives platform teams a shared place to manage them.</p>
+          <p class="section-lead">Set up connectors and permissions in Umbod instead of configuring them separately for each agent.</p>
         </div>
         <div class="feature-grid">
-          <article class="feature"><span class="number">01 / CONNECT</span><h3>Configure connectors once.</h3><p>Connect an internal API through OpenAPI, or add an MCP server. Configure and publish its tools from the administration interface.</p></article>
-          <article class="feature"><span class="number">02 / CONTROL</span><h3>Grant access by group.</h3><p>Choose which tools each group can use. Manage those permissions centrally as teams and their needs change.</p></article>
-          <article class="feature"><span class="number">03 / KEEP YOUR OPTIONS</span><h3>Change agents. Keep your setup.</h3><p>Your connectors and group permissions live in Umbod. Teams can switch compatible MCP clients without moving that configuration into another agent vendor’s platform.</p></article>
+          <article class="feature"><span class="number">01 / CONNECT</span><h3>Configure connectors once.</h3><p>Add an API using its OpenAPI description, or connect an MCP server. Publish the tools you want to make available.</p></article>
+          <article class="feature"><span class="number">02 / CONTROL</span><h3>Grant access by group.</h3><p>Choose which tools each group can use. Update access in Umbod as teams change.</p></article>
+          <article class="feature"><span class="number">03 / KEEP YOUR OPTIONS</span><h3>Change agents. Keep your setup.</h3><p>Switch to another MCP-compatible agent without moving your connectors or group permissions.</p></article>
         </div>
       </div>
     </section>
@@ -94,13 +94,16 @@
       <div class="wrap">
         <div class="section-head">
           <div><p class="eyebrow">Try it yourself</p><h2 id="install-title">Start with a<br>local cluster.</h2></div>
-          <div><p class="section-lead">Use kind to try the Kubernetes setup on your machine. The commands below install the beta and open the administration interface.</p><p class="requirements">You’ll need Docker, kind, kubectl, and Helm 3.</p></div>
+          <div><p class="section-lead">Use kind to run a Kubernetes cluster on your computer. Then install Umbod and open the admin interface.</p><p class="requirements">You’ll need Docker, kind, kubectl, Helm 3, and OpenSSL.</p></div>
         </div>
 
         <ol class="install-steps">
           <li>
-            <div class="step-heading"><span class="number" aria-hidden="true">01</span><h3>Create a cluster</h3></div>
-            <div class="code-block"><div class="code-heading"><span>Terminal</span><button class="copy-btn" type="button" data-copy-target="kind-command" aria-label="Copy cluster command">Copy</button></div><pre tabindex="0" aria-label="Create a local kind cluster"><code id="kind-command">kind create cluster --name umbod --wait 2m</code></pre></div>
+            <div class="step-heading"><span class="number" aria-hidden="true">01</span><h3>Create a cluster and a Secret</h3></div>
+            <div class="code-block"><div class="code-heading"><span>Terminal</span><button class="copy-btn" type="button" data-copy-target="kind-command" aria-label="Copy cluster setup commands">Copy</button></div><pre tabindex="0" aria-label="Create a local kind cluster and a Kubernetes Secret"><code id="kind-command">kind create cluster --name umbod --wait 2m
+kubectl --context kind-umbod create secret generic umbod-secrets \
+  --from-literal=UMBOD_ROOT_SECRET="$(openssl rand -hex 32)"</code></pre></div>
+            <p class="step-note">Umbod uses this Secret to generate credentials. Keep it unchanged when upgrading.</p>
           </li>
           <li>
             <div class="step-heading"><span class="number" aria-hidden="true">02</span><h3>Install Umbod</h3><span class="version">{{ release.chartVersion }} chart</span></div>
@@ -108,6 +111,7 @@
   oci://ghcr.io/computerlovetech/charts/umbod \
   --version {{ release.chartVersion }} \
   --kube-context kind-umbod \
+  --set existingSecret=umbod-secrets \
   --set config.profile=local \
   --set config.authentication.mode=dev \
   --set-string config.publicOrigins.site=http://localhost:3000 \
@@ -124,12 +128,12 @@
             <div class="step-heading"><span class="number" aria-hidden="true">04</span><h3>Connect a local agent</h3></div>
             <div class="code-block"><div class="code-heading"><span>Another terminal</span><button class="copy-btn" type="button" data-copy-target="mcp-port-forward-command" aria-label="Copy MCP port-forward command">Copy</button></div><pre tabindex="0" aria-label="Forward the Umbod MCP port"><code id="mcp-port-forward-command">kubectl --context kind-umbod port-forward \
   service/umbod-mcp 8011:8011</code></pre></div>
-            <p class="step-note">Keep both terminals running. In the admin UI, open <strong>MCP setup guide</strong> and add <code>http://localhost:8011/mcp</code> as a remote HTTP MCP server in your desktop agent (for example, Claude Code, Codex, or VS Code Copilot). The agent must run on this computer; a hosted agent cannot reach your localhost.</p>
+            <p class="step-note">Keep both terminals running. Add <code>http://localhost:8011/mcp</code> as a remote HTTP MCP server in your agent. Use an agent running on this computer; a hosted agent cannot reach your <code>localhost</code>.</p>
           </li>
         </ol>
-        <p class="install-note">This local setup uses development authentication. For a shared cluster, follow the guide to configure identity, ingress, and storage.</p>
+        <p class="install-note">Use development authentication only on your computer. For a shared installation, follow the guide to set up sign-in, HTTPS, and persistent storage.</p>
         <div class="guide-links"><a class="text-link" href="/docs/getting-started/kubernetes-installation/">Full installation guide <span aria-hidden="true">↗</span></a><a class="text-link" href="/docs/reference/helm-values/">Helm values reference <span aria-hidden="true">↗</span></a></div>
-        <div class="next-step"><span class="number">NEXT</span><div><h3>Try a connector you would actually use.</h3><p>Configure a connector, publish its tools, and grant group access. Then connect your local MCP client. Tell us where you get stuck.</p><a class="text-link" href="/docs/reference/endpoints-and-ports/">MCP endpoints and ports <span aria-hidden="true">↗</span></a></div></div>
+        <div class="next-step"><span class="number">NEXT</span><div><h3>Connect a tool and test access.</h3><p>Set up a connector, publish its tools, and grant access to a group. Check that an agent can see the tools you allowed.</p><a class="text-link" href="/docs/using-umbod/connectors/">Connector setup <span aria-hidden="true">↗</span></a></div></div>
         <p class="sr-only" id="copy-status" role="status" aria-live="polite"></p>
       </div>
     </section>
@@ -137,7 +141,7 @@
     <section class="project-status" aria-labelledby="status-title">
       <div class="wrap status-grid">
         <div><p class="eyebrow">Project status</p><h2 id="status-title">Early beta.<br>Useful feedback welcome.</h2></div>
-        <div class="status-details"><p>Today you can install the Helm chart, manage connectors, configure group permissions, and upload files. Share individual files or folders with registered groups; MCP and API clients can also share with users already observed by Umbod. Folder permissions do not inherit. See the <a href="/docs/using-umbod/files/">files guide</a> for access rules and agent tools.</p><p>The current chart uses a single core replica backed by SQLite. It is an evaluation setup, with no high-availability database architecture yet.</p></div>
+        <div class="status-details"><p>You can connect tools, grant access by group, and share files or folders. See the <a href="/docs/using-umbod/files/">files guide</a> for sharing rules.</p><p>The current Helm chart runs one copy of the core service and uses SQLite. It is for evaluation and does not support high availability.</p></div>
       </div>
     </section>
 

@@ -6,19 +6,21 @@ description: Private upload destinations, namespace-owned caller permissions and
 
 # Filesystem homes and permissions
 
+Keep uploads in the caller's personal namespace unless a destination was chosen. Before troubleshooting an upload or a missing file, check the caller's current access to the actual node. Administrator status is not content access, and visibility metadata is not a list of recipients.
+
 ## Choosing an upload destination
 
 When no destination is specified, use the targetless `home` operation of `filesystem_browse`. It resolves or provisions the caller's private personal namespace and returns its home node and namespace-bounded breadcrumbs. Use the returned UUID as the upload's `parent_id`.
 
 The targetless `namespaces` operation lists this personal namespace and accessible shared namespaces. Root and absolute-path browse targets resolve only within personal files. Select a shared namespace using its returned `root_node_id`; do not infer a path from its display name.
 
-First-use provisioning publishes a durable discovery change. Refresh discovery when upload tools have not yet appeared; synchronization delay does not invalidate returned permissions. REST exposes home resolution through `POST /api/me/filesystem/home` and discovery through `GET /api/me/filesystem/namespaces`.
+If upload tools do not appear immediately after first use, refresh tool discovery. First use records the new home durably; the delay in updating tool discovery does not invalidate returned permissions. REST exposes home resolution through `POST /api/me/filesystem/home` and discovery through `GET /api/me/filesystem/namespaces`.
 
-Check `permissions.can_write`, not a folder name, administrator role or creator identity. Permission metadata is a point-in-time snapshot, not a reservation. Subsequent operations check current authorization. Update responses capture access within the mutation transaction, so a committed update must not be retried merely because discovery was lost afterward.
+Check `permissions.can_write`, not a folder name, administrator role or creator identity. The result reports permissions at that moment; each later operation checks access again. An update response reports access as of the transaction. Do not retry a committed update just because the caller can no longer discover the item afterward.
 
 For an existing local file, compute its exact byte count and preferably its SHA-256 from the original bytes. Use `filesystem_begin_upload`, transfer those bytes using its HTTP instructions, then call `filesystem_complete_upload`. Do not reconstruct local contents as generated text or invent a checksum. See [Upload transfers](filesystem-upload-transfers.md).
 
-Report success only after completion, using the returned identity, verified size and SHA-256, and current `visible_to` descriptor. Repeated completion retains the verified receipt but resolves current access again. Restricted visibility must be reported as unknown, not private.
+Report success only after completion, using the returned identity, verified size and SHA-256, and current `visible_to` descriptor. On a completion retry, the receipt still describes the verified bytes, but access is checked again. Report restricted visibility as unknown, not private.
 
 ## Personal namespace identity
 
@@ -38,7 +40,7 @@ Full node summaries include five permission flags:
 - `can_delete`: delete a file; directories report false because their deletion is unsupported.
 - `can_share`: manage direct file/folder sharing; namespace roots report false.
 
-Permissions add the containing namespace's baseline, item ownership, matching direct grants and recursive folder grants within that namespace. Grants at the structural global root do not inherit into namespaces. Unmanaged nodes remain inaccessible even when ownership or grants exist. Removing one source of access does not revoke rights supplied by another.
+Permissions add the containing namespace's baseline, item ownership, matching direct grants and recursive folder grants within that namespace. Grants at the structural global root do not inherit into namespaces. Unmanaged nodes remain inaccessible even when ownership or grants exist. Removing one source of access does not revoke rights supplied by another. These flags describe the current caller. For the authority and scope of changing an item's direct grants, see [File and folder sharing](filesystem-sharing.md).
 
 Permission metadata accompanies full summaries from browsing, creation, updates and completed uploads. Sparse breadcrumbs, deletion acknowledgements and unpublished session instructions are not full summaries. Downloads independently enforce authorization.
 
