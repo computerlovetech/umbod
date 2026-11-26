@@ -26,6 +26,7 @@ export const catalogueConnectorSchema = z.object({
   connector_id: z.string(),
   kind: z.enum(['native', 'openapi', 'downstream_mcp']),
   display_name: z.string(),
+  icon_url: z.string().optional(),
   capability_description: z.string(),
   ownership: z.enum(['shared', 'personal']),
   capabilities: z.array(catalogueCapabilitySchema)

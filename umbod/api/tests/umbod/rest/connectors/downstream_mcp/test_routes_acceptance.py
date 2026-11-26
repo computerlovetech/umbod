@@ -221,8 +221,13 @@ async def test_connector_lists_discovered_tools_with_persisted_activation_status
     assert rejected.status_code == 404
     assert retained.json()['tools'][0]['activation_status'] == 'enabled'
 
-def _downstream_client_with_tool() -> tuple[TestClient, str]:
-    client = _client(capabilities=DiscoveredCapabilities(tools=(DiscoveredCapabilityTool(name='echo', title='Echo', description='Echo', input_schema={'type': 'object'}),)))
+def _downstream_client_with_tool(
+    server_icons: tuple[DiscoveredServerIcon, ...] = (),
+) -> tuple[TestClient, str]:
+    client = _client(capabilities=DiscoveredCapabilities(
+        tools=(DiscoveredCapabilityTool(name='echo', title='Echo', description='Echo', input_schema={'type': 'object'}),),
+        server_icons=server_icons,
+    ))
     connector_id = client.post('/api/admin/connectors/mcp', json=_payload()).json()['connector_id']
     return (client, connector_id)
 

@@ -30,6 +30,7 @@ class CatalogueConnector(CatalogueModel):
     connector_id: str
     kind: ConnectorKind
     display_name: str
+    icon_url: str = Field(default="", exclude_if=lambda value: value == "")
     capability_description: str
     ownership: Literal["shared", "personal"]
     capabilities: tuple[

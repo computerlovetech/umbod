@@ -92,5 +92,6 @@ class SharedCatalogueSource:
         return CatalogueConnector(
             connector_id=identity.connector_id, kind=identity.connector_kind,
             display_name=capability.connector_display_name,
+            icon_url=capability.connector_icon_url,
             capability_description=description, ownership="shared", capabilities=(),
         )

@@ -10,6 +10,11 @@ export function catalogueConnectorId(connector: CatalogueConnector): string {
   return `${connector.kind}:${connector.connector_id}`;
 }
 
-export function catalogueSidebarItem(connector: CatalogueConnector): CatalogueConnector & { id: string; name: string } {
-  return { ...connector, id: catalogueConnectorId(connector), name: connector.display_name };
+export function catalogueSidebarItem(connector: CatalogueConnector): CatalogueConnector & { id: string; name: string; iconDataUrl?: string } {
+  return {
+    ...connector,
+    id: catalogueConnectorId(connector),
+    name: connector.display_name,
+    ...(connector.icon_url ? { iconDataUrl: connector.icon_url } : {})
+  };
 }

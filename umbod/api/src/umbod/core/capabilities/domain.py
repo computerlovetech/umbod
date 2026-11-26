@@ -42,5 +42,6 @@ class NormalizedCapability(CapabilityModel):
     input_schema: JsonObject
     output_schema: CapabilityOutputSchema
     connector_display_name: str = ""
+    connector_icon_url: str = ""
     connector_capability_description: str = "Connector capabilities"
     search_hints: tuple[str, ...] = ()

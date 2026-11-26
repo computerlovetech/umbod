@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from pydantic import ValidationError
+
 from umbod.core.capabilities import (
     AbsentCapabilityOutputSchema,
     CapabilityIdentity,
@@ -24,6 +26,8 @@ from umbod.core.connectors.downstream_mcp.stores.ports import (
     ToolCatalogFound,
     ToolCatalogStore,
 )
+
+from umbod.core.icons import Favicon
 
 
 @dataclass(frozen=True)
@@ -94,14 +98,16 @@ class StoreBackedDownstreamCapabilityCatalog:
 def normalize_catalog(
     definition: ConnectorDefinitionModel, snapshot: ToolCatalogSnapshot
 ) -> tuple[DownstreamCapabilityRecord, ...]:
+    connector_metadata = {
+        "connector_display_name": definition.display_name,
+        "connector_icon_url": _catalog_icon_url(snapshot),
+    }
     records: list[DownstreamCapabilityRecord] = []
     for tool in snapshot.tools:
         records.append(
             DownstreamCapabilityRecord(
                 definition,
-                _normalize_tool(tool).model_copy(
-                    update={"connector_display_name": definition.display_name}
-                ),
+                _normalize_tool(tool).model_copy(update=connector_metadata),
                 tool,
             )
         )
@@ -109,30 +115,34 @@ def normalize_catalog(
         records.append(
             DownstreamCapabilityRecord(
                 definition,
-                _normalize_prompt(definition.connector_id, prompt).model_copy(
-                    update={"connector_display_name": definition.display_name}
-                ),
+                _normalize_prompt(definition.connector_id, prompt).model_copy(update=connector_metadata),
             )
         )
     for resource in snapshot.resources:
         records.append(
             DownstreamCapabilityRecord(
                 definition,
-                _normalize_resource(definition.connector_id, resource).model_copy(
-                    update={"connector_display_name": definition.display_name}
-                ),
+                _normalize_resource(definition.connector_id, resource).model_copy(update=connector_metadata),
             )
         )
     for template in snapshot.resource_templates:
         records.append(
             DownstreamCapabilityRecord(
                 definition,
-                _normalize_resource_template(definition.connector_id, template).model_copy(
-                    update={"connector_display_name": definition.display_name}
-                ),
+                _normalize_resource_template(definition.connector_id, template).model_copy(update=connector_metadata),
             )
         )
     return tuple(records)
+
+
+def _catalog_icon_url(snapshot: ToolCatalogSnapshot) -> str:
+    if not snapshot.server_icons:
+        return ""
+    icon = snapshot.server_icons[0]
+    try:
+        return Favicon(url=icon.src, mime_type=icon.mime_type).url
+    except ValidationError:
+        return ""
 
 
 def _identity(

@@ -6,7 +6,7 @@
 
 <span class={`connector-icon ${size}`} aria-hidden="true">
   {#if dataUrl}
-    <img src={dataUrl} alt="" />
+    <img src={dataUrl} alt="" referrerpolicy="no-referrer" />
   {:else}
     {connectorInitials(label)}
   {/if}
