@@ -1,141 +1,19 @@
----
-type: Operational Guide
-title: Safe application diagnostics
-description: Diagnostic field contracts, privacy boundaries, and investigation of application failures.
----
-
-# Safe application diagnostics
-
-Start with the server-generated request ID and the sanitized failure record. Check where the failure occurred, whether the downstream service returned a response, and whether the operation may already have completed. Do not replay a write just because its response failed. Keep raw exceptions, credentials, and payloads out of logs, even when debugging.
+# Application diagnostics
 
 ## Investigating a failure
 
-1. Find the invocation completion record. Match it to related records by trace, connector, tool, and operation. Audit and invocation records can describe the same failure; do not count them as separate incidents.
-2. Check origin, stage, reason, and downstream response evidence before interpreting HTTP status. If the downstream status is missing, do not infer it from Umbod's public error. Public errors and internal records serve different purposes: a generic public error can still have a specific internal cause.
-3. If the reason is generic, inspect sanitized exception types, frames, and nested causes. Do not relax redaction or replay production writes for more detail. Even a precise diagnosis does not prove whether an upstream OAuth exchange or tool write completed.
-4. If a known condition was lost, have a maintainer locate the branch that discarded it, reproduce it with a disposable scripted dependency, and verify that an approved reason reaches the final record.
+1. Find the server-generated `X-Request-ID` and match it to the invocation completion record. `X-Umbod-Version` and `X-Umbod-Revision` identify the serving build. Match related records by trace, connector, tool, and operation; audit and invocation records can describe the same failure.
+2. Check `mcp.failure.category`, `mcp.failure.origin`, `mcp.failure.stage`, and `mcp.failure.reason`. If `mcp.downstream.response_received` is true, `mcp.downstream.http.status_code` describes the downstream exchange, not Umbod’s public response. Absent response evidence does not prove that Umbod never contacted the service.
+3. Use sanitized exception types and frames for unexpected failures. Validation, authorization, and known rejections normally log at WARNING; unexpected runtime, storage, and contract failures remain ERROR. Do not replay a write just because its response failed.
 
-Expected argument validation, authorization and approval denials, known domain rejections, and explicit tool-error results use WARNING in invocation and audit logs. Their failure outcomes and metrics remain unchanged. Categories are `validation`, `authorization`, or `tool_error`; rejected client input carries `client_input` origin without exception frames. Authentication denials also use WARNING in audit logs.
-
-Unexpected exceptions, storage and sharing-configuration failures, transport failures, result-classifier failures, and invalid output contracts remain ERROR and alertable. An explicit error result backed by unexpected exception evidence remains a server fault rather than becoming `tool_error`. Invalid or unresolved server-side argument schemas remain contract failures, not client validation errors. Gateway and code-mode audit records retain the strongest nested invocation failure category within their request, so sanitizing a backend error result does not downgrade its audit severity. Downstream origin alone never makes a failure expected. Do not suppress all tool or filesystem errors to reduce alert volume.
-
-## Required diagnostic context
-
-Application failure events use fixed event descriptions and approved component, operation, outcome, and reason values. Event-specific fields must have a bounded, typed contract. Do not add arbitrary metadata dictionaries to a failure event.
-
-The shared application-event contract uses `event.name=application.failure`, `component`, `operation`, `outcome=failure`, `reason`, and `failure.origin=internal`, plus sanitized exception evidence. REST metric failures retain an approved method, static normalized route, and public response status. Built-in signal receivers use allowlisted readable names; unknown receivers and connector-lookup identifiers use deterministic fingerprints rather than arbitrary input text. Audit-write failures preserve the original trace/span correlation without recursively retrying the failed audit sink.
-
-MCP invocation completion records retain the existing connector, tool, operation, execution mode, duration, outcome, trace, and span attributes. Their failure contract includes:
-
-| Field | Meaning |
-| --- | --- |
-| `mcp.failure.category` | Invocation failure classification. |
-| `mcp.failure.origin` | Client input, internal application, connector execution, downstream OpenAPI, or downstream MCP evidence. |
-| `mcp.failure.stage` | Stage at which the operation failed. |
-| `mcp.failure.reason` | Allowlisted, machine-readable diagnostic reason. |
-| `mcp.downstream.response_received` | Whether this diagnostic carries downstream HTTP-response evidence. False does not prove the remote service was never contacted. |
-| `mcp.downstream.http.status_code` | Downstream HTTP status, present only with response evidence; never Umbod's public response status. |
-| `exception.type` | Captured exception type when an exception exists. |
-| `exception.stacktrace` | Bounded frame locations and exception-chain types, without exception messages, source lines, or local variables. |
-
-Response evidence belongs to the failing exchange. A successful initialization response must not supply a status for a subsequent failed connection. Existing diagnostic producers that do not capture HTTP-response evidence retain explicit absence rather than inventing a status. Returned failures need no fabricated traceback.
-
-The diagnostic model is defined in [invocation diagnostics](https://github.com/computerlovetech/umbod/blob/main/umbod/api/src/umbod/core/invocation/diagnostics.py); the emitted MCP fields are defined by the [completion formatter](https://github.com/computerlovetech/umbod/blob/main/umbod/api/src/umbod/mcp/logging/invocation/formatting.py).
-
-## Personal MCP transport reasons
-
-When a personal MCP connector’s authorization has expired, the invocation is denied before contacting the connector and the client receives renewal guidance. The invocation and audit records retain the failure outcome at WARNING (`authorization` category); the invocation reason is `authorization_expired`. This is distinct from `target_expired`, which means an already-resolved runtime target expired.
-
-| Reason | Interpretation |
-| --- | --- |
-| `http_rejected` | A non-success downstream HTTP status was rejected. |
-| `authorization_rejected` | The downstream rejected authorization; existing authorization handling is preserved. |
-| `content_encoding_rejected` | The response used an unsupported content encoding. |
-| `charset_rejected` | The response declared an unsupported character set. |
-| `invalid_content_length` | The response declared an invalid content length. |
-| `response_size_exceeded` | A declared or streamed response exceeded the per-response limit. |
-| `aggregate_size_exceeded` | Declared or streamed responses exceeded the operation-wide byte limit. |
-| `request_size_exceeded` | The outgoing request exceeded its byte limit. |
-| `protocol_rejected` | The bounded protocol or request guard rejected the exchange. |
-| `network_failure` | A network operation failed. |
-| `timeout` | The operation exhausted its time budget; a cleanup-only timeout uses runtime stage and internal origin, without a downstream status. |
-| `target_expired` | The authorized runtime target expired. |
-| `contract_mismatch` | The current tool contract did not match the approved call contract. |
-| `runtime_failure` | An unexpected application/runtime failure occurred. Inspect sanitized exception evidence. |
-| `transport_failure` | A producer supplied only the generic transport fallback. Treat this as a remaining instrumentation gap, not a root-cause diagnosis. |
-
-The first meaningful failure must survive cancellation, task-group wrapping, session shutdown, and connection cleanup. Cleanup must not replace the primary reason, response evidence, or exception origin. A cleanup failure without an earlier operation failure must remain observable.
-
-## Personal OAuth failures
-
-Personal connector OAuth services publish one sanitized failure snapshot before attempt or refresh cleanup. Discovery, OAuth client registration, token exchange, and refresh use `ApplicationFailureKind.PERSONAL_OAUTH` on the REST application's shared failure channel. The separately mounted callback application receives the same explicitly composed publisher.
-
-| Field | Meaning |
-| --- | --- |
-| `oauth.stage` | `discovery`, `registration`, `token_exchange`, or `refresh`. |
-| `oauth.reason` | `provider_rejected`, `timeout`, `invalid_response`, `network_failure`, `scope_mismatch`, `resource_mismatch`, `issuer_mismatch`, `ambiguous_issuer`, `pkce_s256_required`, `authorization_code_required`, `code_response_required`, `client_auth_required`, `registration_unavailable`, `registration_contract_mismatch`, or `unexpected_failure`. |
-| `oauth.downstream.response_received` | Whether the failing exchange supplied HTTP response evidence. |
-| `oauth.downstream.http.status_code` | Actual downstream status, omitted when no response evidence exists. |
-| `connector.id_hash` | Deterministic fingerprint of the connector ID; not an owner identity. |
-
-Setup discovery and validation use this same observer with `operation=validate_setup`; user authorization retains `operation=authorize`. Admin checks validate metadata without creating a provider application or signing in a user. Automatic application registration occurs when personal authorization starts. A registration scope mismatch publishes `registration` / `scope_mismatch` with the actual registration HTTP status, including successful 201 responses. Scope names, metadata documents, client identifiers and secrets never enter diagnostic events.
-
-The server-generated request ID supplies trace correlation without inventing a tracing span. Start, callback, and refresh are separate requests. Expected provider failures log at WARNING; unexpected failures remain ERROR and alertable. These records do not contain provider error codes, descriptions, response bodies, callback parameters, or unrestricted URLs.
-
-The initiation API retains `personal_oauth_provider_failure` and HTTP 502, adding approved `stage` and `reason` fields. The frontend and callback page map approved categories to fixed explanations and authorization-status guidance. Internal HTTP status is not exposed as Umbod's response status. Unsupported providers retain HTTP 422. Refresh retains definitive-denial versus uncertain-outcome handling and must not automatically replay requests.
-
-Investigate by correlating the request ID and connector fingerprint, then inspect the stage, reason, and response evidence. An `unexpected_failure` needs an isolated reproduction and instrumentation of the failing branch, not raw provider logging or production replay.
+For personal connector OAuth, correlate the request ID and `connector.id_hash`, then check `oauth.stage`, `oauth.reason`, and response evidence. An expired personal MCP authorization is different from an expired runtime target: renew the connection when Umbod reports `authorization_expired`.
 
 ## Privacy rules
 
-Set protections on ingress, proxies, collectors, and error reporters as well as Umbod. In particular, protect credentials and OAuth callback query strings before they reach any logs. Umbod's application formatter cannot protect upstream logs.
-
-Never include credentials, tokens, authorization headers, OAuth codes or state, request/response bodies, tool arguments/results, personal data, or unrestricted endpoint URLs in application logs. Provider error descriptions are untrusted input: truncation does not make them safe. Map recognized provider codes to approved local reasons; use a fixed fallback for unknown codes.
-
-Use normalized route identities rather than request paths or query strings. Existing approved connector and tool correlation is not permission to log arbitrary owner identities or private inventory metadata.
-
-The [shared logging boundary](https://github.com/computerlovetech/umbod/blob/main/umbod/api/src/umbod/logging.py) sanitizes exception evidence and bounds primitive metadata. Unsupported objects must not be stringified. Metadata size bounds are resource controls, not secret redaction: an application-owned string still requires approval at its producer. Framework and dependency records must not bypass the application policy by embedding arbitrary text in messages or extra fields. Their free-form message text and extras are intentionally omitted; severity, logger identity, and sanitized exception evidence remain available. Application messages with interpolation arguments also use a fixed omission message. When more framework context is needed, add an explicit safe adapter/event rather than re-enabling arbitrary output.
-
-Validated OTLP exports are a separate data-delivery contract, not application failure diagnostics. The stdout telemetry sink preserves those caller-supplied payloads through a dedicated typed export path; ordinary log metadata cannot bypass application limits by using a telemetry field name. Do not copy application secrets into telemetry exports. Destination access and retention policy still apply to accepted telemetry data.
-
-Do not enable raw exception messages, HTTP debug bodies, or unsafe debug logging to investigate a generic fallback. Debug severity does not relax privacy rules. See [operator configuration](configuration.md).
+Keep credentials, OAuth callback queries, request and response bodies, tool arguments and results, personal data, and signed URLs out of application logs. Apply the same protections to gateways, collectors, and error reporters. Debug logging does not relax these rules. [OTLP exports](telemetry-ingestion.md) are separate: accepted payloads can contain client-supplied sensitive data and need their own access and retention controls.
 
 ## Conversation-visible response diagnostics
 
-Use the response headers to identify the serving build and match a failure to its request. For built-in tool failures, follow the retry guidance and inspect state before retrying any write that may have started.
+[Built-in filesystem, administrator, and agent diagnostics tools](../reference/built-in-tools.md) put essential recovery advice in the result text. Clients can also read structured guidance in `_meta["computerlove.tech/umbod"]` (`schema_version: 1`), which includes request and build identity. Connector tools do not share this guidance contract.
 
-REST and MCP HTTP responses include `X-Umbod-Version`, `X-Umbod-Revision`, and a server-generated `X-Request-ID`. Release images stamp the release and revision during the build; source-development runs explicitly report `development` and `unknown`. MCP initialization, the server card, and REST OpenAPI use the same release identity. These identify the serving build, not the negotiated MCP protocol or connector SDK version.
-
-Executed MCP tool results carry additive `computerlove.tech/umbod` metadata in `_meta`, containing `server_version`, `server_revision`, and `request_id`. The 13 built-in filesystem tools, three built-in administrator tools, and future built-ins additionally use a shared response contract. Metadata uses `schema_version: 1`, identity fields, `guidance`, and client `extensions`. Guidance contains `outcome`, `operation_state`, `error`, `recovery` (`retry` and `instructions`), `notices`, and agent `extensions`. Success has `error: null` and no retry instructions; failures carry a stable code, approved message, and at most eight schema-approved field issues with reason and correction. This nested layout is the initial contract. Earlier development drafts were not published and have no compatibility or migration path. Payloads remain in their existing MCP fields with their existing schemas. Connector tools retain their existing release/request metadata and are not opted into the new contract.
-
-The MCP response adapter owns scoped construction independently of optional signal receivers. Pre-admission argument failures report `not_started`. Entering a filesystem operation or administrator service call makes failed execution `unknown` unless a successful primary return establishes completion. Primary-read and mutation completion markers precede filesystem response enrichment. Deletion eligibility and approval are pre-admission; actual deletion begins only after approval and caller revalidation. Administrator rejection remains unknown because transactional writes may precede rejected read-back. Completed and unknown failures permit only `inspect_before_retry` or `never`, not automatic retry advice. A completed operation can have a failed response.
-
-The adapter deterministically renders the same guidance DTO into model-visible text, including state, retry advice, field corrections, recovery instructions, notices, and failure release/request correlation. Essential safety instructions never depend on `_meta` visibility. Successful results retain existing content and add serialized payload JSON when absent. Agent and client extensions are separate immutable, extra-forbidden DTOs; neither currently admits any extension keys. A new extension needs an explicit namespaced, versioned schema, and agent extensions also need an approved renderer. Unknown metadata is never automatically rendered. Upload recovery distinguishes staging-session creation from publication and never invents an MCP session-inspection tool; authenticated HTTP status inspection requires normal authentication, not the transfer capability. Authorization exceptions, cancellations, and input-required continuations retain their existing framework semantics; HTTP response headers remain available independently of tool-result metadata. Existing tool inputs and successful domain result schemas are unchanged.
-
-Successful observed tool results are validated against their advertised output schema before a success completion is published. Contract failures publish an internal `output` / `invalid_output` failure and return a safe tool error. Validation does not roll back completed mutations or prove that another client's cached schema is current. Clients must inspect state before replaying a non-idempotent write; upload completion can be retried with the same session ID under its existing idempotency contract.
-
-Filesystem errors retain stable codes and add bounded recovery guidance. Argument errors identify declared schema fields and approved corrections without copying submitted values, arbitrary attribute keys, or validator messages. The same argument-error adapter covers class-based and function-based filesystem tools before invocation work begins. Missing and inaccessible nodes remain indistinguishable, and errors do not list hidden destinations or echo exception details. Use `filesystem_browse` with operation `home` to resolve the caller's private upload destination, then inspect current permissions rather than inventing paths or identifiers.
-
-## Signal-owned side effects
-
-Umbod reports application failures through typed events. The logging, metrics, and audit receivers handle those records; the operation itself does not log them. Reuse the existing application-local signal system rather than introducing a global event bus or invoking a logging helper inside an operation.
-
-Capture and sanitize failure evidence at the failure point, before cleanup can replace it. Publish an immutable snapshot with approved context, not a live exception, traceback object, request, payload, or credential. Every receiver, not only the logging receiver, must receive safe data.
-
-REST composition constructs a configured failure channel for its application and injects its publishing port into metrics middleware. MCP telemetry composition constructs its channel before the audit recorder and shares that publishing port with audit and OpenAPI lookup adapters. Logging is a named receiver registered during composition; application instances do not share subscriptions. Producers depend on the generic publishing port, not a logger or the full MCP signal collection.
-
-Delivery uses the existing synchronous, receiver-isolating signals. These are transient diagnostic notifications, not durable messages or a new background queue. A failed receiver must not change the operation's result or prevent other receivers from running. Failures in ordinary MCP invocation or inventory receivers publish safe notifications to the separate application-failure channel, so other diagnostic receivers can observe them. Only the terminal failure handler of that diagnostic channel may log a sanitized failure directly; it must never republish through the failing channel. Bootstrap failures before channel construction need the same minimal nonrecursive fallback discipline.
-
-Existing invocation completion signals continue to drive invocation logging, metrics, and audit. Intentional OTLP export remains an explicit data-delivery operation, not a best-effort side effect: export failures must still be reported to the caller.
-
-## Verification and enforcement
-
-Regression tests must exercise the real adapter through exception mapping to the final serialized record. Injected preclassified exceptions test formatting, but cannot establish that transport failures retain their original diagnostic detail.
-
-Test both diagnostic usefulness and privacy: distinguish representative statuses, limits, encoding, timeouts, expiry, and cleanup failures; assert correlation and safe public responses; place sensitive sentinels in exceptions, payloads, credentials, and nested metadata and verify the complete emitted output excludes them. Signal tests must also inspect events with an independent subscriber, prove application-instance isolation and one configured log emission, and exercise receiver failure without recursive publication.
-
-The shared [production design rules](https://github.com/computerlovetech/umbod/blob/main/.semgrep/production-design.yml) reject direct exception logging, explicit `exc_info`, and common dynamic-message interpolation in application source. The migrated failure producers additionally reject logging imports and direct logger calls; they must publish through the injected signal port. These syntax checks supplement typed event boundaries and output tests; they do not prove arbitrary data is safe.
-
-## Rollout scope
-
-These protections cover shared exception formatting, metrics failures, connector-name lookup, audit-write failures, and personal MCP transport and OAuth diagnostics. Authentication and MCP debug records are limited to approved categories, presence flags, and counts. A terminal signal-delivery failure can still log through the sanitized fallback. OpenAPI execution diagnostics, filesystem conflict classification, and storage-provider evidence do not yet have the same coverage. Do not assume the shared formatter provides it.
+A failure can report `not_started`, `unknown`, or `completed`. Do not automatically repeat a write with an unknown or completed outcome. Follow the returned instructions: upload completion supports retry with the same session ID, and an uncertain `report_diagnostic` submission supports retry only with identical data and the same key within its 60-day deduplication window. Neither a storage failure nor a failed receipt render acknowledges the report. An input-required result is not a terminal failure or success.

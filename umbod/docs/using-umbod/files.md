@@ -24,7 +24,7 @@ Permission saves apply per namespace. If a save partially fails, successful chan
 
 Read permits discovery and content reading. Read/write also permits creation, uploads, metadata updates, renaming, moves within the namespace and file deletion. Management authority does not itself grant content access: administrators must also have an assigned group to browse its root, or independent item access to follow an individual shared link.
 
-Administrator REST clients use `/api/admin/filesystem/namespaces`. Updates replace group assignments and require the current `expected_revision`. Stale saves must be reloaded and reconciled. See [Namespace access](../operations/filesystem-namespaces.md).
+To remove an empty shared namespace, use **Delete namespace** and confirm. A stored child or active upload can block deletion even if you cannot see it. Deletion is never recursive and does not remove stored bytes.
 
 A bucket alone cannot restore namespace structure and policy. Local-content workers must share a content directory; S3 workers must share the bucket and configuration. See [Filesystem runtime configuration](../operations/configuration.md#filesystem-runtime) and [S3 file storage](../operations/s3-file-storage.md).
 
@@ -46,13 +46,15 @@ Recipients can find explicitly shared items in **Files → Shared with me**, or 
 
 Observed-user discovery uses verified identities and is not a complete or live identity-provider directory. Use returned opaque recipient IDs, not names or email addresses, as mutation targets.
 
-See [File and folder sharing](../operations/filesystem-sharing.md) for recipient, revision and API contracts.
+**Check:** Sign in as the intended recipient and open the item from **Files → Shared with me** or the original link. For a folder share that includes contents, check that the recipient can open a child file too.
+
+For agents, see the [MCP sharing tools](../reference/built-in-tools.md#filesystem-sharing-tools).
 
 ## Create folders and upload files
 
 If **New folder** or **Upload file** is unavailable, check write access to the destination. Read-only locations do not offer write actions. Drag and drop also requires a writable directory; the UI accepts one file at a time.
 
-The default upload limit is **10 MiB** per upload, not a storage quota. Operators can change it. Zero-byte files are supported. Uploads transfer the original bytes in a staging session and do not appear in the directory until publication. Sessions expire after one hour and cannot be resumed; start a new session once expiry is confirmed. A duplicate name, including one taken by a concurrent upload, is rejected rather than overwritten. See [Upload transfers](../operations/filesystem-upload-transfers.md) for transfer checks and safe retries.
+The default upload limit is **10 MiB** per upload, not a storage quota. Operators can change it. Zero-byte files are supported. Uploads transfer the original bytes in a staging session and do not appear in the directory until publication. Sessions expire after one hour and cannot be resumed; start a new session once expiry is confirmed. A duplicate name, including one taken by a concurrent upload, is rejected rather than overwritten. See [uploading from an agent](#uploading-from-an-agent) for transfer checks and safe retries.
 
 ## Read, download and delete
 
@@ -80,7 +82,7 @@ REST clients update nodes through `PATCH /api/me/filesystem/nodes/{id}` with the
 
 ## Agent access
 
-Filesystem tools and native resources are available through the public MCP endpoint, not connector-scoped endpoints. Agents can browse, create folders and files, upload, inspect, rename, move, update metadata and request confirmed file deletion, subject to current namespace permissions.
+[Filesystem tools](../reference/built-in-tools.md#filesystem-tools) and native resources are available through the public MCP endpoint, not connector-scoped endpoints. Agents can browse, create folders and files, upload, inspect, rename, move, update metadata and request confirmed file deletion, subject to current namespace permissions.
 
 Use `filesystem_browse` operation `namespaces` to discover personal and accessible shared namespaces. Operation `home` resolves the private default upload destination. Root and absolute-path targets refer only to personal files; shared namespaces are selected using returned root node UUIDs. No operation browses arbitrary host paths.
 
@@ -88,11 +90,26 @@ Files have resource URIs of the form `umbod://filesystem/files/{node_id}`. Brows
 
 Known textual MIME types return UTF-8 text; binary or unspecified types return base64 blobs. Invalid UTF-8 in declared text fails rather than being silently replaced. Reads have no partial results or silent truncation. Use authenticated REST downloads for larger files.
 
-Full summaries report the caller's discover, read, write, supported file-delete and sharing permissions, plus visibility metadata about the governing namespace, not a complete list of everyone with access. See [Homes and permissions](../operations/filesystem-homes-and-permissions.md) and [Upload transfers](../operations/filesystem-upload-transfers.md).
+Use the returned home UUID as `parent_id` when the user did not choose a destination, and check `permissions.can_write`. If tools are missing immediately after the home is created, refresh discovery. `visible_to` describes the containing namespace, not everyone with access; `restricted` means the audience is unknown, not private.
+
+### Uploading from an agent
+
+The two-step MCP upload tools are not included in Umbod `0.0.1-beta.9`. If `filesystem_begin_upload` and `filesystem_complete_upload` are absent from `tools/list`, use `filesystem_upload` within its inline size limit or upload through the workspace.
+
+Use `filesystem_begin_upload` with the original file’s byte count and, if available, computed SHA-256. Follow the returned HTTP PUT instructions using the original bytes, without cookies, Umbod bearer credentials, or redirects. Treat the URL and transfer headers as secrets. Then call `filesystem_complete_upload` as the session owner; PUT alone does not publish.
+
+Begin is not idempotent. Inspect the outcome before creating another session. A consumed API transfer capability cannot be replayed, and a restart does not clear an abandoned transfer claim. With [S3](../operations/s3-file-storage.md#direct-upload-sessions), try authenticated completion after an uncertain PUT. Completion can return the verified receipt again while the published file exists; report success only after it returns.
+
+## File access API
+
+- **Find locations:** `POST /api/me/filesystem/home` resolves the private home. `GET /api/me/filesystem/namespaces` lists accessible namespaces. `GET /api/me/filesystem/shared-with-me` lists discoverable explicit shares, not descendants inherited through a folder.
+- **Manage a shared namespace:** `GET` and `POST /api/admin/filesystem/namespaces` list and create. `PUT /api/admin/filesystem/namespaces/{namespace_id}` replaces the name and group assignments using `expected_revision`. To change or clear the description, also send `expected_root_revision`. `DELETE` on the same resource requires both revisions and an empty namespace with no active root uploads. Reload and reconcile after a stale-policy conflict.
+- **Find sharing recipients:** `GET /api/me/filesystem/nodes/{node_id}/access/recipients` takes `query` and optional `recipient_type` (`group` or `user`). Use the returned typed IDs, not labels.
+- **Replace direct grants:** `GET /api/me/filesystem/nodes/{node_id}/access` returns a strong `ETag`, including on filtered reads. `PUT` on the same resource requires `recipient_type=group` or `user` and `If-Match` with that tag. Send `grants` containing unique typed recipients of that scope (without labels), permissions, and optional `recursive`. Omission preserves existing scope, defaults to recursive for new folder grants, and always resolves to false for files. An empty list clears manageable grants only for the selected type; protected grants are preserved. User-scoped replacement requires a verified issuer identity even when clearing. After `412`, reread and reconcile before retrying.
 
 ## Current boundaries
 
-- Ordinary deletion applies only to files. Administrators can [delete an empty shared namespace](../operations/filesystem-namespaces.md#administration); personal namespace and ordinary directory deletion are unsupported.
+- Ordinary deletion applies only to files. Administrators can [delete an empty shared namespace](#shared-namespace-administration); personal namespace and ordinary directory deletion are unsupported.
 - Cross-namespace moves and content replacement are unsupported.
 - There is no automatic migration of unmanaged entries, storage quota or physical content garbage collection.
 - Failed publication and expired sessions can leave unreferenced stored bytes.

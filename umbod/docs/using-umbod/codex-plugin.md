@@ -8,11 +8,19 @@ Local-marketplace installation was verified with Codex CLI 0.167.0. Update Codex
 
 ## Install from Getting started
 
+The built-in installer is not included in Umbod `0.0.1-beta.9`. If your workspace does not show **Connect your harness**, configure your client to use the [ordinary MCP endpoint](../operations/service-topology.md) instead.
+
 Direct users to **Getting started → Connect your harness** to select their operating system and **Codex**, then copy and run the installation command. macOS and Linux use Bash with Python 3.8 or later and curl. Native Windows uses PowerShell 5.1 or later with its included .NET runtime; no separate download or hashing utility is required. Codex must already be installed. Use the Linux choice inside WSL.
 
 The command contains a single installer URL. Its script already includes the instance's package location, MCP endpoint and selected harness, so no additional configuration arguments are needed. The installer downloads a credential-free package, verifies its checksum and endpoint, stores it in a persistent user-owned directory, registers the marketplace, and installs the plugin. Administrator access is not required. **Inspect installer** opens the same configured script before you run it.
 
-The terminal, not the Getting started page, displays the Umbod icon and verification steps: restart Codex, open `/mcp`, sign in if prompted, and discover connected apps. Installation itself does not authenticate or verify tool access. Use a normal Umbod account, not a telemetry token, to sign in. Verify with tool discovery rather than a write operation. Empty results can mean the account has no matching published tools, even when sign-in worked.
+### Check the connection
+
+Restart Codex, open `/mcp`, and sign in with your Umbod account if prompted. Verify that Codex discovers a published tool your account is allowed to use; no write is needed. A telemetry token cannot sign in to MCP.
+
+### Optional: send Codex logs to Umbod
+
+If **Set up telemetry** is available in the installer, choose **With telemetry** before copying the command. In the terminal, review the proposed log exporter settings and choose whether to save Umbod as the Codex default. If you decline, your telemetry settings are unchanged. Treat the one-time install command as a credential; do not share it.
 
 ## Existing installations
 
@@ -38,5 +46,5 @@ Edit `skills/integrations/umbod-connected-apps/SKILL.md`, `skills/integrations/u
 
 - [Codex plugins](https://developers.openai.com/codex/plugins) — Supported CLI installation and plugin lifecycle.
 - [OpenAI plugin packaging](https://developers.openai.com/plugins/build/plugins) — Manifest, local-marketplace, and MCP configuration contracts.
-- [Endpoints and ports](../operations/endpoints-and-ports.md) — Umbod's public and private service boundaries.
+- [Connect to Umbod](../operations/service-topology.md) — Umbod's public and private service boundaries.
 - [Harness installation configuration](../operations/configuration.md#harness-plugin-installation) — Public artifact routing, prerequisites, and endpoint authority.

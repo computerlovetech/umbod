@@ -50,25 +50,19 @@ nav:
       - Codex CLI plugin: using-umbod/codex-plugin.md
   - Operations:
       - Configuration: operations/configuration.md
-      - Services and storage: operations/service-topology.md
-      - Application diagnostics: operations/application-diagnostics.md
-      - Scheduled cleanup: operations/cleanup.md
-      - S3 file storage: operations/s3-file-storage.md
-      - Admin MCP: operations/admin-mcp.md
-      - Endpoints and ports: operations/endpoints-and-ports.md
-      - Filesystem namespaces: operations/filesystem-namespaces.md
-      - File and folder sharing: operations/filesystem-sharing.md
-      - Filesystem homes and permissions: operations/filesystem-homes-and-permissions.md
-      - Filesystem upload transfers: operations/filesystem-upload-transfers.md
+      - Connect to Umbod: operations/service-topology.md
+      - Store files in S3: operations/s3-file-storage.md
       - Telemetry collection: operations/telemetry-ingestion.md
       - Log analytics: using-umbod/log-analytics.md
-      - Personal access tokens: operations/personal-access-tokens.md
+      - Scheduled cleanup: operations/cleanup.md
+      - Troubleshoot failures: operations/application-diagnostics.md
   - Connector plugins:
       - Overview: plugins/index.md
       - Build a connector: plugins/build-a-connector.md
   - Reference:
       - Helm values: reference/helm-values.md
       - Built-in MCP tools: reference/built-in-tools.md
+      - Personal access token API: operations/personal-access-tokens.md
 
 markdown_extensions:
   - admonition

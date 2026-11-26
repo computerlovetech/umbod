@@ -71,7 +71,6 @@ Need a custom integration? **[Build a connector →](https://umbod.ai/docs/plugi
 | [Architecture](https://umbod.ai/docs/operations/service-topology/) | Understand the services, data flow, and storage. |
 | [Configuration](https://umbod.ai/docs/operations/configuration/) | Configure authentication, public origins, and persistence. |
 | [Helm reference](https://umbod.ai/docs/reference/helm-values/) | Find chart settings and defaults. |
-| [Endpoints and ports](https://umbod.ai/docs/operations/endpoints-and-ports/) | Connect clients and configure routing. |
 
 ## Project status
 

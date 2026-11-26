@@ -1,3 +1,10 @@
 /enterprise.html /enterprise/ 301
 /download /#how 301
 /download/ /#how 301
+/docs/operations/endpoints-and-ports/ /docs/operations/service-topology/ 301
+/docs/operations/admin-mcp/ /docs/operations/configuration/#administrator-mcp-hosting 301
+/docs/operations/filesystem-namespaces/ /docs/using-umbod/files/#shared-namespace-administration 301
+/docs/reference/filesystem-namespaces/ /docs/using-umbod/files/#shared-namespace-administration 301
+/docs/operations/filesystem-sharing/ /docs/using-umbod/files/#share-files-and-folders 301
+/docs/operations/filesystem-homes-and-permissions/ /docs/using-umbod/files/#agent-access 301
+/docs/operations/filesystem-upload-transfers/ /docs/using-umbod/files/#uploading-from-an-agent 301

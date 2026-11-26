@@ -24,7 +24,7 @@ description: Kubernetes workloads, private listeners, networking, storage, and c
 
 **Read when working with:** Automated chart validation or rendered-resource invariants.
 
-- [Administrator MCP deployment](../../../docs/operations/admin-mcp.md) — Private separate hosting by default, shared opt-in, environment settings, and Compose configuration.
+- [Administrator MCP deployment](../../../docs/operations/configuration.md#administrator-mcp-hosting) — Private separate hosting by default, shared opt-in, environment settings, and Compose configuration.
 - [Administrator listener Service](templates/mcp-administrator.yaml) — Private ClusterIP networking enabled only for separate, enabled administrator hosting.
 - [Administrator render validation](scripts/validate-mcp-administrator.py) — Hosting matrix, MCP ownership, ingress exclusion, and negative settings checks.
 - [Collector resources](templates/telemetry.yaml) — Optional private OTLP Service targeting the API container's collector listener.

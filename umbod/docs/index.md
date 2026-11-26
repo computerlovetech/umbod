@@ -2,58 +2,56 @@
 
 <div class="umbod-intro" markdown>
 
-Install and run Umbod
+Connect your agents to apps and files
 
-This guide is for administrators. Learn how to install Umbod, connect internal tools, and decide which groups can use them. Try it on your computer before setting up a shared Kubernetes installation.
+Use an existing Umbod workspace to connect an agent, share access to apps and files, or turn on agent diagnostics.
 
-[Install Umbod :material-arrow-right:](getting-started/kubernetes-installation.md){ .md-button .md-button--primary }
-[See how it runs](operations/service-topology.md){ .umbod-secondary-link }
+[Choose a task :material-arrow-right:](#choose-a-task){ .md-button .md-button--primary }
+[Install Umbod](getting-started/kubernetes-installation.md){ .umbod-secondary-link }
 
 </div>
 
-## Find your next step
+## Choose a task
 
 <div class="grid cards" markdown>
 
--   :material-server-network: **Understand the deployment**
+-   :material-server-network: **Connect an agent**
 
-    Learn how services connect, where data lives, and which ports to expose.
+    Sign in and discover tools. Use the Codex installer on supported releases, or connect your client to MCP directly.
 
-    [Services and storage :material-arrow-right:](operations/service-topology.md)
+    [Install for Codex](using-umbod/codex-plugin.md) · [Connect directly](operations/service-topology.md)
 
--   :material-tune: **Configure Umbod**
+-   :material-puzzle-outline: **Connect an app**
 
-    Set the URLs people and agents use, configure sign-in, and keep data across restarts.
+    Publish an OpenAPI or MCP connector and give the right groups access.
 
-    [Configuration guide :material-arrow-right:](operations/configuration.md)
+    [Set up connectors :material-arrow-right:](using-umbod/connectors.md)
 
--   :material-puzzle-outline: **Connect tools and grant access**
+-   :material-folder-outline: **Share files**
 
-    Decide whether to use a shared connection or let users connect their own accounts.
+    Give a group a shared workspace or grant access to just one file or folder.
 
-    [Connector setup :material-arrow-right:](using-umbod/connectors.md)
+    [Share files and folders :material-arrow-right:](using-umbod/files.md#share-files-and-folders)
 
--   :material-code-braces: **Look up a setting**
+-   :material-clipboard-check-outline: **Enable agent diagnostics**
 
-    Find Helm setting names and defaults, or check what a built-in MCP tool accepts and returns.
+    On releases with Agent diagnostics, set up a playbook so signed-in agents can submit reports.
 
-    [Helm values](reference/helm-values.md) · [Built-in MCP tools](reference/built-in-tools.md)
+    [Enable diagnostic reporting :material-arrow-right:](operations/configuration.md#diagnostic-reporting)
 
 </div>
 
-## Run and maintain Umbod
+## Deploy and operate Umbod
 
-- [Endpoints and ports](operations/endpoints-and-ports.md): check which addresses to expose and which to keep private.
-- [Files](using-umbod/files.md): understand upload limits, sharing, and agent access.
-- [S3 file storage](operations/s3-file-storage.md): store file contents in an S3 bucket without replacing the application database.
-- [Scheduled cleanup](operations/cleanup.md): set up regular removal of expired records.
-- [Application diagnostics](operations/application-diagnostics.md): find and interpret service logs.
-- [Connector plugins](plugins/index.md): build and deploy a custom connector when you need one.
+- [Install on Kubernetes](getting-started/kubernetes-installation.md), then [configure sign-in and persistence](operations/configuration.md).
+- [Connect clients and configure routing](operations/service-topology.md).
+- [Store files in S3](operations/s3-file-storage.md), [collect agent telemetry](operations/telemetry-ingestion.md), or [schedule cleanup](operations/cleanup.md).
+- [Troubleshoot service and tool failures](operations/application-diagnostics.md).
+
+## Look up a setting or contract
+
+[Helm values](reference/helm-values.md) · [Built-in MCP tools](reference/built-in-tools.md) · [Build a connector plugin](plugins/index.md)
 
 ## Early beta
 
-Umbod is in early beta. The current Helm chart is for evaluation, not a highly available deployment. Questions or feedback? [Join the community on Discord](https://discord.gg/Njy4GnurpE) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).
-
-## About the name
-
-Umbod takes its name from Old Norse *umboð*: a mandate to act on another’s behalf. Its theme song is [MMMBop by Hanson](https://www.youtube.com/watch?v=NHozn0YXAeE).
+The [installation guide](getting-started/kubernetes-installation.md) uses published chart `{{ release.chartVersion }}` and images `{{ release.imageTag }}`. Some guides describe newer features and call out when those releases lack support. The chart is for evaluation, not high availability. Questions or feedback? [Join the community on Discord](https://discord.gg/Njy4GnurpE) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).

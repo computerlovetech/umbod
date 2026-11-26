@@ -125,7 +125,7 @@ ingress:
 Before installing:
 
 - **HTTPS:** Set `ingress.tls` or use an HTTPS proxy in front of the Ingress. The chart does not set up TLS by default. Use the same addresses in `publicOrigins` that users and agents will use.
-- **Sign-in:** Set the OIDC domain, client ID, audience, and group claims to match your provider. Set up an [external gateway for browser sign-in](../operations/endpoints-and-ports.md#administration-api-clients); the chart does not install one.
+- **Sign-in:** Set the OIDC domain, client ID, audience, and group claims to match your provider. Set up an [external gateway for browser sign-in](../operations/service-topology.md#administration-api-clients); the chart does not install one.
 - **Storage and images:** Confirm that the storage class is available and keep the image tags shipped with the chart.
 
 See [Configuration](../operations/configuration.md) for what the settings do and the [Helm values reference](../reference/helm-values.md) for defaults.
