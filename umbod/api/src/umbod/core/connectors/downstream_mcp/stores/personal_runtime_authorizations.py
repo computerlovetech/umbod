@@ -1,4 +1,5 @@
 from umbod.core.configuration.persistence import TextCipher
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 from umbod.core.permissions.stores.schema import (
     CONNECTOR_PERMISSION_CONNECTOR_ID,
     CONNECTOR_PERMISSION_GROUP_ID,
@@ -53,7 +54,12 @@ async def load_personal_runtime_target(
         if await matching_rejection(session, cipher, connection):
             raise PersonalAuthorizationRequired("rejected")
         if target.expires_at <= query.now:
-            raise PersonalAuthorizationRequired("expired")
+            raise PersonalAuthorizationRequired(
+                "expired",
+                diagnostic=InvocationFailureDiagnostic(
+                    execution_mode="personal", stage="authorization", reason="authorization_expired",
+                ),
+            )
         return target
     except PersonalRuntimeUnavailable:
         raise

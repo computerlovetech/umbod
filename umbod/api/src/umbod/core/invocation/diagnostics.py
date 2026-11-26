@@ -30,7 +30,7 @@ class InvocationFailureDiagnostic(BaseModel):
     stage: Literal["downstream", "context", "admission", "authorization", "arguments", "output", "transport", "runtime"]
     reason: Literal[
         "downstream_exception", "downstream_tool_error", "context_unavailable",
-        "admission_denied", "authorization_rejected", "authorization_health_unavailable",
+        "admission_denied", "authorization_expired", "authorization_rejected", "authorization_health_unavailable",
         "invalid_arguments", "invalid_output", "contract_mismatch", "target_expired",
         "timeout", "transport_failure", "runtime_failure", "http_rejected",
         "content_encoding_rejected", "charset_rejected", "invalid_content_length",

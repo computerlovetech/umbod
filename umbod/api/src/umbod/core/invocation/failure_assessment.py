@@ -48,6 +48,7 @@ def _diagnostic_rejection(diagnostic: InvocationDiagnostic) -> InvocationRejecti
     return {
         "invalid_arguments": InvocationRejectionKind.VALIDATION,
         "admission_denied": InvocationRejectionKind.AUTHORIZATION,
+        "authorization_expired": InvocationRejectionKind.AUTHORIZATION,
         "authorization_rejected": InvocationRejectionKind.AUTHORIZATION,
     }.get(diagnostic.reason, InvocationRejectionKind.NONE)
 

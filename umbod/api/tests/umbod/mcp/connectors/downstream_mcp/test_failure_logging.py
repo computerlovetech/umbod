@@ -2,6 +2,8 @@ import asyncio
 import json
 import logging
 from collections.abc import Iterator
+from dataclasses import replace
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -23,9 +25,9 @@ from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 from umbod.logging import OpenTelemetryJsonFormatter, configure_logging
 from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedDownstreamProxyTool
-from tests.umbod.mcp.connectors.downstream_mcp.signal_support import DiscardingAuditSink
+from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalToolRuntime
 from umbod.mcp.listeners import create_mcp_signals
-from umbod.mcp.logging import McpAuditRecorder
+from umbod.mcp.logging.audit.recorder import create_default_mcp_audit_recorder
 from tests.support import InMemoryMcpMetricsRecorder
 from umbod.mcp.signals import McpSignals, McpToolIdentity, SignalToolExecutionPipelineFactory
 from umbod.mcp.logging.invocation.sink import create_default_mcp_tool_invocation_log_sink
@@ -47,7 +49,7 @@ def configured_signals(capsys: pytest.CaptureFixture[str]) -> Iterator[McpSignal
         yield create_mcp_signals(
             create_default_mcp_tool_invocation_log_sink(),
             InMemoryMcpMetricsRecorder(),
-            McpAuditRecorder(DiscardingAuditSink(), "test", application_failures=application_failures),
+            create_default_mcp_audit_recorder("test", application_failures=application_failures),
          application_failures=application_failures)
     finally:
         root.handlers = original_handlers
@@ -57,19 +59,23 @@ def configured_signals(capsys: pytest.CaptureFixture[str]) -> Iterator[McpSignal
             logging.getLogger(name).propagate = propagate
 
 
-def completion_records(capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
+def serialized_records(capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
     output = capsys.readouterr()
     assert SENSITIVE not in output.out + output.err + caplog.text
     assert "https://" not in output.out + output.err
     assert "owner-token" not in output.out + output.err
-    records = [json.loads(line) for line in output.out.splitlines()]
-    return [record for record in records if record["body"] == "mcp tool invocation completed"]
+    return [json.loads(line) for line in output.out.splitlines()]
+
+
+def completion_records(capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
+    return [record for record in serialized_records(capsys, caplog) if record["body"] == "mcp tool invocation completed"]
 
 
 def assert_failure(record: dict[str, Any], connector_id: str, name: str, tool: str, operation: str, mode: str, stage: str, reason: str) -> None:
     expected_categories = {
         "invalid_arguments": "validation",
         "admission_denied": "authorization",
+        "authorization_expired": "authorization",
         "authorization_rejected": "authorization",
         "downstream_tool_error": "tool_error",
     }
@@ -217,6 +223,40 @@ async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: R
     if reason == "contract_mismatch" and stage == "arguments":
         assert attributes["exception.type"] == "PersonalToolPolicyInvalid"
     assert current_invocation_failure() is None
+
+
+@pytest.mark.asyncio
+async def test_expired_personal_authorization_warns_in_invocation_and_audit_logs(
+    runtime_case: RuntimeCase, configured_signals: McpSignals,
+    capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture,
+) -> None:
+    configure_logging("failure-test", "INFO")
+    execution = await execution_case(runtime_case)
+    runtime = McpPersonalToolRuntime(
+        execution.contexts, runtime_case.bundle.personal_tool_access, execution.transport,
+        lambda: runtime_case.query.now + timedelta(days=1), "https://workspace.example",
+    )
+    provider = await provider_for(
+        replace(execution, runtime=runtime), PermitAllConnectorInvocationPolicy(),
+        configured_signals.invocation_completed.send,
+    )
+
+    result = await provider.execute_tool("Personal_read", {"value": SENSITIVE})
+
+    assert result.is_error
+    assert "https://workspace.example/connectors?connector=downstream_mcp%3Apersonal" in result.content[0].text
+    assert execution.transport.calls == []
+    records = serialized_records(capsys, caplog)
+    invocation, = [record for record in records if record["body"] == "mcp tool invocation completed"]
+    audit, = [record for record in records if record["body"] == "mcp audit event"]
+    assert_failure(invocation, "personal", "Personal", "Personal_read", "read", "personal", "authorization", "authorization_expired")
+    assert invocation["attributes"]["mcp.invocation.outcome"] == "failure"
+    assert invocation["attributes"]["mcp.downstream.response_received"] is False
+    assert audit["trace_id"] == invocation["trace_id"]
+    assert audit["severity_text"] == "WARNING"
+    assert audit["attributes"]["mcp.audit.outcome"] == "failure"
+    assert audit["attributes"]["mcp.failure.category"] == "authorization"
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
 
 
 @pytest.mark.asyncio

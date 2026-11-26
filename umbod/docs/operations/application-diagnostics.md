@@ -44,6 +44,8 @@ The diagnostic model is defined in [invocation diagnostics](https://github.com/c
 
 ## Personal MCP transport reasons
 
+When a personal MCP connector’s authorization has expired, the invocation is denied before contacting the connector and the client receives renewal guidance. The invocation and audit records retain the failure outcome at WARNING (`authorization` category); the invocation reason is `authorization_expired`. This is distinct from `target_expired`, which means an already-resolved runtime target expired.
+
 | Reason | Interpretation |
 | --- | --- |
 | `http_rejected` | A non-success downstream HTTP status was rejected. |
