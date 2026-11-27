@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import type { ActivityChart } from './types';
   import { ActivityTooltip } from './activity-tooltip.svelte';
   import './visualizations.css';
@@ -17,7 +18,7 @@
     <div class="dv-bars">
       {#if data.total > 0}
       {#each data.days as day (day.date)}
-        <button
+        <Button variant="unstyled"
           type="button"
           class={['dv-bar-column', 'dv-day-trigger', { 'dv-day-active': tooltip.day?.date === day.date }]}
           aria-label={`${day.date}: ${day.total} tool calls`}
@@ -32,7 +33,7 @@
             <span class="dv-failure" style:--segment={`${day.failure / data.axisMaximum * 100}%`}></span>
             <span class="dv-success" style:--segment={`${day.success / data.axisMaximum * 100}%`}></span>
           </span>
-        </button>
+        </Button>
       {/each}
       {/if}
     </div>

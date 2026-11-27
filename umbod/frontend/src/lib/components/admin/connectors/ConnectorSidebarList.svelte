@@ -1,4 +1,5 @@
 <script lang="ts" generics="Item extends { id: string; name: string; iconDataUrl?: string }">
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import type { Snippet } from 'svelte';
   import ConnectorIcon from './ConnectorIcon.svelte';
 
@@ -29,13 +30,13 @@
       {#if 'item' in row}
         {@const item = row.item}
         <div class={['connector-row', selectedId === item.id && 'connector-row-selected']}>
-          <button type="button" aria-pressed={selectedId === item.id} onclick={() => onselect(item)}>
+          <Button variant="unstyled" type="button" aria-pressed={selectedId === item.id} onclick={() => onselect(item)}>
             <ConnectorIcon label={item.name} dataUrl={item.iconDataUrl} />
             <span class="connector-copy">
               <span class="connector-name">{item.name}</span>
               {@render metadata(item)}
             </span>
-          </button>
+          </Button>
           {@render actions(item)}
         </div>
       {:else}
@@ -59,7 +60,7 @@
   .connector-row { align-items: center; display: flex; }
   .connector-row:hover { background: var(--admin-hover); }
   .connector-row-selected, .connector-row-selected:hover { background: var(--admin-accent-soft); box-shadow: inset 2px 0 0 var(--admin-accent); }
-  .connector-list .connector-row > :is(button, a) { align-items: flex-start; background: transparent; border: 0; color: var(--admin-ink); cursor: pointer; display: flex; font: inherit; gap: 0.6rem; min-width: 0; padding: 15px 16px; text-align: left; width: 100%; }
+  .connector-list .connector-row > a, .connector-list .connector-row > :global(button) { align-items: flex-start; background: transparent; border: 0; color: var(--admin-ink); cursor: pointer; display: flex; font: inherit; gap: 0.6rem; min-width: 0; padding: 15px 16px; text-align: left; width: 100%; }
   .connector-row > a { box-sizing: border-box; text-decoration: none; }
   .connector-copy { min-width: 0; display: grid; gap: 0.25rem; }
   .connector-name { overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }

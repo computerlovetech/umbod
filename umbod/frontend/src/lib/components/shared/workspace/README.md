@@ -18,7 +18,7 @@ description: Shared application shell and actor-independent subpage presentation
 - [Page container fixture](./page-container.test-support.svelte) — Test-only injected heading, optional actions, sidebar and detail content.
 - [SubpageContainer.svelte](./SubpageContainer.svelte) — Page heading, optional action slot, navigation slot and selected content.
 - [SubpageNavigation.svelte](./SubpageNavigation.svelte) — Controlled horizontal route links, current page or parent location, and pending feedback.
-- [QueryPanel.svelte](./QueryPanel.svelte) — Collapsed native query disclosure with caller-owned parameters, reset and submission.
+- [QueryPanel.svelte](./QueryPanel.svelte) — Shared query disclosure with caller-owned parameters, reset and submission.
 - [query-panel.dom.test.ts](./query-panel.dom.test.ts) — Pending protection, draft reset, successful collapse and focus restoration.
 - [Subpage navigation styles](../../../styles/subpage-navigation.css) — Shared underline, hover and keyboard-focus presentation for route links and in-place tabs.
 - [subpage-container.test.ts](./subpage-container.test.ts) — Neutral heading, action, navigation and current-page rendering tests.

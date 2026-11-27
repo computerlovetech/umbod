@@ -43,12 +43,12 @@
 
 <div class="import-panel">
   <div class="modes" role="group" aria-label="Import source">
-    <button type="button" class:active={state.mode === 'file'} aria-pressed={state.mode === 'file'} onclick={() => state.setMode('file')}>
+    <Button variant="unstyled" type="button" class={{ active: state.mode === 'file' }} aria-pressed={state.mode === 'file'} onclick={() => state.setMode('file')}>
       File
-    </button>
-    <button type="button" class:active={state.mode === 'url'} aria-pressed={state.mode === 'url'} onclick={() => state.setMode('url')}>
+    </Button>
+    <Button variant="unstyled" type="button" class={{ active: state.mode === 'url' }} aria-pressed={state.mode === 'url'} onclick={() => state.setMode('url')}>
       HTTPS URL
-    </button>
+    </Button>
   </div>
   <SecurityBoundaryNotice />
   {#if action}
@@ -165,7 +165,7 @@
     margin-bottom: 1rem;
   }
 
-  .modes button {
+  .modes > :global(button) {
     background: var(--admin-panel);
     border: 1px solid var(--admin-border-strong);
     border-radius: 6px;
@@ -177,7 +177,7 @@
     padding: 0.55rem 0.7rem;
   }
 
-  .modes .active {
+  .modes > :global(button.active) {
     background: var(--admin-ink);
     border-color: var(--admin-ink);
     color: var(--admin-panel);

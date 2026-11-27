@@ -86,7 +86,7 @@ const mcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors
     expect(buttonStyles).toContain('cursor: pointer');
     expect(buttonStyles).toContain('cursor: not-allowed');
     expect(buttonStyles).toContain('.admin-shared-button:focus-visible');
-    expect(mcpWorkspace).toContain('button:not(:disabled){cursor:pointer}');
-    expect(mcpWorkspace).toContain('button:disabled{cursor:not-allowed}');
+    expect(mcpWorkspace).toMatch(/:global\(button\.downstream-mcp-menu-item:not\(:disabled\)\)\s*\{\s*cursor:\s*pointer\b/);
+    expect(mcpWorkspace).toMatch(/:global\(button\.downstream-mcp-menu-item:disabled\)\s*\{\s*cursor:\s*not-allowed\b/);
   });
 });

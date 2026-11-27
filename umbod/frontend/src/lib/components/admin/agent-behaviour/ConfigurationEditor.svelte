@@ -10,6 +10,7 @@
   import Select from '#lib/components/admin/shared/Select.svelte';
   import TextField from '#lib/components/shared/TextField.svelte';
   import TextAreaField from '#lib/components/shared/TextAreaField.svelte';
+  import Disclosure from '#lib/components/shared/Disclosure.svelte';
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import type { ConfigurationState } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
   import ReportingSettings from './ReportingSettings.svelte';
@@ -50,10 +51,10 @@
   async function deletePattern(id: string, button: HTMLButtonElement): Promise<void> {
     const row = button.closest('li');
     const neighbor = row?.nextElementSibling ?? row?.previousElementSibling;
-    const nextSummary = neighbor?.querySelector<HTMLElement>('summary');
+    const nextDisclosure = neighbor?.querySelector<HTMLButtonElement>('.pattern-details button[aria-expanded]');
     state.removePattern(id);
     await tick();
-    if (!button.isConnected) (nextSummary ?? button.ownerDocument.getElementById('discard-diagnostics-changes'))?.focus();
+    if (!button.isConnected) (nextDisclosure ?? button.ownerDocument.getElementById('discard-diagnostics-changes'))?.focus();
   }
 </script>
 
@@ -91,40 +92,42 @@
     </header>
     <AdminRecordList items={state.patterns} keyOf={(pattern): string => pattern.id} label="Patterns" recordHeading="Pattern" detailHeading="Enabled" emptyMessage="No patterns configured.">
       {#snippet identity(pattern)}
-        <details class="pattern-details">
-          <summary class="pattern-summary"><span class="chevron" aria-hidden="true"></span><span>{pattern.name || 'New pattern'}</span></summary>
-          <div class="pattern-inspection">
-            <p>{pattern.description || 'No description'}</p>
-            <dl class="pattern-facts">
-              <div class="rule-card inclusion-rule">
-                <dt>{@render factIcon('M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM8 12l2.5 2.5L16 9')} When it counts</dt>
-                <dd>{pattern.inclusion_criteria.trim() ? pattern.inclusion_criteria : 'Not specified'}</dd>
-              </div>
-              <div class="rule-card exclusion-rule">
-                <dt>{@render factIcon('M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9 9l6 6m0-6-6 6')} When it does not count</dt>
-                <dd>{pattern.exclusion_criteria.trim() ? pattern.exclusion_criteria : 'Not specified'}</dd>
-              </div>
-            </dl>
-            <dl class="pattern-facts assessment-facts">
-              <div class="assessment-prompt">
-                <dt>{@render factIcon('M4 4h16v13H10l-6 4V4Zm4 5h8m-8 4h5')} Assessment prompt</dt>
-                <dd>{pattern.assessment_prompt || 'Not specified'}</dd>
-              </div>
-              <div>
-                <dt>{@render factIcon('M4 4h8l8 8-8 8-8-8V4Zm4 4h.01')} Categories</dt>
-                <dd class="fact-badges">
-                  {#each pattern.categories as category, index (`${category}:${index}`)}
-                    <span class="fact-badge">{category}</span>
-                  {:else}None{/each}
-                </dd>
-              </div>
-              <div>
-                <dt>{@render factIcon('M3 12h18m-14-4-4 4 4 4m10-8 4 4-4 4')} Polarity</dt>
-                <dd><span class={['fact-badge', 'polarity', pattern.polarity]}>{pattern.polarity}</span></dd>
-              </div>
-            </dl>
-          </div>
-        </details>
+        <div class="pattern-details">
+          <Disclosure --disclosure-trigger-gap=".75rem">
+            {#snippet label()}<span class="pattern-label">{pattern.name || 'New pattern'}</span>{/snippet}
+            <div class="pattern-inspection">
+              <p>{pattern.description || 'No description'}</p>
+              <dl class="pattern-facts">
+                <div class="rule-card inclusion-rule">
+                  <dt>{@render factIcon('M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM8 12l2.5 2.5L16 9')} When it counts</dt>
+                  <dd>{pattern.inclusion_criteria.trim() ? pattern.inclusion_criteria : 'Not specified'}</dd>
+                </div>
+                <div class="rule-card exclusion-rule">
+                  <dt>{@render factIcon('M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM9 9l6 6m0-6-6 6')} When it does not count</dt>
+                  <dd>{pattern.exclusion_criteria.trim() ? pattern.exclusion_criteria : 'Not specified'}</dd>
+                </div>
+              </dl>
+              <dl class="pattern-facts assessment-facts">
+                <div class="assessment-prompt">
+                  <dt>{@render factIcon('M4 4h16v13H10l-6 4V4Zm4 5h8m-8 4h5')} Assessment prompt</dt>
+                  <dd>{pattern.assessment_prompt || 'Not specified'}</dd>
+                </div>
+                <div>
+                  <dt>{@render factIcon('M4 4h8l8 8-8 8-8-8V4Zm4 4h.01')} Categories</dt>
+                  <dd class="fact-badges">
+                    {#each pattern.categories as category, index (`${category}:${index}`)}
+                      <span class="fact-badge">{category}</span>
+                    {:else}None{/each}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{@render factIcon('M3 12h18m-14-4-4 4 4 4m10-8 4 4-4 4')} Polarity</dt>
+                  <dd><span class={['fact-badge', 'polarity', pattern.polarity]}>{pattern.polarity}</span></dd>
+                </div>
+              </dl>
+            </div>
+          </Disclosure>
+        </div>
       {/snippet}
       {#snippet detail(pattern)}
         <AdminToggle checked={pattern.enabled} ariaLabel={`Enable ${pattern.name || 'New pattern'}`} disabled={state.busy} onchange={(): void => state.updatePattern(pattern.id, 'enabled', !pattern.enabled)} />
@@ -164,9 +167,9 @@
               {#each pattern.categories as category (category)}
                 <li class="fact-badge category-tag">
                   <span>{category}</span>
-                  <button type="button" class="remove-tag" aria-label={`Remove category ${category}`} onclick={(event): void => removeCategory(pattern.id, category, event.currentTarget)}>
+                  <Button variant="unstyled" type="button" class="remove-tag" aria-label={`Remove category ${category}`} onclick={(event): void => removeCategory(pattern.id, category, event.currentTarget)}>
                     {@render factIcon('M7 7l10 10M17 7 7 17')}
-                  </button>
+                  </Button>
                 </li>
               {/each}
             </ul>
@@ -190,10 +193,7 @@
 {/if}
 
 <style>
-  .pattern-summary { display: flex; align-items: center; gap: .75rem; cursor: pointer; font-weight: 600; list-style: none; overflow-wrap: anywhere; }
-  .pattern-summary::-webkit-details-marker { display: none; }
-  .chevron { flex: none; width: .45rem; height: .45rem; margin-inline: .15rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); color: var(--admin-muted); }
-  .pattern-details[open] > .pattern-summary .chevron { transform: rotate(45deg); }
+  .pattern-label { font-weight: 600; overflow-wrap: anywhere; }
   .pattern-inspection { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--admin-border); overflow-wrap: anywhere; }
   .pattern-inspection p { margin: 0; white-space: pre-wrap; }
   .pattern-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: .85rem 1.25rem; margin: .75rem 0 0; }
@@ -209,8 +209,8 @@
   .fact-badge { display: inline-block; max-width: 100%; padding: .1rem .5rem; border: 1px solid var(--admin-border); border-radius: 999px; color: var(--admin-ink); background: var(--admin-soft); font-size: .8rem; font-weight: 600; }
   .category-tags { display: flex; flex-wrap: wrap; gap: .35rem; list-style: none; margin: 0; padding: 0; }
   .category-tag { display: inline-flex; align-items: center; gap: .25rem; padding-inline-end: .2rem; overflow-wrap: anywhere; }
-  .remove-tag { display: grid; place-items: center; flex: none; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 50%; color: var(--admin-muted); background: transparent; cursor: pointer; }
-  .remove-tag:hover { background: var(--admin-hover); color: var(--admin-ink); }
+  .category-tag > :global(button.remove-tag) { display: grid; place-items: center; flex: none; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 50%; color: var(--admin-muted); background: transparent; cursor: pointer; }
+  .category-tag > :global(button.remove-tag:hover) { background: var(--admin-hover); color: var(--admin-ink); }
   .category-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
   .polarity { text-transform: capitalize; }
   .polarity.negative { background: var(--admin-danger-bg); border-color: var(--admin-danger-border); color: var(--admin-danger-text); }

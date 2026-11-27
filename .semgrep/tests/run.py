@@ -26,6 +26,7 @@ except ImportError:
 class Case(TypedDict):
     name: str
     path: NotRequired[str]
+    scanned: NotRequired[bool]
     source: str
     expected: dict[str, dict[str, int]]
 
@@ -41,6 +42,7 @@ def run() -> int:
         root = Path(temporary)
         expected: Counter[tuple[str, str, int]] = Counter()
         probes: set[str] = set()
+        expected_scanned: set[str] = set()
         for case in cases:
             case_root = root / case["name"]
             probe = case_root / case.get("path", "api/src/probe.py")
@@ -52,6 +54,8 @@ def run() -> int:
             if relative in probes:
                 raise ValueError(f"Duplicate case: {case['name']}")
             probes.add(relative)
+            if case.get("scanned", True):
+                expected_scanned.add(relative)
             for rule, lines in case["expected"].items():
                 for line, count in lines.items():
                     expected[relative, rule, int(line)] = count
@@ -65,6 +69,8 @@ def run() -> int:
                 "scan",
                 "--config",
                 str(directory.parent / "production-design.yml"),
+                "--config",
+                str(directory.parent / "frontend-advisory.yml"),
                 "--no-rewrite-rule-ids",
                 "--no-git-ignore",
                 "--json",
@@ -85,8 +91,12 @@ def run() -> int:
             logging.error("Semgrep scan errors: %s", report["errors"])
             return 1
         scanned = {Path(path).relative_to(root).as_posix() for path in report["paths"]["scanned"]}
-        if scanned != probes:
-            logging.error("Scanned paths mismatch: expected=%s actual=%s", probes, scanned)
+        if scanned != expected_scanned:
+            logging.error(
+                "Scanned paths mismatch: missing=%s unexpected=%s",
+                expected_scanned - scanned,
+                scanned - expected_scanned,
+            )
             return 1
         actual = Counter(
             (

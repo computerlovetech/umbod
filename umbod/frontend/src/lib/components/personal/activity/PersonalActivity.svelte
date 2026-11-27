@@ -1,6 +1,7 @@
 <script lang="ts">
   import Button from '#lib/components/admin/shared/Button.svelte';
   import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
+  import Disclosure from '#lib/components/shared/Disclosure.svelte';
   import SegmentedRadio from '#lib/components/shared/SegmentedRadio.svelte';
   import DashboardContainer from '#lib/components/shared/dashboard/DashboardContainer.svelte';
   import DashboardPeriodSwitch from '#lib/components/shared/dashboard/DashboardPeriodSwitch.svelte';
@@ -41,34 +42,36 @@
   {@const overview = state.overviewSummary}
   {@const sessionPage = state.sessionPage}
   {#if state.source === 'harness'}
-    <details class="session-search">
-      <summary>Search session</summary>
-      <div class="search-content">
-        <form onsubmit={search} role="search" aria-label="Harness sessions">
-          <input type="search" name="q" aria-label="Search sessions" value={state.search} maxlength="128" placeholder="Session ID, client, or UTC date" />
-          <Button type="submit" variant="secondary">Search</Button>
-        </form>
-        <div aria-busy={state.sessions.kind === 'loading' || state.pagination === 'loading'}>
-          <DelayedSpinner active={state.sessions.kind === 'loading'} label="Loading harness sessions" />
-          {#if sessionPage && sessionPage.sessions.length > 0}
-            <HarnessSessionPicker sessions={sessionPage.sessions} selected={state.selected} onselect={state.openSession} />
-            {#if sessionPage.page.kind === 'more'}
-              {#if state.pagination !== 'loading' && state.pagination !== 'idle'}
-                <p class="admin-message" role="alert">Could not load more sessions.</p>
+    <div class="session-search">
+      <Disclosure>
+        {#snippet label()}<span class="session-search-label">Search session</span>{/snippet}
+        <div class="search-content">
+          <form onsubmit={search} role="search" aria-label="Harness sessions">
+            <input type="search" name="q" aria-label="Search sessions" value={state.search} maxlength="128" placeholder="Session ID, client, or UTC date" />
+            <Button type="submit" variant="secondary">Search</Button>
+          </form>
+          <div aria-busy={state.sessions.kind === 'loading' || state.pagination === 'loading'}>
+            <DelayedSpinner active={state.sessions.kind === 'loading'} label="Loading harness sessions" />
+            {#if sessionPage && sessionPage.sessions.length > 0}
+              <HarnessSessionPicker sessions={sessionPage.sessions} selected={state.selected} onselect={state.openSession} />
+              {#if sessionPage.page.kind === 'more'}
+                {#if state.pagination !== 'loading' && state.pagination !== 'idle'}
+                  <p class="admin-message" role="alert">Could not load more sessions.</p>
+                {/if}
+                <Button variant="secondary" onclick={state.loadMore} disabled={state.pagination === 'loading'}>
+                  {state.pagination === 'loading' ? 'Loading more…' : 'Load more sessions'}
+                </Button>
               {/if}
-              <Button variant="secondary" onclick={state.loadMore} disabled={state.pagination === 'loading'}>
-                {state.pagination === 'loading' ? 'Loading more…' : 'Load more sessions'}
-              </Button>
+            {:else if sessionPage}
+              <p class="admin-message" role="status">{state.search ? 'No matching sessions.' : 'No harness sessions in this period.'}</p>
+            {:else if state.sessions.kind === 'unavailable' || state.sessions.kind === 'error' || state.sessions.kind === 'missing'}
+              <p class="admin-message" role="status">{state.sessions.kind === 'unavailable' ? 'Harness sessions are unavailable.' : 'Could not load harness sessions.'}</p>
+              <Button variant="secondary" onclick={state.loadSessions}>Retry sessions</Button>
             {/if}
-          {:else if sessionPage}
-            <p class="admin-message" role="status">{state.search ? 'No matching sessions.' : 'No harness sessions in this period.'}</p>
-          {:else if state.sessions.kind === 'unavailable' || state.sessions.kind === 'error' || state.sessions.kind === 'missing'}
-            <p class="admin-message" role="status">{state.sessions.kind === 'unavailable' ? 'Harness sessions are unavailable.' : 'Could not load harness sessions.'}</p>
-            <Button variant="secondary" onclick={state.loadSessions}>Retry sessions</Button>
-          {/if}
+          </div>
         </div>
-      </div>
-    </details>
+      </Disclosure>
+    </div>
   {/if}
 
   {#if state.selected}
@@ -110,9 +113,9 @@
   .activity-toolbar { display: flex; width: 100%; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
   .view-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
   .metrics { display: grid; gap: 20px; }
-  .session-search { min-width: 0; border: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel); background: var(--admin-panel); }
-  summary { box-sizing: border-box; min-height: 44px; padding: 0.875rem 1.25rem; cursor: pointer; font-size: 0.875rem; font-weight: 600; }
-  summary:focus-visible, input:focus-visible { outline: 2px solid var(--admin-focus); outline-offset: 2px; }
+  .session-search { --disclosure-trigger-min-height: 44px; --disclosure-trigger-padding: 0.875rem 1.25rem; --disclosure-trigger-radius: var(--admin-radius-panel); min-width: 0; border: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel); background: var(--admin-panel); }
+  .session-search-label { font-size: 0.875rem; font-weight: 600; }
+  input:focus-visible { outline: 2px solid var(--admin-focus); outline-offset: 2px; }
   .search-content { padding: 0 1.25rem 1.25rem; }
   form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.625rem; margin-bottom: 0.75rem; }
   input { box-sizing: border-box; width: min(100%, 22rem); padding: 0.5rem 0.75rem; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); font: inherit; }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Disclosure from '#lib/components/shared/Disclosure.svelte';
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
 
@@ -27,10 +28,12 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10.3 4.2-7.6 13.3a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4m0 3.5h.01" /></svg>
     <div><strong>This changes who can use it</strong><p>Permitted groups can use all its tools, including future tools after discovery.</p></div>
   </div>
-  <details>
-    <summary>Access &amp; setup details</summary>
-    <p>This does not make the connector available to everyone. Account authorization, owner enablement, and tool discovery remain separate steps.</p>
-  </details>
+  <div class="access-details">
+    <Disclosure --disclosure-trigger-width="fit-content" --disclosure-trigger-padding="0.25rem 0">
+      {#snippet label()}Access &amp; setup details{/snippet}
+      <p>This does not make the connector available to everyone. Account authorization, owner enablement, and tool discovery remain separate steps.</p>
+    </Disclosure>
+  </div>
   <footer>
     <Button variant="secondary" data-dialog-cancel onclick={oncancel}>Cancel</Button>
     <Button onclick={onconfirm}>Publish connector</Button>
@@ -48,8 +51,7 @@
   .notice svg { margin-top: 0.125rem; }
   .notice strong { display: block; font-size: 0.8125rem; font-weight: 600; margin-bottom: 0.25rem; }
   p { font-size: 0.8125rem; line-height: 1.6; margin: 0; }
-  details { color: var(--admin-muted); font-size: 0.8125rem; margin-top: 1.125rem; }
-  summary { cursor: pointer; padding: 0.25rem 0; width: fit-content; }
-  details p { margin-top: 0.625rem; }
+  .access-details { color: var(--admin-muted); font-size: 0.8125rem; margin-top: 1.125rem; }
+  .access-details p { margin-top: 0.625rem; }
   footer { border-top: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; margin-top: 1.5rem; padding-top: 1rem; }
 </style>

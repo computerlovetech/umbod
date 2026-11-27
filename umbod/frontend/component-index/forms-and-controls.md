@@ -12,9 +12,9 @@ description: Buttons, fields, selection controls, form containers, and their sha
 
 - [TextAreaField](../src/lib/components/shared/TextAreaField.svelte) — Controlled labelled multiline input with native attributes and events; uses the same field and focus styling as plain and configuration text inputs.
 - [TextField](../src/lib/components/shared/TextField.svelte) — Controlled labelled plain text input with native attribute and event forwarding; use for non-credential text without configuration-secret behavior.
-- [Button](../src/lib/components/admin/shared/Button.svelte) — Native action button with primary, secondary, danger, quiet, compact, and icon-only presentation; forwards native attributes, events, and attachments.
+- [Button](../src/lib/components/admin/shared/Button.svelte) — Native action button; use `variant="soft"` for a tinted secondary action or `variant="unstyled"` for a control with its own styling.
 - [PlusIcon](../src/lib/components/shared/PlusIcon.svelte) — Decorative leading plus for labeled buttons that start creating a new item, not form submit buttons.
-- [ButtonLink](../src/lib/components/admin/shared/ButtonLink.svelte) — Native navigation anchor with canonical action styling; use for action-like links without replacing href semantics.
+- [ButtonLink](../src/lib/components/admin/shared/ButtonLink.svelte) — Native navigation anchor with the same presentation variants as Button; use for action-like links that retain href semantics.
 - [LoadingButton](../src/lib/components/admin/shared/LoadingButton.svelte) — Button with delayed loading feedback, native attribute forwarding, and immediate pending protection; supports the same variants and sizes.
 - [AdminSaveAction](../src/lib/components/admin/shared/AdminSaveAction.svelte) — Save button with status feedback; use when a save action needs loading, success, or error presentation.
 - [AdminConfigurationField](../src/lib/components/admin/shared/AdminConfigurationField.svelte) — Labelled text, password, or URL field; use for configuration inputs with helper text, validation, or existing-secret handling.
@@ -25,7 +25,8 @@ description: Buttons, fields, selection controls, form containers, and their sha
 - [AdminToggleSetting](../src/lib/components/admin/shared/AdminToggleSetting.svelte) — Settings card with a described toggle, visible On/Off state, and optional metadata and notices.
 - [AdminSettingsActions](../src/lib/components/admin/shared/AdminSettingsActions.svelte) — Save and discard row for staged settings; callers own drafts, publishing, and conflict resolution.
 - [AdminFileUpload](../src/lib/components/admin/shared/AdminFileUpload.svelte) — Single-file picker/drop field with size and type checks; use for file selection, noting its fixed JSON marker.
-- [QueryPanel](../src/lib/components/shared/workspace/QueryPanel.svelte) — Collapsed native query editor; callers own parameters, reset, submission and loading.
+- [Disclosure](../src/lib/components/shared/Disclosure.svelte) — Keyboard-accessible inline disclosure with retained content, reduced-motion-aware transitions, and local or caller-controlled expansion.
+- [QueryPanel](../src/lib/components/shared/workspace/QueryPanel.svelte) — Collapsible query editor; callers own parameters, reset, submission and loading.
 - [Form](../src/lib/components/admin/shared/Form.svelte) — Scrollable fields and optional action footer; use for forms compatible with its attached administration submission integration.
 
 ## Shared form and button styles

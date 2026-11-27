@@ -191,7 +191,7 @@
 
     <div class={['form-actions', progress && 'wizard-actions']}>
       {#if progress}
-        <Button type="button" variant="quiet" disabled={checkConfigurationPending || saveConfigurationPending} onclick={reviewing ? state.invalidateCheck : onback}>Back</Button>
+        <Button type="button" variant="soft" disabled={checkConfigurationPending || saveConfigurationPending} onclick={reviewing ? state.invalidateCheck : onback}>Back</Button>
       {/if}
       {#if !reviewing}
       <LoadingButton

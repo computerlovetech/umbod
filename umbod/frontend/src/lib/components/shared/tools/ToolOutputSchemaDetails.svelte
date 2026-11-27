@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Disclosure from '#lib/components/shared/Disclosure.svelte';
   import type { ToolOutputSchemaState } from './presentation';
 
   let { outputSchema }: { outputSchema: ToolOutputSchemaState } = $props();
@@ -25,10 +26,12 @@
 <section aria-label="Output schema" class="output-schema">
   <span class="label">Output schema</span>
   {#if outputSchema.status === 'available'}
-    <details>
-      <summary>Available</summary>
-      <pre><code>{formattedSchema}</code></pre>
-    </details>
+    <div class="schema-disclosure">
+      <Disclosure>
+        {#snippet label()}Available{/snippet}
+        <pre><code>{formattedSchema}</code></pre>
+      </Disclosure>
+    </div>
   {:else}
     <span class="status status--warning">
       <svg class="warning-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
@@ -43,9 +46,8 @@
 <style>
   .output-schema { align-items: baseline; display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.875rem; }
   .label { color: var(--admin-ink); font-size: 0.8rem; font-weight: 600; }
-  details { max-width: 100%; width: 100%; }
-  summary, .status { color: var(--admin-muted); font-size: 0.8rem; }
-  summary { cursor: pointer; width: fit-content; }
+  .schema-disclosure { max-width: 100%; width: 100%; }
+  .schema-disclosure, .status { color: var(--admin-muted); font-size: 0.8rem; }
   .status--warning { align-items: center; color: var(--admin-warning-text); display: inline-flex; font-weight: 600; gap: 0.25rem; }
   .warning-icon { fill: var(--admin-warning-bg); height: 1rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; width: 1rem; }
   pre { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 6px; margin: 0.4rem 0 0; max-height: 16rem; max-width: 100%; overflow: auto; padding: 0.65rem; }

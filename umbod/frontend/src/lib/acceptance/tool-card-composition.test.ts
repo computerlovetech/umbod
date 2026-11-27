@@ -92,7 +92,9 @@ describe('actor-independent tool card composition', () => {
     expect(body).toContain('Available');
     expect(body).toContain('result');
     expect(body).not.toContain('Manage tool');
-    expect(body).not.toContain('<button');
+    const buttons = body.match(/<button\b[^>]*>/g) ?? [];
+    expect(buttons).toHaveLength(3);
+    for (const button of buttons) expect(button).toContain('aria-expanded="false"');
     expect(body).not.toContain('Not declared');
   });
 

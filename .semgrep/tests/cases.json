@@ -1,5 +1,53 @@
 [
   {
+    "name": "native-frontend-controls",
+    "path": "frontend/src/lib/Controls.svelte",
+    "source": "<button>Save</button>\n<button\n  type=\"submit\">Submit</button>\n<select><option>One</option></select>\n<Button>Save</Button>\n<Select />\n<button-group />\n<select-menu />\n",
+    "expected": {
+      "frontend.use-shared-button": {"1": 1, "2": 1},
+      "frontend.use-shared-select": {"4": 1}
+    }
+  },
+  {
+    "name": "native-frontend-disclosure",
+    "path": "frontend/src/lib/Expandable.svelte",
+    "source": "<script lang=\"ts\">\n  const markup = '<details>Not a rendered element</details>';\n</script>\n<!-- <details>Commented out</details> -->\n<details><summary>One</summary><details><summary>Nested</summary></details></details>\n<details\n  open><summary>Two</summary></details>\n<details-panel />\n<Disclosure />\n<Details />\n{'<details>Literal text</details>'}\n",
+    "expected": {"frontend.use-shared-disclosure": {"5": 2, "6": 1}}
+  },
+  {
+    "name": "shared-button-implementation",
+    "path": "frontend/src/lib/components/admin/shared/Button.svelte",
+    "source": "<button>Save</button>\n<select><option>One</option></select>\n",
+    "expected": {"frontend.use-shared-select": {"2": 1}}
+  },
+  {
+    "name": "shared-select-implementation",
+    "path": "frontend/src/lib/components/admin/shared/Select.svelte",
+    "source": "<button>Open</button>\n<select><option>One</option></select>\n",
+    "expected": {}
+  },
+  {
+    "name": "frontend-test-support-controls",
+    "path": "frontend/src/lib/Controls.test-support.svelte",
+    "scanned": false,
+    "source": "<button>Save</button>\n<select><option>One</option></select>\n<details><summary>Test</summary></details>\n",
+    "expected": {}
+  },
+  {
+    "name": "svelte-outside-frontend",
+    "path": "website/src/Controls.svelte",
+    "scanned": false,
+    "source": "<button>Save</button>\n<select><option>One</option></select>\n<details><summary>Website</summary></details>\n",
+    "expected": {}
+  },
+  {
+    "name": "non-svelte-frontend-source",
+    "path": "frontend/src/controls.ts",
+    "scanned": false,
+    "source": "export const markup = '<button>Save</button><select></select><details></details>';\n",
+    "expected": {}
+  },
+  {
     "name": "prometheus-outside-infrastructure",
     "path": "api/src/umbod/mcp/metrics/probe.py",
     "source": "from prometheus_client import Counter\nimport prometheus_client as prometheus\nfrom prometheus_client.parser import text_string_to_metric_families\nimport os, prometheus_client\nimport prometheus_client.parser as parser\n",

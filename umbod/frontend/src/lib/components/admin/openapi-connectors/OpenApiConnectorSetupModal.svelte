@@ -97,8 +97,8 @@
           </div>
         {:else}
           <div class="import-tabs" role="group" aria-label="OpenAPI specification source">
-            <button type="button" class:active={state.importMode === 'file'} aria-pressed={state.importMode === 'file'} onclick={() => state.setImportMode('file')}>File</button>
-            <button type="button" class:active={state.importMode === 'url'} aria-pressed={state.importMode === 'url'} onclick={() => state.setImportMode('url')}>HTTPS URL</button>
+            <Button variant="unstyled" type="button" class={{ active: state.importMode === 'file' }} aria-pressed={state.importMode === 'file'} onclick={() => state.setImportMode('file')}>File</Button>
+            <Button variant="unstyled" type="button" class={{ active: state.importMode === 'url' }} aria-pressed={state.importMode === 'url'} onclick={() => state.setImportMode('url')}>HTTPS URL</Button>
           </div>
         {/if}
         {#if state.importMode === 'file'}
@@ -145,7 +145,7 @@
       {/snippet}
       {#snippet actions()}
         {#if state.mode === 'create'}
-          <Button type="button" variant="quiet" disabled={state.submitting || state.setupBlocked} onclick={state.back}>Back</Button>
+          <Button type="button" variant="soft" disabled={state.submitting || state.setupBlocked} onclick={state.back}>Back</Button>
         {:else}
           <LoadingButton label="Cancel" loading={false} variant="secondary" onclick={state.close} />
         {/if}
@@ -158,7 +158,7 @@
             <h3>Add a specification</h3>
             {@render sourceFields()}
             <div class="stage-actions">
-              {#if includesType}<Button type="button" variant="quiet" onclick={backToType}>Back</Button>{/if}
+              {#if includesType}<Button type="button" variant="soft" onclick={backToType}>Back</Button>{/if}
               <LoadingButton type="submit" label="Next" loadingLabel="Reading specification…" loading={state.step === 1 && state.submitting} />
             </div>
           </form>
@@ -175,7 +175,7 @@
             {/if}
             {@render hostnameField()}
             <div class="stage-actions">
-              <Button type="button" variant="quiet" onclick={state.back}>Back</Button>
+              <Button type="button" variant="soft" onclick={state.back}>Back</Button>
               <Button type="submit" disabled={!state.hostnameValid}>Next</Button>
             </div>
           </form>
@@ -207,8 +207,8 @@
   .stage-actions { display: flex; justify-content: space-between; gap: .75rem; padding-top: 1rem; border-top: 1px solid var(--admin-border); }
   .stage-actions > :only-child { margin-inline-start: auto; }
   .import-tabs { border-bottom: 1px solid var(--admin-border-strong); display: flex; gap: 18px; }
-  .import-tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--admin-muted); cursor: pointer; font: inherit; font-size: 13px; font-weight: 650; padding: 0 2px 8px; }
-  .import-tabs button.active { border-bottom-color: var(--admin-ink); color: var(--admin-ink); }
+  .import-tabs > :global(button) { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--admin-muted); cursor: pointer; font: inherit; font-size: 13px; font-weight: 650; padding: 0 2px 8px; }
+  .import-tabs > :global(button.active) { border-bottom-color: var(--admin-ink); color: var(--admin-ink); }
   .helper { color: var(--admin-muted); font-size: 13px; margin: -0.5rem 0 0; }
   .error { background: var(--admin-danger-bg); border-radius: 8px; color: var(--admin-danger-text); font-size: 13px; margin: 0; padding: 9px 10px; }
 </style>

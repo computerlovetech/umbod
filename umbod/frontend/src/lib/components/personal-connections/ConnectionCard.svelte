@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import Disclosure from '#lib/components/shared/Disclosure.svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
   import type { PersonalConnectionController } from '#lib/personal-connections/state/port.js';
   import { PersonalAccessViewState } from '#lib/personal-connections/state/access-view-state.svelte.js';
@@ -29,24 +30,26 @@
   </header>
   {#if !embedded}<p class="connector-description">{state.selection.capability_description}</p>{/if}
   <p class="status-description">{view.status.description}</p>
-  <details class="connection-details">
-    <summary>Connection details</summary>
-    <dl>
-      <div><dt>Personal access</dt><dd>{state.selection.enabled ? 'Enabled' : 'Disabled'}</dd></div>
-      <div><dt>Authorization</dt><dd>{state.selection.has_authorization ? 'Authorization saved' : 'No authorization saved'}</dd></div>
-      <div><dt>Authorization status</dt><dd>{view.healthLabel}</dd></div>
-      <div><dt>Tools</dt><dd>{state.selection.runtime_available ? 'Tools available' : 'Not available'}</dd></div>
-      {#if state.healthPhase === 'ready' && state.health && (state.health.state === 'authorized' || state.health.state === 'expired')}
-        <div><dt>Expires</dt><dd><time datetime={state.health.expires_at}>{new Date(state.health.expires_at).toLocaleString()}</time></dd></div>
-      {/if}
-      {#if state.healthCheckedAt}<div><dt>Last checked</dt><dd>{state.healthCheckedAt}</dd></div>{/if}
-      {#if state.attempt}
-        <div><dt>Sign-in status</dt><dd>{state.attempt.status}</dd></div>
-        <div><dt>Sign-in expires</dt><dd><time datetime={state.attempt.expires_at}>{new Date(state.attempt.expires_at).toLocaleString()}</time></dd></div>
-      {/if}
-    </dl>
-    <p class="hint">Authorization checks use saved records, not a live provider connection test.</p>
-  </details>
+  <div class="connection-details">
+    <Disclosure --disclosure-trigger-width="fit-content" --disclosure-trigger-hover-color="var(--admin-accent)">
+      {#snippet label()}<span class="connection-details-label">Connection details</span>{/snippet}
+      <dl>
+        <div><dt>Personal access</dt><dd>{state.selection.enabled ? 'Enabled' : 'Disabled'}</dd></div>
+        <div><dt>Authorization</dt><dd>{state.selection.has_authorization ? 'Authorization saved' : 'No authorization saved'}</dd></div>
+        <div><dt>Authorization status</dt><dd>{view.healthLabel}</dd></div>
+        <div><dt>Tools</dt><dd>{state.selection.runtime_available ? 'Tools available' : 'Not available'}</dd></div>
+        {#if state.healthPhase === 'ready' && state.health && (state.health.state === 'authorized' || state.health.state === 'expired')}
+          <div><dt>Expires</dt><dd><time datetime={state.health.expires_at}>{new Date(state.health.expires_at).toLocaleString()}</time></dd></div>
+        {/if}
+        {#if state.healthCheckedAt}<div><dt>Last checked</dt><dd>{state.healthCheckedAt}</dd></div>{/if}
+        {#if state.attempt}
+          <div><dt>Sign-in status</dt><dd>{state.attempt.status}</dd></div>
+          <div><dt>Sign-in expires</dt><dd><time datetime={state.attempt.expires_at}>{new Date(state.attempt.expires_at).toLocaleString()}</time></dd></div>
+        {/if}
+      </dl>
+      <p class="hint">Authorization checks use saved records, not a live provider connection test.</p>
+    </Disclosure>
+  </div>
   {#if state.confirmingDisconnect}
     <section class="confirmation" aria-label="Confirm disconnect">
       <h5>Disconnect personal access?</h5>
@@ -72,15 +75,13 @@
   .header-status { margin-left: auto; }
   p { line-height: 1.6; }
   .status-description, .connector-description { color: var(--admin-muted); font-size: 0.85rem; margin: 0.75rem 0 0; }
-  .connection-details { border-top: 1px solid var(--admin-border); font-size: 0.8rem; margin-top: 1rem; padding-top: 0.85rem; }
-  summary { color: var(--admin-muted); cursor: pointer; font-weight: 600; width: fit-content; }
-  summary:hover { color: var(--admin-accent); }
-  dl { display: grid; gap: 0.6rem; margin: 1rem 0 0; }
+  .connection-details { border-top: 1px solid var(--admin-border); color: var(--admin-muted); font-size: 0.8rem; margin-top: 1rem; padding-top: 0.85rem; }
+  .connection-details-label { font-weight: 600; }
+  dl { color: var(--admin-ink); display: grid; gap: 0.6rem; margin: 1rem 0 0; }
   dl div { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; justify-content: space-between; }
   dt { color: var(--admin-muted); }
   dd { margin: 0; text-align: right; }
   .hint { color: var(--admin-muted); font-size: 0.75rem; margin: 0.85rem 0 0; }
-  summary:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
   .confirmation { background: var(--admin-danger-bg); border: 1px solid var(--admin-danger-border); border-radius: var(--admin-radius); color: var(--admin-danger-text); margin-top: 1rem; padding: 1rem; }
   h5 { font-size: 0.85rem; margin: 0; }
   .confirmation p { font-size: 0.8rem; margin: 0.5rem 0 0; }

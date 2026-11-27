@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy, type Snippet } from 'svelte';
   import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
+  import Disclosure from '#lib/components/shared/Disclosure.svelte';
   import { reportStatuses, type ReportsState } from '#lib/agent-behaviour/state/reports-state.svelte.js';
 
   let { state, reportId, listHref, actions }: {
@@ -53,16 +54,19 @@
               <ul class="evidence">{#each assessment.evidence as evidence, index (index)}<li class="prose">{evidence}</li>{/each}</ul>
             {/if}
             {#if pattern}
-              <details class="criteria"><summary>View original criteria</summary>
-                <p class="prose">{pattern.description}</p>
-                <dl>
-                  {#if pattern.assessment_prompt !== pattern.description}<dt>Assessment prompt</dt><dd class="prose">{pattern.assessment_prompt}</dd>{/if}
-                  <dt>Inclusion criteria</dt><dd class="prose">{pattern.inclusion_criteria || 'None'}</dd>
-                  <dt>Exclusion criteria</dt><dd class="prose">{pattern.exclusion_criteria || 'None'}</dd>
-                  <dt>Polarity</dt><dd>{pattern.polarity}</dd>
-                  <dt>Categories</dt><dd>{pattern.categories.join(', ') || 'None'}</dd>
-                </dl>
-              </details>
+              <div class="criteria">
+                <Disclosure>
+                  {#snippet label()}<span class="disclosure-label">View original criteria</span>{/snippet}
+                  <p class="prose">{pattern.description}</p>
+                  <dl>
+                    {#if pattern.assessment_prompt !== pattern.description}<dt>Assessment prompt</dt><dd class="prose">{pattern.assessment_prompt}</dd>{/if}
+                    <dt>Inclusion criteria</dt><dd class="prose">{pattern.inclusion_criteria || 'None'}</dd>
+                    <dt>Exclusion criteria</dt><dd class="prose">{pattern.exclusion_criteria || 'None'}</dd>
+                    <dt>Polarity</dt><dd>{pattern.polarity}</dd>
+                    <dt>Categories</dt><dd>{pattern.categories.join(', ') || 'None'}</dd>
+                  </dl>
+                </Disclosure>
+              </div>
             {/if}
           </article>
         {/each}
@@ -75,22 +79,28 @@
         <div><dt>Expires</dt><dd><DateTimeView value={report.expires_at} /></dd></div>
         <div><dt>Original configuration revision</dt><dd>{report.instructions.configuration_revision}</dd></div>
       </dl>
-      <details>
-        <summary>Caller and authentication</summary>
-        <dl class="technical-facts">
-          <div><dt>Caller</dt><dd>{'subject' in report.caller.subject ? report.caller.subject.subject : 'Unavailable'}</dd></div>
-          <div><dt>Issuer</dt><dd>{'issuer' in report.caller.subject && 'value' in report.caller.subject.issuer ? report.caller.subject.issuer.value : 'Unavailable'}</dd></div>
-          <div><dt>Authentication</dt><dd>{report.caller.authentication}</dd></div>
-        </dl>
-      </details>
-      <details>
-        <summary>Original collection instructions</summary>
-        <p class="prose technical-text">{report.instructions.playbook.collection_instructions}</p>
-      </details>
-      <details>
-        <summary>Original reporting guidance</summary>
-        <p class="prose technical-text">{report.instructions.reporting_guidance}</p>
-      </details>
+      <div class="technical-disclosure">
+        <Disclosure>
+          {#snippet label()}<span class="disclosure-label">Caller and authentication</span>{/snippet}
+          <dl class="technical-facts">
+            <div><dt>Caller</dt><dd>{'subject' in report.caller.subject ? report.caller.subject.subject : 'Unavailable'}</dd></div>
+            <div><dt>Issuer</dt><dd>{'issuer' in report.caller.subject && 'value' in report.caller.subject.issuer ? report.caller.subject.issuer.value : 'Unavailable'}</dd></div>
+            <div><dt>Authentication</dt><dd>{report.caller.authentication}</dd></div>
+          </dl>
+        </Disclosure>
+      </div>
+      <div class="technical-disclosure">
+        <Disclosure>
+          {#snippet label()}<span class="disclosure-label">Original collection instructions</span>{/snippet}
+          <p class="prose technical-text">{report.instructions.playbook.collection_instructions}</p>
+        </Disclosure>
+      </div>
+      <div class="technical-disclosure">
+        <Disclosure>
+          {#snippet label()}<span class="disclosure-label">Original reporting guidance</span>{/snippet}
+          <p class="prose technical-text">{report.instructions.reporting_guidance}</p>
+        </Disclosure>
+      </div>
     </section>
     {#if actions}<footer>{@render actions()}</footer>{/if}
   </section>
@@ -122,8 +132,9 @@
   .assessment-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
   .prose { white-space: pre-wrap; margin-top: .45rem; }
   .evidence { margin: .25rem 0 0; padding-left: 1.15rem; }
-  details { margin-top: .75rem; border-top: 1px solid var(--admin-border); padding-top: .6rem; }
-  summary { cursor: pointer; font-weight: 600; }
+  .criteria, .technical-disclosure { margin-top: .75rem; }
+  .criteria { border-top: 1px solid var(--admin-border); padding-top: .6rem; }
+  .disclosure-label { font-weight: 600; }
   .criteria, .technical { font-size: .875rem; }
   dt { font-weight: 600; margin-top: .5rem; } dd { margin: .2rem 0; }
   .technical { margin-top: 1rem; border-top: 1px solid var(--admin-border); padding-top: 1rem; }
@@ -131,9 +142,8 @@
   .technical-facts dt { font-size: .8rem; color: var(--admin-muted); margin: 0; }
   .technical-facts dd { margin-bottom: 0; }
   .technical-overview { margin-top: .65rem; padding: .75rem 1rem; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 8px; }
-  .technical details { padding: 0; border: 1px solid var(--admin-border); border-radius: 8px; }
-  .technical summary { padding: .6rem .85rem; }
-  .technical details > :is(dl, p) { margin: 0 .85rem .85rem; }
+  .technical-disclosure { --disclosure-trigger-padding: .6rem .85rem; --disclosure-trigger-radius: 8px; border: 1px solid var(--admin-border); border-radius: 8px; }
+  .technical-disclosure :is(.technical-facts, .technical-text) { margin: 0 .85rem .85rem; }
   .technical-text { max-inline-size: 68ch; line-height: 1.6; }
   footer { margin-top: 1rem; }
   @container (max-width: 40rem) {

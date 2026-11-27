@@ -101,12 +101,12 @@
         {/each}
         {#if logout}
           <div class={accountLinks.length > 0 ? 'account-menu-divider' : undefined}>
-            <button type="button" role="menuitem" tabindex="-1" disabled={state.loggingOut} onclick={() => logout && state.logout(logout)}>
+            <Button variant="unstyled" type="button" role="menuitem" tabindex={-1} disabled={state.loggingOut} onclick={() => logout && state.logout(logout)}>
               <span class="account-menu-item logout-item">
                 <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m10 17 5-5-5-5m5 5H3m10-8h7v16h-7" /></svg>
                 Log out
               </span>
-            </button>
+            </Button>
           </div>
         {/if}
       {/snippet}

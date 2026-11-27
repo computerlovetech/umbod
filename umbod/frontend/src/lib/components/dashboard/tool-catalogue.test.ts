@@ -29,7 +29,7 @@ describe('read-only user tool cards', () => {
     expect(body).not.toContain('Save tools');
     expect(body).toContain('Full input schema (read-only)');
     expect(body).toContain('readonly');
-    expect(body).not.toMatch(/<details[^>]*\sopen/);
+    expect(body).toContain('aria-label="Toggle parameter schema details"');
   });
 
   test('shows output absence rather than inventing a schema', (): void => {
@@ -59,20 +59,20 @@ describe('shared compact tool descriptions', () => {
     expect(body).toContain('aria-hidden="true"');
     expect(body).toContain('class="preview');
     expect(body).toContain('Show full description');
-    expect(body).toContain('Hide full description');
+    expect(body).not.toContain('Hide full description');
     expect(body).toContain(description);
-    expect(body).not.toMatch(/<details[^>]*\sopen/);
+    expect(body).toContain('aria-expanded="false"');
   });
 
   test('short descriptions do not add unnecessary disclosure controls', (): void => {
     const body = render(ToolDescription, { props: { description: 'List all meetings.' } }).body;
     expect(body).toContain('List all meetings.');
-    expect(body).not.toContain('<details');
+    expect(body).not.toContain('<button');
   });
 
   test('empty descriptions do not render placeholders', (): void => {
     const body = render(ToolDescription, { props: { description: '' } }).body;
     expect(body).not.toContain('<p');
-    expect(body).not.toContain('<details');
+    expect(body).not.toContain('<button');
   });
 });

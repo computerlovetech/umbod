@@ -179,21 +179,23 @@ describe('personal MCP editing from the action menu', (): void => {
     expect(dialog.querySelector('small')?.textContent).toBe('Personal MCP connector');
     const notice = document.getElementById(dialog.getAttribute('aria-describedby') ?? '');
     expect(notice).not.toBeNull();
-    expect(notice?.closest('details')).toBeNull();
     expect(notice?.querySelector('strong')?.textContent).toBe('This changes who can use it');
     expect(notice?.querySelector('p')?.textContent).toBe('Permitted groups can use all its tools, including future tools after discovery.');
-    const details = dialog.querySelector('details');
-    if (!details) throw new Error('Access details are missing');
-    expect(details.open).toBe(false);
-    const summary = details.querySelector('summary');
-    if (!summary) throw new Error('Access details summary is missing');
-    expect(summary.textContent).toBe('Access & setup details');
-    summary.click();
-    await tick();
-    expect(details.open).toBe(true);
-    expect(details.querySelector('p')?.textContent).toBe('This does not make the connector available to everyone. Account authorization, owner enablement, and tool discovery remain separate steps.');
+    const disclosure = button('Access & setup details', dialog);
+    const details = document.getElementById(disclosure.getAttribute('aria-controls') ?? '');
+    if (!details) throw new Error('Access details panel is missing');
+    expect(details.contains(notice)).toBe(false);
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+    expect(details.hidden).toBe(true);
+    const explanation = details.querySelector('p');
+    expect(explanation?.textContent).toBe('This does not make the connector available to everyone. Account authorization, owner enablement, and tool discovery remain separate steps.');
     expect(dialog.querySelector('[data-dialog-cancel]')).toBe(button('Cancel', dialog));
     expect(document.activeElement).toBe(button('Cancel', dialog));
+    disclosure.click();
+    await tick();
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+    expect(details.hidden).toBe(false);
+    expect(details.querySelector('p')).toBe(explanation);
     expect(api.publish).not.toHaveBeenCalled();
   });
 
@@ -234,7 +236,7 @@ describe('personal MCP editing from the action menu', (): void => {
     if (!dialog) throw new Error('Mutation confirmation is missing');
     expect(dialog.querySelector('h2')?.textContent).toBe(`${action} Personal server?`);
     expect(dialog.textContent).toContain(message);
-    expect(dialog.querySelector('details')).toBeNull();
+    expect(dialog.querySelector('details, button[aria-expanded]')).toBeNull();
     expect(button(confirm, dialog).disabled).toBe(false);
     button('Cancel', dialog).click();
     await tick();
@@ -519,6 +521,26 @@ describe('personal MCP editing from the action menu', (): void => {
     expect(replace).not.toHaveBeenCalled();
     expect(document.querySelector('article')?.textContent).toContain('Personal server');
   });
+});
+
+test('Refresh discovery submits the selected shared connector from the action menu', async (): Promise<void> => {
+  renderWorkspace(false);
+  button('Open actions for Grafana').click();
+  await tick();
+
+  const refresh = button('Refresh discovery');
+  const form = refresh.form;
+  if (!form) throw new Error('Expected a discovery refresh form');
+  const submitted = vi.fn<(connectorId: FormDataEntryValue | null, submitter: HTMLElement | null) => void>();
+  form.addEventListener('submit', (event): void => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    submitted(new FormData(form).get('connectorId'), event.submitter);
+  }, { capture: true });
+
+  refresh.click();
+
+  expect(submitted).toHaveBeenCalledExactlyOnceWith('grafana', refresh);
 });
 
 describe('shared MCP publication from the action menu', (): void => {

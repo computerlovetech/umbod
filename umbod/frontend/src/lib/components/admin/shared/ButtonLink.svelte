@@ -17,6 +17,6 @@
   }: Props = $props();
 </script>
 
-<a {...attributes} class={["admin-shared-button", `admin-shared-button--${variant}`, `admin-shared-button--${size}`, className]}>
+<a {...attributes} class={variant === 'unstyled' ? className : ['admin-shared-button', `admin-shared-button--${variant}`, `admin-shared-button--${size}`, className]}>
   {@render children()}
 </a>

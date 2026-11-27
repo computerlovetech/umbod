@@ -17,12 +17,12 @@
       <div class={['folder-row', { selected: folder.selected }]} role="group" aria-label={folder.name}>
         <div class="disclosure">
           {#if folder.expandable || disclosureFocus.isFocused(folder.id)}
-            <button type="button" class="expand-button" aria-label={folder.expandable ? `${folder.expanded ? 'Collapse' : 'Expand'} ${folder.name}` : `No subfolders in ${folder.name}`} aria-expanded={folder.expandable ? folder.expanded : undefined} aria-disabled={!folder.expandable} disabled={state.pending || state.needsReload} onfocus={() => disclosureFocus.focus(folder.id)} onblur={() => disclosureFocus.blur(folder.id)} onclick={() => { if (folder.expandable) void state.destinations.toggle(folder.id); }}>
+            <Button variant="unstyled" type="button" class="expand-button" aria-label={folder.expandable ? `${folder.expanded ? 'Collapse' : 'Expand'} ${folder.name}` : `No subfolders in ${folder.name}`} aria-expanded={folder.expandable ? folder.expanded : undefined} aria-disabled={!folder.expandable} disabled={state.pending || state.needsReload} onfocus={() => disclosureFocus.focus(folder.id)} onblur={() => disclosureFocus.blur(folder.id)} onclick={() => { if (folder.expandable) void state.destinations.toggle(folder.id); }}>
               <svg class={['chevron', { expanded: folder.expanded }]} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-            </button>
+            </Button>
           {/if}
         </div>
-        <button class="folder-button" type="button" aria-label={`Select ${folder.name}`} aria-pressed={folder.selected} disabled={!folder.selectable || state.pending || state.needsReload} onclick={() => { void state.destinations.select(folder.id); }}>
+        <Button variant="unstyled" class="folder-button" type="button" aria-label={`Select ${folder.name}`} aria-pressed={folder.selected} disabled={!folder.selectable || state.pending || state.needsReload} onclick={() => { void state.destinations.select(folder.id); }}>
           <svg class="folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 7V5a1 1 0 0 1 1-1h5l2 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Z" /></svg>
           <span class="folder-name">{folder.name}</span>
           {#if folder.current}
@@ -33,7 +33,7 @@
           {#if folder.selected}
             <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
           {/if}
-        </button>
+        </Button>
       </div>
       {#if folder.expanded}
         {#if folder.phase === 'loading'}
@@ -93,12 +93,12 @@
   .folder-row:hover { background: var(--admin-canvas); }
   .folder-row.selected { background: color-mix(in srgb, var(--admin-accent) 10%, var(--admin-panel)); border-color: var(--admin-accent); }
   .disclosure { display: flex; align-items: center; flex: 0 0 2rem; }
-  .expand-button, .folder-button { display: flex; align-items: center; background: transparent; color: var(--admin-ink); border: 0; border-radius: var(--admin-radius); font: inherit; cursor: pointer; text-align: start; }
-  .expand-button { justify-content: center; width: 2rem; min-height: 2.75rem; padding: 0; }
-  .expand-button:hover:not(:disabled) { background: color-mix(in srgb, var(--admin-ink) 8%, transparent); }
-  .folder-button { gap: 0.65rem; flex: 1; min-width: 0; min-height: 2.75rem; padding: 0.5rem 0.65rem 0.5rem 0.15rem; }
-  .folder-button:disabled { cursor: default; color: var(--admin-muted); }
-  .expand-button:disabled, .expand-button[aria-disabled='true'] { cursor: default; opacity: 0.6; }
+  .folder-row :global(button.expand-button), .folder-row :global(button.folder-button) { display: flex; align-items: center; background: transparent; color: var(--admin-ink); border: 0; border-radius: var(--admin-radius); font: inherit; cursor: pointer; text-align: start; }
+  .folder-row :global(button.expand-button) { justify-content: center; width: 2rem; min-height: 2.75rem; padding: 0; }
+  .folder-row :global(button.expand-button:hover:not(:disabled)) { background: color-mix(in srgb, var(--admin-ink) 8%, transparent); }
+  .folder-row :global(button.folder-button) { gap: 0.65rem; flex: 1; min-width: 0; min-height: 2.75rem; padding: 0.5rem 0.65rem 0.5rem 0.15rem; }
+  .folder-row :global(button.folder-button:disabled) { cursor: default; color: var(--admin-muted); }
+  .folder-row :global(button.expand-button:disabled), .folder-row :global(button.expand-button[aria-disabled='true']) { cursor: default; opacity: 0.6; }
   .folder-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .badge { flex-shrink: 0; padding: 0.1rem 0.4rem; background: var(--admin-canvas); border: 1px solid var(--admin-border); border-radius: 999px; color: var(--admin-muted); font-size: 0.7rem; }
   svg { width: 1.15rem; height: 1.15rem; flex-shrink: 0; }
@@ -108,7 +108,7 @@
   .check { color: var(--admin-accent); }
   .branch-message { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem 0.5rem 2.25rem; color: var(--admin-muted); }
   [role='alert'] { color: var(--admin-danger); }
-  :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: -2px; }
+  :focus-visible, .folder-row :global(button.expand-button:focus-visible), .folder-row :global(button.folder-button:focus-visible) { outline: 2px solid var(--admin-accent); outline-offset: -2px; }
   @media (max-width: 480px) {
     .dialog-body, .actions { padding-inline: 1rem; }
     .children { margin-inline-start: 0.65rem; }

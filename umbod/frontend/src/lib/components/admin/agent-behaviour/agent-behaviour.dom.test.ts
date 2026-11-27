@@ -42,14 +42,17 @@ test('inspects a pattern inline and keeps its labelled actions independent of th
     originalToggle!.click(); flushSync();
     expect(findButton(target, 'Save changes')).toBeUndefined();
     expect(findButton(target, 'Discard changes')).toBeUndefined();
-    const pattern = row?.querySelector('details');
-    expect(pattern?.open).toBe(false);
-    const disclosure = pattern!.querySelector('summary')!;
-    expect(disclosure.textContent?.trim()).toBe('Missing context');
+    const disclosure = button(row!, 'Missing context');
+    const pattern = document.getElementById(disclosure.getAttribute('aria-controls') ?? '');
+    if (!pattern) throw new Error('Pattern disclosure panel is missing');
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+    expect(pattern.hidden).toBe(true);
+    expect(pattern.textContent).toContain('Notice missing facts');
     disclosure.click(); flushSync();
-    expect(pattern!.open).toBe(true);
-    expect(pattern!.querySelectorAll('summary')).toHaveLength(1);
-    const facts = new Map(Array.from(pattern!.querySelectorAll('dt'), (term): [string, Element] => [term.textContent!.trim(), term.nextElementSibling!]));
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+    expect(pattern.hidden).toBe(false);
+    expect(row!.querySelectorAll('button[aria-expanded]')).toHaveLength(1);
+    const facts = new Map(Array.from(pattern.querySelectorAll('dt'), (term): [string, Element] => [term.textContent!.trim(), term.nextElementSibling!]));
     expect(facts.get('When it counts')?.textContent).toBe('Required facts are missing');
     expect(facts.get('When it does not count')?.textContent).toBe('The facts are already available');
     expect(facts.get('Assessment prompt')?.textContent).toBe('Assess missing facts');
@@ -74,7 +77,8 @@ test('inspects a pattern inline and keeps its labelled actions independent of th
     const toggle = row!.querySelector<HTMLInputElement>('input[type="checkbox"][aria-label="Enable Edited context"]')!;
     toggle.click(); flushSync();
     expect(toggle.checked).toBe(false);
-    expect(pattern!.open).toBe(true);
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+    expect(pattern.hidden).toBe(false);
     button(target, 'Discard changes').click(); flushSync(); expect(target.textContent).toContain('Missing context'); expect(state.dirty).toBe(false);
     const deleteButton = button(target, 'Delete Missing context');
     deleteButton.focus();
@@ -84,7 +88,7 @@ test('inspects a pattern inline and keeps its labelled actions independent of th
     const discard = button(target, 'Discard changes');
     await vi.waitFor((): void => expect(document.activeElement).toBe(discard));
     discard.click(); flushSync();
-    expect(target.querySelector('li summary')?.textContent?.trim()).toBe('Missing context');
+    expect(target.querySelector('li button[aria-expanded="false"]')?.textContent?.trim()).toBe('Missing context');
     expect(findButton(target, 'Save changes')).toBeUndefined();
     expect(findButton(target, 'Discard changes')).toBeUndefined();
   } finally { await unmount(component); target.remove(); state.dispose(); }
@@ -95,6 +99,24 @@ function reportingFixture(): InMemoryAgentBehaviourApi {
   api.current = { revision: 6, reporting_enabled: true, patterns: [{ id: 'pattern', name: 'Missing context', description: 'Notice missing facts', assessment_prompt: 'Assess missing facts', inclusion_criteria: '', exclusion_criteria: '', categories: [], polarity: 'neutral', enabled: true }], playbooks: [{ id: 'review', name: 'Behaviour review', collection_instructions: 'Collect facts', pattern_ids: ['pattern'], enabled: true }, { id: 'secondary', name: 'Secondary review', collection_instructions: 'Collect secondary facts', pattern_ids: ['pattern'], enabled: false }] };
   return api;
 }
+
+test.each(['Missing context', 'Neighbor pattern'] as const)('deleting %s focuses the remaining pattern disclosure', async (name): Promise<void> => {
+  const api = reportingFixture();
+  api.current.patterns.push({ ...api.current.patterns[0], id: 'neighbor', name: 'Neighbor pattern' });
+  const state = new ConfigurationState(api.configuration, vi.fn());
+  await state.load();
+  const target = document.createElement('div');
+  document.body.append(target);
+  const component = mount(ConfigurationEditor, { target, props: { state } });
+  try {
+    const neighbor = button(target, name === 'Missing context' ? 'Neighbor pattern' : 'Missing context');
+    const remove = button(target, `Delete ${name}`);
+    remove.focus();
+    remove.click();
+    await vi.waitFor((): void => expect(document.activeElement).toBe(neighbor));
+    expect(neighbor.getAttribute('aria-expanded')).toBe('false');
+  } finally { await unmount(component); target.remove(); state.dispose(); }
+});
 
 test('uses one reporting switch and preserves collection instructions and memberships when turned off and on', async (): Promise<void> => {
   const api = reportingFixture();
@@ -266,7 +288,7 @@ test.each(['Close', 'Escape'])('dismisses an unsaved new pattern with %s without
     const name = dialog.querySelector<HTMLInputElement>('#pattern-name')!;
     name.value = 'Abandoned pattern'; name.dispatchEvent(new Event('input', { bubbles: true })); flushSync();
     expect(dialog.querySelector('h2')?.textContent).toBe('New pattern');
-    expect(target.querySelector('#diagnostic-patterns-title')?.closest('section')?.querySelector('summary')).toBeNull();
+    expect(target.querySelector('#diagnostic-patterns-title')?.closest('section')?.querySelector('li button[aria-expanded]')).toBeNull();
     expect(target.textContent).not.toContain('Unsaved changes');
     if (dismissal === 'Close') button(dialog, 'Close').click();
     else dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
@@ -322,7 +344,7 @@ test('adds and removes category tags without publishing the pattern', async (): 
     enterTag('Review notes');
     save.click(); flushSync();
     expect(target.querySelector('dialog [role="status"]')?.textContent).toContain('Add a name');
-    expect(target.querySelector('#diagnostic-patterns-title')?.closest('section')?.querySelector('summary')).toBeNull();
+    expect(target.querySelector('#diagnostic-patterns-title')?.closest('section')?.querySelector('li button[aria-expanded]')).toBeNull();
     for (const [selector, value] of [['#pattern-name', 'Tool context'], ['#pattern-description', 'Notice missing tool context']]) {
       const field = target.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector);
       expect(field).not.toBeNull();
@@ -332,7 +354,7 @@ test('adds and removes category tags without publishing the pattern', async (): 
     flushSync();
     save.click();
     await vi.waitFor((): void => expect(target.querySelector('dialog')).toBeNull());
-    expect(target.querySelector('summary')?.textContent?.trim()).toBe('Tool context');
+    expect(target.querySelector('li button[aria-expanded="false"]')?.textContent?.trim()).toBe('Tool context');
     expect(button(target, 'Save changes').disabled).toBe(false);
     button(target, 'Edit Tool context').click(); flushSync();
     expect(tags()).toEqual(['tools', 'review-notes']);
@@ -408,7 +430,7 @@ test('edits pattern polarity through the shared dropdown inside the pattern dial
   const target = document.createElement('div'); document.body.append(target);
   const component = mount(ConfigurationEditor, { target, props: { state } }); flushSync();
   try {
-    expect(target.querySelector('dialog details')).toBeNull();
+    expect(target.querySelector('dialog :is(details, button[aria-expanded]:not([role="combobox"]))')).toBeNull();
     expect(target.querySelector('select')).toBeNull();
     const control = target.querySelector<HTMLButtonElement>('[role="combobox"]')!;
     expect(target.querySelector(`label[for="${control.id}"]`)?.textContent).toBe('Polarity');
@@ -454,7 +476,6 @@ test('renders original report snapshots and evidence only as escaped text', asyn
   try {
     await vi.waitFor((): void => expect(target.querySelector('h2')?.textContent).toBe('Original review'));
     expect(target.querySelector('dialog')).toBeNull();
-    expect(target.querySelector('details[open]')).toBeNull();
     expect(target.querySelector('img')).toBeNull();
     expect(target.textContent).toContain('<img src=x onerror=alert(1)>');
     expect(target.textContent).toContain('Not independently verified');
@@ -464,19 +485,39 @@ test('renders original report snapshots and evidence only as escaped text', asyn
     expect(links).toEqual(['#pattern-first', '#pattern-third', '#pattern-second']);
     expect(links.map((link) => target.querySelector(`article${link}`)?.getAttribute('data-status'))).toEqual(['observed', 'not_assessed', 'not_observed']);
     expect(target.querySelector('[aria-label="Assessment summary"]')?.textContent).toContain('1 not assessed');
-    expect(target.textContent).toContain('Original inclusion');
-    const technical = target.querySelector('section[aria-labelledby="technical-heading"]');
-    const overview = technical?.querySelector(':scope > dl');
+    const technical = target.querySelector<HTMLElement>('section[aria-labelledby="technical-heading"]');
+    if (!technical) throw new Error('Missing technical details');
+    const overview = technical.querySelector(':scope > dl');
     expect(Array.from(overview?.querySelectorAll('dt') ?? [], (label): string | null => label.textContent)).toEqual([
       'Report ID', 'Expires', 'Original configuration revision',
     ]);
     expect(overview?.textContent).toContain(api.rows[0].report_id);
-    const disclosures = Array.from(technical?.querySelectorAll('details') ?? []);
-    expect(disclosures.map((detail): string | null => detail.querySelector('summary')?.textContent ?? null)).toEqual([
+    const disclosures = Array.from(target.querySelectorAll<HTMLButtonElement>('button[aria-controls]'));
+    expect(disclosures.map((trigger): string | undefined => trigger.textContent?.trim())).toEqual([
+      'View original criteria', 'View original criteria', 'View original criteria',
       'Caller and authentication', 'Original collection instructions', 'Original reporting guidance',
     ]);
-    expect(disclosures[0].querySelector('dl')?.textContent).toContain('caller');
-    expect(disclosures[1].querySelector('p')?.textContent).toBe('Original collection instructions');
-    expect(disclosures[2].querySelector('p')?.textContent).toBe('Original guidance');
+    const panels = disclosures.map((trigger): HTMLElement => {
+      const id = trigger.getAttribute('aria-controls');
+      const panel = id && document.getElementById(id);
+      if (!panel) throw new Error('Missing disclosure panel');
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(panel.hidden).toBe(true);
+      return panel;
+    });
+    expect(new Set(panels).size).toBe(disclosures.length);
+    const originalContent = [
+      'Original inclusion', 'Original inclusion', 'Original inclusion',
+      'caller', 'Original collection instructions', 'Original guidance',
+    ];
+    for (const [index, trigger] of disclosures.entries()) {
+      trigger.click(); flushSync();
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(panels[index].textContent).toContain(originalContent[index]);
+      expect(panels.filter((panel): boolean => !panel.hidden)).toEqual([panels[index]]);
+      trigger.click(); flushSync();
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(panels[index].hidden).toBe(true);
+    }
   } finally { await unmount(component); target.remove(); state.dispose(); }
 });

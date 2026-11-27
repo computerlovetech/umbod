@@ -72,23 +72,34 @@ async function render(api: ActivityApi, source: 'harness' | 'mcp' = 'harness'): 
   return activity;
 }
 
+function findButton(label: string): HTMLButtonElement | undefined {
+  return [...document.querySelectorAll('button')].find((item): boolean => item.textContent?.trim() === label);
+}
+
 function button(label: string): HTMLButtonElement {
-  const match = [...document.querySelectorAll('button')].find((item): boolean => item.textContent?.trim() === label);
+  const match = findButton(label);
   if (!match) throw new Error(`Button not found: ${label}`);
   return match;
 }
 
 function text(): string { return document.body.textContent ?? ''; }
 
-function searchDetails(): HTMLDetailsElement {
-  const details = document.querySelector('details');
-  if (!details) throw new Error('Session search disclosure not found');
-  return details;
+function searchPanel(trigger: HTMLButtonElement): HTMLElement {
+  const id = trigger.getAttribute('aria-controls');
+  const panel = id && document.getElementById(id);
+  if (!panel) throw new Error('Session search panel not found');
+  return panel;
+}
+
+function searchInput(): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>('input[type="search"][aria-label="Search sessions"]');
+  if (!input) throw new Error('Session search input not found');
+  return input;
 }
 
 function submitSearch(query: string): void {
-  const input = document.querySelector<HTMLInputElement>('input[type="search"][aria-label="Search sessions"]');
-  if (!input?.form) throw new Error('Session search form not found');
+  const input = searchInput();
+  if (!input.form) throw new Error('Session search form not found');
   input.value = query;
   input.form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, bubbles: true }));
 }
@@ -132,7 +143,7 @@ describe('personal activity dashboard', (): void => {
     chooseSource('mcp');
     expect(text()).toContain('Cancelled');
     expect(text()).not.toContain('Unknown');
-    expect(document.querySelector('details')).toBeNull();
+    expect(findButton('Search session')).toBeUndefined();
     button('30 days').click();
     expect(api.overview).toHaveBeenLastCalledWith(30, expect.any(AbortSignal));
     expect(api.sessions).toHaveBeenCalledTimes(1);
@@ -145,15 +156,17 @@ describe('personal activity dashboard', (): void => {
     const pending = Promise.withResolvers<ActivitySessionReport>();
     api.session.mockReturnValueOnce(pending.promise);
     await render(api);
-    const details = searchDetails();
-    const summary = details.querySelector('summary');
+    const trigger = button('Search session');
+    const panel = searchPanel(trigger);
     const metrics = document.querySelector('[aria-label="Tool call outcomes"]');
-    if (!summary || !metrics) throw new Error('Session search or Harness metrics not found');
-    expect(summary.textContent).toBe('Search session');
-    expect(details.open).toBe(false);
-    summary.click();
-    expect(details.open).toBe(true);
-    expect(details.compareDocumentPosition(metrics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    if (!metrics) throw new Error('Harness metrics not found');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(panel.hidden).toBe(true);
+    trigger.click();
+    flushSync();
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(panel.hidden).toBe(false);
+    expect(panel.compareDocumentPosition(metrics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const cards = sessionCards();
     expect(cards).toHaveLength(2);
     expect(cards[0].textContent).toContain('first/path');
@@ -189,6 +202,8 @@ describe('personal activity dashboard', (): void => {
     api.session.mockReturnValueOnce(pending.promise);
     await render(api);
     expect(text()).toContain('Overview tool');
+    button('Search session').click();
+    flushSync();
     sessionCards()[0].click();
     flushSync();
     expect(document.querySelector('section[aria-label="Session statistics"]')?.getAttribute('aria-busy')).toBe('true');
@@ -213,20 +228,26 @@ describe('personal activity dashboard', (): void => {
     expect(text()).not.toContain('Overview tool');
   });
 
-  it('preserves the period, query, loaded pages and collapsed picker when returning to the overview', async (): Promise<void> => {
+  it('preserves the period, draft, loaded pages and collapsed picker when returning to the overview', async (): Promise<void> => {
     const api = activityApi();
     await render(api);
     button('30 days').click();
     await vi.waitFor(() => expect(sessionCards()).toHaveLength(2));
+    const trigger = button('Search session');
+    const panel = searchPanel(trigger);
+    trigger.click();
+    flushSync();
     submitSearch('codex');
     await vi.waitFor(() => expect(sessionCards()).toHaveLength(2));
     sessionCards()[0].click();
     await vi.waitFor(() => expect(text()).toContain('Failed tools'));
     button('Load more sessions').click();
     await vi.waitFor(() => expect(sessionCards()).toHaveLength(3));
-    const details = searchDetails();
-    details.open = false;
+    const input = searchInput();
+    input.value = 'Unsubmitted draft';
+    trigger.click();
     flushSync();
+    expect(panel.hidden).toBe(true);
     expect(text()).toContain('Failed tools');
     expect(sessionCards()[0].getAttribute('aria-pressed')).toBe('true');
 
@@ -235,9 +256,14 @@ describe('personal activity dashboard', (): void => {
     expect(text()).toContain('Overview tool');
     expect(document.querySelector('[aria-label="Session statistics"]')).toBeNull();
     expect(button('30 days').getAttribute('aria-pressed')).toBe('true');
-    expect(searchDetails()).toBe(details);
-    expect(details.open).toBe(false);
-    expect(details.querySelector('input')?.value).toBe('codex');
+    expect(button('Search session')).toBe(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(panel.hidden).toBe(true);
+    trigger.click();
+    flushSync();
+    expect(panel.hidden).toBe(false);
+    expect(searchInput()).toBe(input);
+    expect(input.value).toBe('Unsubmitted draft');
     expect(sessionCards()).toHaveLength(3);
     expect(sessionCards()[0].getAttribute('aria-pressed')).toBe('false');
     expect(api.overview).toHaveBeenCalledTimes(2);
@@ -249,6 +275,8 @@ describe('personal activity dashboard', (): void => {
     const pending = Promise.withResolvers<ActivitySessionReport>();
     api.session.mockReturnValueOnce(pending.promise);
     await render(api);
+    button('Search session').click();
+    flushSync();
     sessionCards()[0].click();
     flushSync();
     const signal = api.session.mock.lastCall?.[1];
@@ -256,7 +284,7 @@ describe('personal activity dashboard', (): void => {
     expect(signal?.aborted).toBe(true);
     expect(text()).toContain('Cancelled');
     expect(button('7 days').getAttribute('aria-pressed')).toBe('true');
-    expect(document.querySelector('details')).toBeNull();
+    expect(findButton('Search session')).toBeUndefined();
     pending.resolve(report);
     await pending.promise;
     chooseSource('harness');

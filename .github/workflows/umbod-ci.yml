@@ -111,6 +111,8 @@ jobs:
           cache-dependency-glob: umbod/uv.lock
       - name: Scan application sources
         run: bash scripts/run_semgrep.sh
+      - name: Scan for native frontend buttons
+        run: bash scripts/run_semgrep.sh --frontend-advisory
 
   sdk-tests:
     needs: changes

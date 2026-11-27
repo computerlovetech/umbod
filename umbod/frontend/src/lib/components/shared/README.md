@@ -22,6 +22,10 @@ description: "Actor-independent presentation and interaction mechanics."
 - [action-menu-state.svelte.ts](./action-menu-state.svelte.ts) — Shared keyboard focus, dismissal and viewport positioning mechanics.
 - [action-menu.test.ts](./action-menu.test.ts) — Keyboard movement, focus restoration, outside dismissal and administration compatibility tests.
 - [action-menu-disabled.dom.test.ts](./action-menu-disabled.dom.test.ts) — Disabled native trigger, hidden popup and guarded pointer/keyboard interaction.
+- [Disclosure.svelte](./Disclosure.svelte) — Inline disclosure with retained content, local or caller-controlled expansion, and reduced-motion-aware transitions.
+- [disclosure-state.svelte.ts](./disclosure-state.svelte.ts) — Open/close transitions, change notification and conditional focus restoration.
+- [disclosure.dom.test.ts](./disclosure.dom.test.ts) — Initial state, caller-controlled requests, programmatic control, independent panels, form safety and focus restoration.
+- [Disclosure test support](./disclosure.test-support.svelte.ts) — Parent effect used to test that programmatic control does not subscribe to the disclosure state.
 - [PlusIcon.svelte](./PlusIcon.svelte) — Decorative leading plus for labeled creation buttons.
 - [DateTimeView.svelte](./DateTimeView.svelte) — Date and time display.
 - [ModalShell.svelte](./ModalShell.svelte) — Native modal with a shared heading, close control, guarded dismissal, and initial focus.

@@ -137,7 +137,32 @@
     <span class="connector-meta">MCP · {item.connector.authorization_mode === 'personal' ? 'Personal authorization' : 'Shared authorization'} · {item.connector.authorization_mode === 'shared' ? `${item.connector.health.status} · ` : ''}{item.connector.publication_status}{#if item.connector.authorization_mode === 'personal'}{' · '}<span role="status">{state.personalSetup.sidebarLabel(item.id)}</span>{/if}</span>
    {/snippet}
    {#snippet actions(item)}
-    {#if selected && item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}{#if selected.authorization_mode === 'personal'}<button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.open('personal-edit', event.currentTarget, detailSelected)}>Edit</button><button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.checkConfiguration(event.currentTarget, detailSelected)}>Check configuration</button>{/if}{#if selected.authorization_mode === 'shared'}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem" disabled={state.operations.locked}>Refresh discovery</button></form>{/if}{#if selected.publication_status === 'published' || state.operations.canPublish(selected)}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={() => state.requestPublication(selected)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</button>{/if}{#if selected.authorization_mode === 'personal'}<button role="menuitem" class="danger-text" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</button>{:else}<button role="menuitem" class="danger-text" type="button" disabled={state.operations.locked} onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/if}{/snippet}</AdminSidebarActionMenu>{/if}
+    {#if selected && item.id === selected.connector_id}
+      <AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>
+        {#snippet menu()}
+          {#if selected.authorization_mode === 'personal'}
+            <Button variant="unstyled" class="downstream-mcp-menu-item" role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.open('personal-edit', event.currentTarget, detailSelected)}>Edit</Button>
+            <Button variant="unstyled" class="downstream-mcp-menu-item" role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.checkConfiguration(event.currentTarget, detailSelected)}>Check configuration</Button>
+          {/if}
+          {#if selected.authorization_mode === 'shared'}
+            <Button variant="unstyled" class="downstream-mcp-menu-item" role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</Button>
+            <Button variant="unstyled" class="downstream-mcp-menu-item" role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</Button>
+            <form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}>
+              <input type="hidden" name="connectorId" value={selected.connector_id}/>
+              <Button variant="unstyled" class="downstream-mcp-menu-item" role="menuitem" type="submit" disabled={state.operations.locked}>Refresh discovery</Button>
+            </form>
+          {/if}
+          {#if selected.publication_status === 'published' || state.operations.canPublish(selected)}
+            <Button variant="unstyled" class="downstream-mcp-menu-item" role="menuitem" type="button" disabled={state.operations.locked} onclick={() => state.requestPublication(selected)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</Button>
+          {/if}
+          {#if selected.authorization_mode === 'personal'}
+            <Button variant="unstyled" class="downstream-mcp-menu-item danger-text" role="menuitem" type="button" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</Button>
+          {:else}
+            <Button variant="unstyled" class="downstream-mcp-menu-item danger-text" role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.open('delete', event.currentTarget)}>Delete</Button>
+          {/if}
+        {/snippet}
+      </AdminSidebarActionMenu>
+    {/if}
    {/snippet}
 
  {#snippet detail()}
@@ -223,12 +248,12 @@
 {/if}
 {:else}<p role="alert">Administration access was lost. Sign in again before reloading this page.</p>{/if}
 <style>
-  button:not(:disabled){cursor:pointer}
-  button:disabled{cursor:not-allowed}
+  :global(button.downstream-mcp-menu-item:not(:disabled)) { cursor: pointer; }
+  :global(button.downstream-mcp-menu-item:disabled) { cursor: not-allowed; }
   .tools h3 { color: var(--admin-ink); font-size: 1rem; margin: 0 0 .875rem; }
   .deletion-description { color: var(--admin-muted); font-size: 14px; line-height: 1.55; margin: 1rem 0 1.5rem; }
   .deletion-actions { border-top: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: .7rem; justify-content: flex-end; padding-top: 1rem; }
-  .danger-text[role='menuitem'] { color: var(--admin-danger-text); }
+  :global(.downstream-mcp-menu-item.danger-text[role='menuitem']) { color: var(--admin-danger-text); }
   .feedback { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-muted); font-size: 14px; line-height: 1.55; padding: 1rem; }
   .feedback[role='alert'] { background: var(--admin-danger-bg); border-color: var(--admin-danger-border); color: var(--admin-danger-text); }
   .feedback p { margin: 0 0 .75rem; }

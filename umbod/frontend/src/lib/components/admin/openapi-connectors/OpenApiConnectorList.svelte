@@ -130,8 +130,8 @@
     {#snippet actions(connector)}
       <AdminSidebarActionMenu open={state.view.openMenuConnectorId === connector.id} label={`Open actions for ${connector.name}`} onopenchange={(open) => state.setMenuOpen(connector.id, open)}>
         {#snippet menu()}
-          <button type="button" role="menuitem" onclick={(event) => { state.view.closeMenu(); onconfigure(event, connector); }}>Configure</button>
-          <button type="button" role="menuitem" onclick={() => state.showCapabilityDescription(connector.id)}>Edit capability description</button>
+          <Button variant="unstyled" type="button" role="menuitem" onclick={(event) => { state.view.closeMenu(); onconfigure(event, connector); }}>Configure</Button>
+          <Button variant="unstyled" type="button" role="menuitem" onclick={() => state.showCapabilityDescription(connector.id)}>Edit capability description</Button>
           {#if connector.canPublish || connector.canUnpublish}
             <ConnectorPublicationMenuAction connectorId={connector.id} connectorName={connector.name} action={connector.canPublish ? 'publish' : 'unpublish'} onrequest={requestPublicationConfirmation} />
           {/if}

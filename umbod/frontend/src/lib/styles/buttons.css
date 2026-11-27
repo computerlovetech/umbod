@@ -34,6 +34,11 @@
   color: var(--admin-ink);
 }
 
+.admin-shared-button--soft {
+  background: var(--admin-hover);
+  color: var(--admin-ink);
+}
+
 .admin-shared-button--danger {
   background: var(--admin-danger);
   color: var(--admin-on-action);
@@ -64,6 +69,10 @@
 
 .admin-shared-button--secondary:not(:disabled):hover {
   background: var(--admin-soft);
+  border-color: var(--admin-border-strong);
+}
+
+.admin-shared-button--soft:not(:disabled):hover {
   border-color: var(--admin-border-strong);
 }
 

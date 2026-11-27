@@ -14,6 +14,7 @@ description: Shared and personal MCP workspaces, confirmation-owned mutations, a
 - [downstream-mcp-publication.dom.test.ts](./downstream-mcp-publication.dom.test.ts) — Mounted UI publication, retained filters, cancellation, competing-action locks, errors, and fixture-owned disposal.
 - [MCP controls acceptance tests](../../../acceptance/admin-downstream-mcp-connector-controls.test.ts) — Runtime actor/form presentation and validated-adapter behavior; retained catalogue and page lifecycle wiring checks.
 - [McpEndpointSetupWizard.svelte](./McpEndpointSetupWizard.svelte) — Source selection, registry search, endpoint review, and pre-registration access check.
+- [mcp-endpoint-setup-wizard.dom.test.ts](./mcp-endpoint-setup-wizard.dom.test.ts) — Unverified access disclosure, selection reset, and continuation gating.
 - [mcp-endpoint-setup-state.svelte.ts](./mcp-endpoint-setup-state.svelte.ts) — Wizard navigation, async search and check state, and setup-form handoff.
 - [DownstreamMcpSetupModal.svelte](./DownstreamMcpSetupModal.svelte) — Shared connector creation and configuration.
 - [Personal MCP administration](../personal-mcp-servers/README.md) — Personal registration, policy editing, pre-publication validation and group authorization guidance.

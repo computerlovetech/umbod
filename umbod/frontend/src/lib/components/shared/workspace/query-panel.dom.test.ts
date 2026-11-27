@@ -9,15 +9,15 @@ afterEach(async (): Promise<void> => {
   document.body.replaceChildren();
 });
 
-function renderPanel(onrun: () => Promise<boolean>, pending: boolean = false, onreset: () => void = (): void => {}): HTMLDetailsElement {
+function renderPanel(onrun: () => Promise<boolean>, pending: boolean = false, onreset: () => void = (): void => {}): HTMLButtonElement {
   component = mount(QueryPanel, { target: document.body, props: {
     id: 'test-query', summary: 'Applied query', pending, onrun, onreset,
     children: createRawSnippet(() => ({ render: (): string => '<label>Filter<input name="filter" /></label>' }))
   } });
   flushSync();
-  const panel = document.querySelector('details');
-  expect(panel).not.toBeNull();
-  return panel!;
+  const trigger = document.querySelector<HTMLButtonElement>('button[aria-expanded]');
+  if (!trigger) throw new Error('Query trigger not found');
+  return trigger;
 }
 
 function button(label: string): HTMLButtonElement {
@@ -29,35 +29,37 @@ function button(label: string): HTMLButtonElement {
 test('starts collapsed, describes the applied query and resets without submitting', async (): Promise<void> => {
   const onrun = vi.fn<() => Promise<boolean>>().mockResolvedValue(true);
   const onreset = vi.fn<() => void>();
-  const panel = renderPanel(onrun, false, onreset);
-  expect(panel.open).toBe(false);
-  expect(panel.querySelector('summary')?.textContent).toContain('Applied query');
-  panel.open = true;
+  const trigger = renderPanel(onrun, false, onreset);
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  expect(trigger.textContent).toContain('Applied query');
+  trigger.click();
+  await tick();
   button('Reset').click();
   await tick();
   expect(onreset).toHaveBeenCalledOnce();
   expect(onrun).not.toHaveBeenCalled();
-  expect(panel.open).toBe(true);
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
 });
 
-test.each([true, false])('folds and restores summary focus only after successful submission: %s', async (success: boolean): Promise<void> => {
+test.each([true, false])('folds and restores trigger focus only after successful submission: %s', async (success: boolean): Promise<void> => {
   const onrun = vi.fn<() => Promise<boolean>>().mockResolvedValue(success);
-  const panel = renderPanel(onrun);
-  panel.open = true;
+  const trigger = renderPanel(onrun);
+  trigger.click();
+  await tick();
   const run = button('Run query');
   run.focus();
   run.click();
-  await tick();
-  expect(onrun).toHaveBeenCalledOnce();
-  expect(panel.open).toBe(!success);
-  expect(document.activeElement).toBe(success ? panel.querySelector('summary') : run);
+  await vi.waitFor(() => expect(onrun).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(trigger.getAttribute('aria-expanded')).toBe(String(!success)));
+  expect(document.activeElement).toBe(success ? trigger : run);
 });
 
 test('pending queries prevent repeat submissions and reset', async (): Promise<void> => {
   const onrun = vi.fn<() => Promise<boolean>>().mockResolvedValue(true);
   const onreset = vi.fn<() => void>();
-  const panel = renderPanel(onrun, true, onreset);
-  panel.open = true;
+  const trigger = renderPanel(onrun, true, onreset);
+  trigger.click();
+  await tick();
   expect(button('Run query').disabled).toBe(true);
   expect(button('Reset').disabled).toBe(true);
   document.querySelector('form')!.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));

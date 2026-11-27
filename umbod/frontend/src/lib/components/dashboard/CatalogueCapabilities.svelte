@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import type { CatalogueCapability } from '#lib/dashboard/domain/schemas.js';
   import { CapabilitiesState, capabilityGroups, capabilityGroupLabels } from '#lib/dashboard/state/capabilities-state.svelte.js';
   import CapabilityCatalogGrid from '#lib/components/admin/shared/CapabilityCatalogGrid.svelte';
@@ -15,10 +16,10 @@
   <h3 id={headingId}>Capabilities</h3>
   <nav aria-label="Connector capabilities">
     {#each capabilityGroups as group (group)}
-      <button type="button" class={['capability-tab', { active: state.activeGroup === group }]} aria-pressed={state.activeGroup === group} onclick={() => state.selectGroup(group)}>
+      <Button variant="unstyled" type="button" class={['capability-tab', { active: state.activeGroup === group }]} aria-pressed={state.activeGroup === group} onclick={() => state.selectGroup(group)}>
         <span>{capabilityGroupLabels[group]}</span>
-        <strong>{state.counts[group]}</strong>
-      </button>
+        <strong class={{ active: state.activeGroup === group }}>{state.counts[group]}</strong>
+      </Button>
     {/each}
   </nav>
   <div class="catalogue">
@@ -58,11 +59,11 @@
   .capabilities { border-top: 1px solid var(--admin-border); margin-top: 1.5rem; min-width: 0; padding-top: 1.25rem; }
   h3 { color: var(--admin-ink); font-size: 1rem; margin: 0 0 0.875rem; }
   nav { border-bottom: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: 0.25rem; }
-  .capability-tab { align-items: center; background: transparent; border: 1px solid transparent; border-bottom-width: 3px; border-radius: 7px 7px 0 0; color: var(--admin-muted); cursor: pointer; display: flex; font: inherit; font-size: 0.875rem; font-weight: 650; gap: 0.45rem; margin-bottom: -1px; min-height: 2.75rem; padding: 0.65rem 0.8rem; }
-  .capability-tab:hover { background: var(--admin-sidebar); color: var(--admin-ink); }
-  .capability-tab.active { background: var(--admin-accent-soft); border-color: var(--admin-accent-border); border-bottom-color: var(--admin-accent); color: var(--admin-ink); font-weight: 750; }
+  nav > :global(button.capability-tab) { align-items: center; background: transparent; border: 1px solid transparent; border-bottom-width: 3px; border-radius: 7px 7px 0 0; color: var(--admin-muted); cursor: pointer; display: flex; font: inherit; font-size: 0.875rem; font-weight: 650; gap: 0.45rem; margin-bottom: -1px; min-height: 2.75rem; padding: 0.65rem 0.8rem; }
+  nav > :global(button.capability-tab:hover) { background: var(--admin-sidebar); color: var(--admin-ink); }
+  nav > :global(button.capability-tab.active) { background: var(--admin-accent-soft); border-color: var(--admin-accent-border); border-bottom-color: var(--admin-accent); color: var(--admin-ink); font-weight: 750; }
   strong { background: var(--admin-sidebar); border: 1px solid var(--admin-border); border-radius: 999px; color: inherit; font-size: 0.7rem; min-width: 1.45rem; padding: 0.08rem 0.35rem; text-align: center; }
-  .active strong { background: var(--admin-panel); border-color: var(--admin-accent-border); color: var(--admin-accent); }
+  strong.active { background: var(--admin-panel); border-color: var(--admin-accent-border); color: var(--admin-accent); }
   .catalogue { margin-top: 1rem; min-width: 0; }
   .catalogue-heading { align-items: baseline; display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; justify-content: space-between; margin-bottom: 1rem; }
   h4 { font-size: 1rem; margin: 0; }
@@ -74,5 +75,5 @@
   .capability-heading { align-items: baseline; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: space-between; }
   h5 { font-size: 0.9rem; margin: 0; }
   .capability-heading span { color: var(--admin-muted); font-size: 0.7rem; }
-  button:focus-visible, input:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: -3px; }
+  nav > :global(button.capability-tab:focus-visible), input:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: -3px; }
 </style>

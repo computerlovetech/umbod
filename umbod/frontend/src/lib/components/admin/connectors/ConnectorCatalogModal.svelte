@@ -66,21 +66,21 @@
           />
         {:else}
           <p class="empty" role="alert">This connector configuration could not be loaded.</p>
-          {#if state.mode === 'add'}<button type="button" class="retry-back" onclick={state.clearSelection}>Back</button>{/if}
+          {#if state.mode === 'add'}<Button variant="soft" type="button" class="connector-catalog-retry-back" onclick={state.clearSelection}>Back</Button>{/if}
         {/if}
       {:else if connectors.some((connector) => !connector.isConfigured)}
         <h3>Choose a connector</h3>
         <ul aria-label="Available connectors">
           {#each connectors.filter((connector) => !connector.isConfigured) as connector (connector.id)}
             <li>
-              <button type="button" onclick={() => onselect(connector.id)}>
+              <Button variant="unstyled" type="button" onclick={() => onselect(connector.id)}>
                 <ConnectorIcon label={connector.name} dataUrl={connector.iconDataUrl} />
                 <span class="connector-copy">
                   <strong>{connector.name}</strong>
                   <span>{connector.description}</span>
                 </span>
                 <span class="arrow" aria-hidden="true">→</span>
-              </button>
+              </Button>
             </li>
           {/each}
         </ul>
@@ -88,7 +88,7 @@
         <p class="empty">No connectors are available to add.</p>
       {/if}
       {#if includesType && !selectedConnector}
-        <div class="stage-actions"><Button type="button" variant="quiet" onclick={backToType}>Back</Button></div>
+        <div class="stage-actions"><Button type="button" variant="soft" onclick={backToType}>Back</Button></div>
       {/if}
     {/snippet}
   </ModalShell>
@@ -97,12 +97,12 @@
 <style>
   .empty { color: var(--admin-muted); margin: 1rem 0 0; }
   h3 { margin: 0; font-size: 1.0625rem; letter-spacing: -.02em; }
-  .retry-back { margin-block-start: 1rem; }
+  :global(button.connector-catalog-retry-back) { margin-block-start: 1rem; }
   .stage-actions { margin-block-start: 1rem; padding-block-start: 1rem; border-top: 1px solid var(--admin-border); }
   .arrow { margin-inline-start: auto; color: var(--admin-accent); }
   ul { display: grid; gap: 0.5rem; list-style: none; margin: 1rem 0 0; overflow: auto; padding: 0; }
-  li button { align-items: flex-start; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 16px; cursor: pointer; display: flex; gap: 0.75rem; padding: 0.85rem; text-align: left; width: 100%; }
-  li button:hover, li button:focus-visible { background: var(--admin-accent-soft); border-color: var(--admin-accent); }
+  li > :global(button) { align-items: flex-start; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 16px; cursor: pointer; display: flex; gap: 0.75rem; padding: 0.85rem; text-align: left; width: 100%; }
+  li > :global(button:hover), li > :global(button:focus-visible) { background: var(--admin-accent-soft); border-color: var(--admin-accent); }
   .connector-copy strong { color: var(--admin-ink); }
   .connector-copy { display: grid; gap: 0.3rem; }
   li span { color: var(--admin-muted); font-size: 13px; }

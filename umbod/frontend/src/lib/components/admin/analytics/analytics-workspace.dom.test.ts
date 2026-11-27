@@ -28,18 +28,20 @@ function input(id: string, value: string): void {
   field.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-function panel(): HTMLDetailsElement {
-  const element = document.querySelector('details');
-  expect(element).not.toBeNull();
-  return element!;
+function queryTrigger(): HTMLButtonElement {
+  const trigger = document.querySelector<HTMLButtonElement>('.query-panel button[aria-controls]');
+  if (!trigger) throw new Error('Query trigger not found');
+  return trigger;
+}
+
+function queryExpanded(): boolean {
+  return queryTrigger().getAttribute('aria-expanded') === 'true';
 }
 
 async function openQuery(): Promise<void> {
-  const summary = panel().querySelector('summary');
-  expect(summary).not.toBeNull();
-  summary!.click();
+  queryTrigger().click();
   await tick();
-  expect(panel().open).toBe(true);
+  expect(queryExpanded()).toBe(true);
 }
 
 async function select(label: string, optionLabel: string): Promise<void> {
@@ -83,13 +85,13 @@ describe('analytics query workspace', () => {
     let complete!: (response: LogCountResponse) => void;
     source.handler = (): Promise<LogCountResponse> => new Promise((resolve): void => { complete = resolve; });
     render(source);
-    expect(panel().open).toBe(false);
-    const status = [...document.querySelectorAll('[role="status"]')].find((entry): boolean => !entry.closest('details') && entry.textContent === 'Running query…');
+    expect(queryExpanded()).toBe(false);
+    const status = [...document.querySelectorAll('[role="status"]')].find((entry): boolean => !entry.closest('.query-panel') && entry.textContent === 'Running query…');
     expect(status).toBeDefined();
     expect(document.querySelector('[aria-label="Query results"]')).toBeNull();
     complete({ rows: [], has_more: false });
     await vi.waitFor((): void => expect(document.querySelector('[aria-label="Query results"]')).not.toBeNull());
-    expect(panel().open).toBe(false);
+    expect(queryExpanded()).toBe(false);
     expect(status!.isConnected).toBe(false);
   });
 
@@ -98,7 +100,7 @@ describe('analytics query workspace', () => {
     expect(document.querySelector('h1')).toBeNull();
     expect(document.querySelector('h2')?.textContent).toBe('Log analytics');
     expect(document.querySelector('.insight-heading p')).toBeNull();
-    expect(panel().open).toBe(false);
+    expect(queryExpanded()).toBe(false);
     expect(document.querySelector('.query-summary')?.textContent).toBe('Stored logs · Last 7 days');
     expect(source.reportQueries).toHaveLength(1);
     expect(source.reportQueries[0]).toMatchObject({ time_range: { start: '2026-10-24T12:00:00.000Z', end: '2026-10-31T12:00:00.000Z' }, filters: [], group_by: ['activity_kind', 'source', 'event_name', 'tool_name', 'session_id'] });
@@ -110,7 +112,7 @@ describe('analytics query workspace', () => {
 
   it('shows results without log details or auxiliary classification requests', async (): Promise<void> => {
     const source = await ready(sessionSource());
-    expect(document.querySelectorAll('details')).toHaveLength(1);
+    expect(document.querySelectorAll('details')).toHaveLength(0);
     expect(document.querySelector('[aria-label="Scope log classifications"]')).toBeNull();
     expect(document.body.textContent).not.toContain('Log details');
     expect(document.body.textContent).not.toContain('not necessarily missed activity');
@@ -121,8 +123,8 @@ describe('analytics query workspace', () => {
     await openQuery();
     await select('Report', 'Custom log query');
     button('Run query').click();
-    await vi.waitFor((): void => expect(panel().open).toBe(false));
-    expect(document.querySelectorAll('details')).toHaveLength(1);
+    await vi.waitFor((): void => expect(queryExpanded()).toBe(false));
+    expect(document.querySelectorAll('details')).toHaveLength(0);
     expect(document.body.textContent).not.toContain('Log details');
     expect(source.queries).toHaveLength(2);
   });
@@ -136,15 +138,15 @@ describe('analytics query workspace', () => {
     expect(source.reportQueries).toHaveLength(1);
     button('Run query').focus();
     button('Run query').click();
-    await vi.waitFor(() => expect(panel().open).toBe(false));
-    expect(document.activeElement).toBe(panel().querySelector('summary'));
+    await vi.waitFor(() => expect(queryExpanded()).toBe(false));
+    expect(document.activeElement).toBe(queryTrigger());
     expect(document.querySelector('.query-summary')?.textContent).toBe('Tool calls · Last 24 hours');
     await openQuery();
     await select('Report', 'Custom log query');
     await select('Interval', 'Day');
     button('Reset').click();
     await tick();
-    expect(panel().open).toBe(true);
+    expect(queryExpanded()).toBe(true);
     expect(document.querySelector('.query-summary')?.textContent).toBe('Tool calls · Last 24 hours');
     expect(source.reportQueries).toHaveLength(2);
     expect(document.querySelector('.toolbar')?.textContent).toContain('Stored logs');
@@ -158,7 +160,7 @@ describe('analytics query workspace', () => {
     await select('Time range', 'Custom range');
     button('Run query').click();
     await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('both custom dates'));
-    expect(panel().open).toBe(true);
+    expect(queryExpanded()).toBe(true);
     expect(source.reportQueries).toHaveLength(1);
     input('analytics-start', '2026-10-31T09:00');
     input('analytics-end', '2026-10-31T10:00');
@@ -166,7 +168,7 @@ describe('analytics query workspace', () => {
     source.failure = new HttpError(503, 'Unavailable', {});
     button('Run query').click();
     await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('disabled'));
-    expect(panel().open).toBe(true);
+    expect(queryExpanded()).toBe(true);
     expect(document.querySelector('.query-summary')?.textContent).toBe('Stored logs · Last 7 days');
     source.failure = undefined;
     button('Retry query').click();
@@ -244,7 +246,7 @@ describe('analytics query workspace', () => {
     await select('Report', 'Custom log query');
     source.response = { rows: [{ groups: [{ dimension: 'severity', value: { kind: 'missing' } }, { dimension: 'source', value: { kind: 'present', value: '' } }], count: 2, bucket: { kind: 'none' } }], has_more: false };
     button('Run query').click();
-    await vi.waitFor(() => expect(panel().open).toBe(false));
+    await vi.waitFor(() => expect(queryExpanded()).toBe(false));
     expect(source.reportQueries.at(-1)).toMatchObject({ filters: [{ dimension: 'source', values: [''] }], group_by: ['severity', 'source'], bucketing: { kind: 'fixed', width: 'day' } });
     expect(document.querySelector('tbody')?.textContent).toContain('Missing attribute');
     expect(document.querySelector('tbody')?.textContent).toContain('Empty string');
@@ -267,13 +269,13 @@ describe('analytics query workspace', () => {
     expect(button('Add session filter').disabled).toBe(true);
     expect(document.querySelector('[aria-label="Selected filters"]')?.textContent).toContain('Session ID:  exact session ');
     button('Run query').click();
-    await vi.waitFor(() => expect(panel().open).toBe(false));
+    await vi.waitFor(() => expect(queryExpanded()).toBe(false));
     expect(source.reportQueries.at(-1)?.filters).toEqual([{ dimension: 'session_id', values: [' exact session '] }]);
     await openQuery();
     await select('Report', 'Tool calls');
     expect(document.getElementById('analytics-session')).toBeNull();
     button('Run query').click();
-    await vi.waitFor(() => expect(panel().open).toBe(false));
+    await vi.waitFor(() => expect(queryExpanded()).toBe(false));
     expect(source.reportQueries.at(-1)?.filters).toEqual([{ dimension: 'activity_kind', values: ['tool_call', 'file_read', 'file_edit'] }]);
   });
 
@@ -304,7 +306,7 @@ describe('analytics query workspace', () => {
     expect(document.querySelector('[aria-label="Selected filters"]')?.textContent).toContain('worker');
     expect(document.querySelector('.section-heading h3')?.textContent).toBe('Stored logs');
     button('Run query').click();
-    await vi.waitFor(() => expect(panel().open).toBe(false));
+    await vi.waitFor(() => expect(queryExpanded()).toBe(false));
     expect(source.reportQueries.at(-1)?.filters).toEqual([{ dimension: 'source', values: ['worker'] }]);
   });
 

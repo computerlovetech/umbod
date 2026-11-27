@@ -133,10 +133,17 @@ test('MCP refreshed data for A reloads shallow-selected B without seeding A cata
     await vi.waitFor(() => expect(document.querySelector('#selected-mcp-connector-heading')?.textContent).toBe('MCP b'));
     expect(document.body.textContent).toContain('b-prompt');
     expect(document.body.textContent).not.toContain('a-prompt');
-    const technicalDetails = document.querySelector<HTMLDetailsElement>('details.technical-details')!;
-    expect(technicalDetails.open).toBe(false);
-    technicalDetails.querySelector('summary')!.click();
-    expect(technicalDetails.open).toBe(true);
+    const disclosure = Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')).find((candidate) => candidate.textContent?.trim() === 'Technical details');
+    if (!disclosure) throw new Error('Technical details disclosure is missing');
+    const technicalDetails = document.getElementById(disclosure.getAttribute('aria-controls') ?? '');
+    if (!technicalDetails) throw new Error('Technical details panel is missing');
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+    expect(technicalDetails.hidden).toBe(true);
+    expect(technicalDetails.textContent).toContain('Endpoints');
+    disclosure.click();
+    await tick();
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+    expect(technicalDetails.hidden).toBe(false);
     expect(Array.from(technicalDetails.querySelectorAll('h3'), (heading): string => heading.textContent!)).toEqual(['Endpoints', 'Discovery', 'Identity']);
     expect(Array.from(technicalDetails.querySelectorAll('dt'), (term): string => term.textContent!)).toEqual([
       'Shared endpoint', 'Dedicated endpoint', 'Downstream endpoint',

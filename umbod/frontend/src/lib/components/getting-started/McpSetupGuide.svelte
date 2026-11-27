@@ -30,11 +30,11 @@
 <section aria-label="Harness setup guides" class="wizard">
   <nav class="rail" aria-label="Installer steps">
     {#each wizard.steps as step, index (step.id)}
-      <button type="button" aria-current={wizard.step.id === step.id ? 'step' : undefined}
+      <Button variant="unstyled" type="button" aria-current={wizard.step.id === step.id ? 'step' : undefined}
         onclick={() => navigate(() => wizard.goTo(step.id))}>
-        <span class="number" aria-hidden="true">{index + 1}</span>
+        <span class={['number', { current: wizard.step.id === step.id }]} aria-hidden="true">{index + 1}</span>
         <span>{step.label}{#if wizard.summary[step.id]}<small>{wizard.summary[step.id]}</small>{/if}</span>
-      </button>
+      </Button>
     {/each}
   </nav>
 
@@ -119,11 +119,11 @@
 <style>
   .wizard { max-width: 960px; display: grid; grid-template-columns: 210px minmax(0, 1fr); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel); }
   .rail { background: var(--admin-sidebar); padding: 20px 12px; border-right: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel) 0 0 var(--admin-radius-panel); }
-  .rail button { border: 0; border-radius: var(--admin-radius); background: transparent; color: var(--admin-ink); cursor: pointer; display: flex; align-items: center; gap: 8px; text-align: left; width: 100%; padding: 10px; margin-bottom: 4px; font: inherit; font-size: 14px; font-weight: 600; }
-  .rail button:hover, .choice:hover { background: var(--admin-hover); }
-  .rail button[aria-current='step'], .choice:has(:checked) { background: var(--admin-accent-soft); color: var(--admin-accent-strong); }
+  .rail > :global(button) { border: 0; border-radius: var(--admin-radius); background: transparent; color: var(--admin-ink); cursor: pointer; display: flex; align-items: center; gap: 8px; text-align: left; width: 100%; padding: 10px; margin-bottom: 4px; font: inherit; font-size: 14px; font-weight: 600; }
+  .rail > :global(button:hover), .choice:hover { background: var(--admin-hover); }
+  .rail > :global(button[aria-current='step']), .choice:has(:checked) { background: var(--admin-accent-soft); color: var(--admin-accent-strong); }
   .number { display: inline-grid; place-items: center; width: 26px; height: 26px; flex: none; border: 1px solid var(--admin-border); border-radius: 50%; background: var(--admin-panel); font-size: 12px; }
-  [aria-current='step'] .number { background: var(--admin-accent); border-color: var(--admin-accent); color: var(--admin-on-action); }
+  .number.current { background: var(--admin-accent); border-color: var(--admin-accent); color: var(--admin-on-action); }
   small { display: block; font-weight: 400; color: var(--admin-muted); }
   .step-body { min-width: 0; padding: 24px; }
   .step-count { color: var(--admin-accent-strong); font-weight: 650; font-size: 12px; margin-bottom: 5px; }
@@ -157,7 +157,7 @@
   @media (max-width: 650px) {
     .wizard { grid-template-columns: minmax(0, 1fr); }
     .rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px; border-right: 0; border-bottom: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel) var(--admin-radius-panel) 0 0; }
-    .rail button { flex-direction: column; gap: 4px; font-size: 12px; text-align: center; padding: 6px 2px; margin: 0; }
+    .rail > :global(button) { flex-direction: column; gap: 4px; font-size: 12px; text-align: center; padding: 6px 2px; margin: 0; }
     .rail small { display: none; }
     .step-body { padding: 16px; }
     .summary { grid-template-columns: 1fr; }

@@ -72,20 +72,20 @@ test('preserves pattern drafts across standalone diagnostics, findings and log a
   expect(required(activeAdminLink).getAttribute('href')).toBe('/admin/insights/agent-behaviour');
   expect(required(findingsTab).getAttribute('aria-current')).toBe('page');
   expect(required('h2').textContent).toBe('Agent behaviour');
-  expect(required<HTMLDetailsElement>('.query-panel').open).toBe(false);
+  expect(required('.query-panel button[aria-controls]').getAttribute('aria-expanded')).toBe('false');
   expect(required(settingsLink).textContent).toBe('Collection settings');
   expect(document.body.textContent).not.toContain('Add pattern');
   follow(logsTab);
   await vi.waitFor((): void => expect(logs.reportQueries).toHaveLength(1));
   expect(required('h2').textContent).toBe('Log analytics');
-  expect(required<HTMLDetailsElement>('.query-panel').open).toBe(false);
+  expect(required('.query-panel button[aria-controls]').getAttribute('aria-expanded')).toBe('false');
   expect(required(logsTab).getAttribute('aria-current')).toBe('page');
   expect(document.querySelector(settingsLink)).toBeNull();
   follow(findingsTab);
   await vi.waitFor((): void => expect(list).toHaveBeenCalledTimes(2));
   follow(logsTab);
   await vi.waitFor((): void => expect(logs.reportQueries).toHaveLength(2));
-  expect(required<HTMLDetailsElement>('.query-panel').open).toBe(false);
+  expect(required('.query-panel button[aria-controls]').getAttribute('aria-expanded')).toBe('false');
   expect(document.querySelector('.query-summary')?.textContent).toBe('Stored logs · Last 7 days');
   follow(`nav[aria-label="Administration navigation"] a[href="${diagnostics}"]`);
   expect(required<HTMLInputElement>(patternToggle).checked).toBe(false);
@@ -233,7 +233,7 @@ test('findings offer setup when collection is unpublished and still show the que
   component = mount(InsightsHarness, { target: document.body, props: { controls: new InsightsHarnessState(), createState: (): InsightsState => state } });
   await vi.waitFor((): void => expect(document.querySelector('.collection-notice')?.textContent).toContain('Collection isn’t configured'));
   expect(required(`.collection-notice a[href="${diagnostics}"]`).textContent).toBe('Set up collection');
-  expect(required('.query-panel summary').textContent).toContain('Query');
+  expect(required('.query-panel button[aria-controls]').textContent).toContain('Query');
 });
 
 test('findings show collection is unconfigured when the last usable pattern is disabled and published', async (): Promise<void> => {
@@ -255,7 +255,7 @@ test('findings show collection is unconfigured when the last usable pattern is d
   follow(findingsLink);
   expect(required('.collection-notice').textContent).toContain('Collection isn’t configured');
   expect(api.current.reporting_enabled).toBe(true);
-  expect(required('.query-panel summary').textContent).toContain('Query');
+  expect(required('.query-panel button[aria-controls]').textContent).toContain('Query');
 });
 
 test('findings show collection is off when saved reporting is off even with an excluded playbook', async (): Promise<void> => {
@@ -267,7 +267,7 @@ test('findings show collection is off when saved reporting is off even with an e
   await vi.waitFor((): void => expect(document.querySelector('.collection-notice')?.textContent).toContain('Collection is off'));
   expect(required('.collection-notice').textContent).toContain('Existing entries remain available.');
   expect(required(`.collection-notice a[href="${reporting}"]`).textContent).toBe('Review collection settings');
-  expect(required('.query-panel summary').textContent).toContain('Query');
+  expect(required('.query-panel button[aria-controls]').textContent).toContain('Query');
 });
 
 test('a failed findings query shows the error instead of a false empty result', async (): Promise<void> => {
@@ -278,10 +278,11 @@ test('a failed findings query shows the error instead of a false empty result', 
   component = mount(InsightsHarness, { target: document.body, props: { controls, createState: (): InsightsState => state } });
   await vi.waitFor((): void => expect(document.body.textContent).toContain('Entries could not be loaded'));
   expect(document.querySelector('section[aria-label="Entries"]')).toBeNull();
-  const query = required<HTMLDetailsElement>('.query-panel');
-  query.open = true;
+  const query = required<HTMLButtonElement>('.query-panel button[aria-controls]');
+  query.click();
+  await tick();
   required<HTMLButtonElement>('#agent-behaviour-query button[type="submit"]').click();
   await vi.waitFor((): void => expect(document.body.textContent).toContain('No entries match this query.'));
-  expect(query.open).toBe(false);
+  expect(query.getAttribute('aria-expanded')).toBe('false');
   expect(document.body.textContent).not.toContain('Entries could not be loaded');
 });

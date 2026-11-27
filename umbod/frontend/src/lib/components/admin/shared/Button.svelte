@@ -5,7 +5,7 @@
 
   type Props = Omit<HTMLButtonAttributes, 'children'> & {
     children: Snippet;
-    variant?: 'primary' | 'secondary' | 'danger' | 'quiet';
+    variant?: 'primary' | 'secondary' | 'soft' | 'danger' | 'quiet' | 'unstyled';
     size?: 'normal' | 'compact';
     iconOnly?: boolean;
     ref?: HTMLButtonElement;
@@ -23,6 +23,6 @@
   }: Props = $props();
 </script>
 
-<button {...attributes} bind:this={ref} {type} class={["admin-shared-button", `admin-shared-button--${variant}`, `admin-shared-button--${size}`, { 'admin-shared-button--icon': iconOnly }, className]}>
+<button {...attributes} bind:this={ref} {type} class={variant === 'unstyled' ? className : ['admin-shared-button', `admin-shared-button--${variant}`, `admin-shared-button--${size}`, { 'admin-shared-button--icon': iconOnly }, className]}>
   {@render children()}
 </button>

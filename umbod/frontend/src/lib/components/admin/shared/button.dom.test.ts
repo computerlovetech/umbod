@@ -127,7 +127,7 @@ test('forwards keyboard and nested click callbacks with the native currentTarget
   expect(clicked).toEqual([button()]);
 });
 
-test.each(['primary', 'secondary', 'danger', 'quiet'] as const)('merges %s classes and updates size, icon mode and native props without remounting', async (variant): Promise<void> => {
+test.each(['primary', 'secondary', 'soft', 'danger', 'quiet'] as const)('merges %s classes and updates size, icon mode and native props without remounting', async (variant): Promise<void> => {
   const view = await setup('button', { variant, size: 'compact', iconOnly: true, class: 'consumer-action', disabled: true });
   const element = button();
   expect([...element.classList]).toEqual(expect.arrayContaining([
@@ -143,6 +143,16 @@ test.each(['primary', 'secondary', 'danger', 'quiet'] as const)('merges %s class
   expect(element.classList.contains('admin-shared-button--compact')).toBe(false);
   expect(element.classList.contains('admin-shared-button--icon')).toBe(false);
   expect(element.classList.contains('consumer-action')).toBe(false);
+});
+
+test('unstyled preserves consumer styling and the native button while changing appearance', async (): Promise<void> => {
+  const view = await setup('button', { variant: 'secondary' });
+  const element = button();
+  await view.update({ variant: 'unstyled', class: ['consumer-control', { selected: true }] });
+  expect(button()).toBe(element);
+  expect([...element.classList]).toEqual(['consumer-control', 'selected']);
+  expect(view.ref()).toBe(element);
+  expect(element.type).toBe('button');
 });
 
 test.each(['button', 'loading'] as const)('%s exposes its native bound ref and cleans up spread attachments on unmount', async (kind): Promise<void> => {
@@ -231,7 +241,14 @@ test('LoadingButton cancels obsolete feedback on completion and clears pending t
   expect(document.querySelector('button')).toBeNull();
 });
 
-test.each(['primary', 'secondary', 'danger', 'quiet'] as const)('ButtonLink stays an anchor with native navigation attributes and %s button classes', async (variant): Promise<void> => {
+test('unstyled ButtonLink retains its destination and uses only consumer classes', async (): Promise<void> => {
+  await setup('link', { href: '/destination', variant: 'unstyled', class: 'consumer-link' });
+  const link = document.querySelector('a[href="/destination"]');
+  expect(link).toBeInstanceOf(HTMLAnchorElement);
+  expect(link?.className).toBe('consumer-link');
+});
+
+test.each(['primary', 'secondary', 'soft', 'danger', 'quiet'] as const)('ButtonLink stays an anchor with native navigation attributes and %s button classes', async (variant): Promise<void> => {
   const clicked: Array<EventTarget | null> = [];
   const view = await setup('link', {
     href: '/destination', target: '_blank', rel: 'noopener noreferrer', id: 'destination',

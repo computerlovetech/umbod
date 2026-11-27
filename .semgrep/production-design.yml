@@ -1,4 +1,16 @@
 rules:
+  - id: frontend.use-shared-select
+    languages: [regex]
+    severity: ERROR
+    message: Use the shared Select component from $lib/components/admin/shared/Select.svelte instead of a native <select> for consistent dropdown behavior.
+    paths:
+      include:
+        - '**/frontend/src/**/*.svelte'
+      exclude:
+        - '**/frontend/src/**/*.test-support.svelte'
+        - '**/frontend/src/lib/components/admin/shared/Select.svelte'
+    pattern-regex: '<select(?=[\s/>])'
+
   - id: python.metrics.infrastructure-only-prometheus
     languages: [python]
     severity: ERROR

@@ -119,7 +119,8 @@ describe('admin connector shared presentation', () => {
     expect(detailSummary).toContain('<article class="connector-detail"');
     expect(detailSummary).toContain('<AdminPublicationStatus');
     expect(detailSummary).toContain('{@render summary()}');
-    expect(detailSummary).toContain('<details class="technical-details">');
+    expect(detailSummary).toContain("import Disclosure from '#lib/components/shared/Disclosure.svelte'");
+    expect(detailSummary).toMatch(/\{#if technicalDetails\}[\s\S]*?<Disclosure\b[^>]*>[\s\S]*?\{@render technicalDetails\(\)\}[\s\S]*?<\/Disclosure>/);
     expect(detailSummary).toContain('.summary-row');
   });
 });

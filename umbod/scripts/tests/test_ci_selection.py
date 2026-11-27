@@ -234,23 +234,38 @@ def test_lint_checks_api_and_sdk_without_command_line_policy_overrides(workflow:
     assert set(setup["with"]["cache-dependency-glob"].splitlines()) == {"umbod/api/uv.lock", "packages/umbod-sdk/uv.lock"}
 
 
-def test_semgrep_ci_runs_shared_script_without_targets(workflow: dict[str, Any]) -> None:
+def test_semgrep_ci_runs_blocking_and_advisory_scans_without_targets(workflow: dict[str, Any]) -> None:
     job = workflow["jobs"]["semgrep"]
     assert job["defaults"]["run"]["working-directory"] == "umbod"
     setup = next(step for step in job["steps"] if step.get("uses") == "astral-sh/setup-uv@v7")
     assert setup["with"]["cache-dependency-glob"] == "umbod/uv.lock"
     commands = [shlex.split(step["run"]) for step in job["steps"] if "run" in step]
-    assert commands == [["bash", "scripts/run_semgrep.sh"]]
+    assert commands == [
+        ["bash", "scripts/run_semgrep.sh"],
+        ["bash", "scripts/run_semgrep.sh", "--frontend-advisory"],
+    ]
 
 
+@pytest.mark.parametrize(
+    ("mode", "configs", "blocking", "default_target"),
+    [
+        ([], {"../.semgrep.yml", "../.semgrep/production-design.yml", "../.semgrep/test-correctness.yml"}, True, "."),
+        (["--frontend-advisory"], {"../.semgrep/frontend-advisory.yml"}, False, "frontend/src"),
+    ],
+)
 @pytest.mark.parametrize("targets", [(), ("umbod/api", "umbod/folder with spaces")])
-def test_semgrep_wrapper_preserves_shared_rules_and_requested_scope(
-    tmp_path: Path, targets: tuple[str, ...]
+def test_semgrep_wrapper_uses_mode_specific_rules_and_preserves_requested_scope(
+    tmp_path: Path,
+    targets: tuple[str, ...],
+    mode: list[str],
+    configs: set[str],
+    blocking: bool,
+    default_target: str,
 ) -> None:
     uv = tmp_path / "uv"
     uv.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$PWD" "$@"\nexit 1\n')
     uv.chmod(0o755)
-    arguments = ["--json", *targets] if targets else []
+    arguments = [*mode, "--json", *targets] if targets else mode
 
     result = subprocess.run(
         ["bash", "umbod/scripts/run_semgrep.sh", *arguments],
@@ -263,15 +278,18 @@ def test_semgrep_wrapper_preserves_shared_rules_and_requested_scope(
     )
 
     assert result.returncode == 1
-    assert result.stdout.splitlines() == [
-        str(REPOSITORY / "umbod"),
-        "run", "--locked", "--only-group", "dev", "semgrep", "scan",
-        "--config", "../.semgrep.yml",
-        "--config", "../.semgrep/production-design.yml",
-        "--config", "../.semgrep/test-correctness.yml",
-        "--no-rewrite-rule-ids", "--error", "--metrics=off",
-        *(["--json", *(str(REPOSITORY / target) for target in targets)] if targets else ["."]),
-    ]
+    lines = result.stdout.splitlines()
+    assert lines[:7] == [str(REPOSITORY / "umbod"), "run", "--locked", "--only-group", "dev", "semgrep", "scan"]
+    expected_targets = [str(REPOSITORY / target) for target in targets] or [default_target]
+    assert lines[-len(expected_targets):] == expected_targets
+    options = lines[7:-len(expected_targets)]
+    assert {value for option, value in zip(options, options[1:]) if option == "--config"} == configs
+    assert {option for option in options if option.startswith("--") and option != "--config"} == {
+        "--no-rewrite-rule-ids",
+        "--metrics=off",
+        *(["--error"] if blocking else []),
+        *(["--json"] if targets else []),
+    }
 
 
 def test_frontend_sets_node_22_before_bun_and_dependency_installation(workflow: dict[str, Any]) -> None:

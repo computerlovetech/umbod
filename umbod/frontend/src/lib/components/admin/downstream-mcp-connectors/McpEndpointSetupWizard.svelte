@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import Button from '#lib/components/admin/shared/Button.svelte';
+  import Disclosure from '#lib/components/shared/Disclosure.svelte';
   import SetupProgress from '#lib/components/admin/shared/SetupProgress.svelte';
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import { nativeDialog } from '#lib/components/shared/dialogs/native-dialog.js';
@@ -143,7 +144,7 @@
         </Button>
       </div>
       {#if includesType}
-        <div class="actions"><Button type="button" variant="quiet" onclick={backToType}>Back</Button></div>
+        <div class="actions"><Button type="button" variant="soft" onclick={backToType}>Back</Button></div>
       {/if}
     {:else if state.step === 'search'}
       <h3>Search official MCP Registry</h3>
@@ -190,7 +191,7 @@
         </div>
       </div>
       <div class="actions">
-        <Button variant="quiet" onclick={goBack}>Back</Button>
+        <Button variant="soft" onclick={goBack}>Back</Button>
         <Button disabled={!state.selected} onclick={state.review}>Next</Button>
       </div>
     {:else if state.step === 'review' && state.selected}
@@ -223,7 +224,7 @@
         </fieldset>
       {/if}
       <div class="actions">
-        <Button variant="quiet" onclick={state.back}>Back</Button>
+        <Button variant="soft" onclick={state.back}>Back</Button>
         <Button disabled={!state.registryEndpoint} onclick={state.checkAccess}>Next</Button>
       </div>
     {:else if state.step === 'manual'}
@@ -232,7 +233,7 @@
         <TextField id={`${id}-url`} label="MCP endpoint URL" name="endpointUrl" value={state.manualUrl} oninput={updateUrl} inputmode="url" placeholder="https://mcp.example.com/mcp" autocomplete="off" aria-invalid={Boolean(state.manualUrl && !state.canCheckManual) || undefined} aria-describedby={state.manualUrl && !state.canCheckManual ? `${id}-url-error` : undefined} {@attach focusOnEntry} />
         {#if state.manualUrl && !state.canCheckManual}<p id={`${id}-url-error`}>Enter an HTTPS URL or a local loopback HTTP URL without embedded credentials or a fragment.</p>{/if}
         <div class="actions">
-          <Button variant="quiet" onclick={goBack}>Back</Button>
+          <Button variant="soft" onclick={goBack}>Back</Button>
           <Button type="submit" disabled={!state.canCheckManual}>Next</Button>
         </div>
       </form>
@@ -275,16 +276,18 @@
             {@render accessChoice(mode, '')}
           {/each}
           {#if state.unverifiedModes.length}
-            <details class="unverified-access" open={state.overrideEnabled} ontoggle={(event) => state.setOverride(event.currentTarget.open)}>
-              <summary>Unverified access methods</summary>
-              {#if state.overrideEnabled}
-                <div class="unverified-choices">
-                  {#each state.unverifiedModes as mode (mode)}
-                    {@render accessChoice(mode, mode === 'personal' ? 'OAuth not confirmed' : 'Connection not verified')}
-                  {/each}
-                </div>
-              {/if}
-            </details>
+            <div class="unverified-access">
+              <Disclosure expanded={state.overrideEnabled} onOpenChange={state.setOverride}>
+                {#snippet label()}Unverified access methods{/snippet}
+                {#if state.overrideEnabled}
+                  <div class="unverified-choices">
+                    {#each state.unverifiedModes as mode (mode)}
+                      {@render accessChoice(mode, mode === 'personal' ? 'OAuth not confirmed' : 'Connection not verified')}
+                    {/each}
+                  </div>
+                {/if}
+              </Disclosure>
+            </div>
           {/if}
         </fieldset>
       {/if}
@@ -292,7 +295,7 @@
         <div><Button variant="secondary" onclick={(event) => moveFocus(event, state.checkAccess, '[data-access-heading]')}>Retry check</Button></div>
       {/if}
       <div class="actions">
-        <Button variant="quiet" onclick={state.back}>Back</Button>
+        <Button variant="soft" onclick={state.back}>Back</Button>
         <Button disabled={!state.selectedMode} onclick={state.configure}>Next: Configure</Button>
       </div>
     {/if}
@@ -316,7 +319,7 @@
   .access-methods legend { margin-bottom: .375rem; }
   .access-choice { display: flex; align-items: baseline; gap: .5rem; padding: .625rem .75rem; border: 1px solid var(--admin-border); border-radius: 10px; background: var(--admin-panel); cursor: pointer; }
   .access-choice:has(input:checked) { border-color: var(--admin-accent); background: var(--admin-accent-soft); }
-  .unverified-access summary { color: var(--admin-accent); font-size: .875rem; font-weight: 650; cursor: pointer; padding: .375rem .125rem; }
+  .unverified-access { --disclosure-trigger-padding: .375rem .125rem; --disclosure-trigger-width: fit-content; color: var(--admin-accent); font-size: .875rem; font-weight: 650; }
   .unverified-choices { display: grid; gap: .5rem; margin-block-start: .25rem; }
   .access-choice-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: .375rem; }
   .access-status { color: var(--admin-muted); background: var(--admin-soft); border-radius: 6px; padding: .0625rem .375rem; font-size: .75rem; font-weight: 650; }

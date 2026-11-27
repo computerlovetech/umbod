@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import { tick } from 'svelte';
   import type { ConnectionAction } from '#lib/personal-connections/presentation.js';
   import type { PersonalConnectionController } from '#lib/personal-connections/state/port.js';
@@ -24,7 +25,7 @@
   <AdminSidebarActionMenu open={view.menuOpen} label={`Personal access actions for ${state.selection.display_name}`} onopenchange={view.setMenuOpen}>
     {#snippet menu()}
       {#each view.menuActions as action (action.id)}
-        <button type="button" role="menuitem" disabled={action.disabled} aria-describedby={action.reason ? `${reasonId}-${action.id}` : undefined} title={action.reason || undefined} data-destructive={action.destructive ? 'true' : undefined} onclick={() => act(action.id)}>{action.label}</button>
+        <Button variant="unstyled" type="button" role="menuitem" disabled={action.disabled} aria-describedby={action.reason ? `${reasonId}-${action.id}` : undefined} title={action.reason || undefined} data-destructive={action.destructive ? 'true' : undefined} onclick={() => act(action.id)}>{action.label}</Button>
         {#if action.reason}<span id={`${reasonId}-${action.id}`} class="sr-only">{action.reason}</span>{/if}
       {/each}
     {/snippet}

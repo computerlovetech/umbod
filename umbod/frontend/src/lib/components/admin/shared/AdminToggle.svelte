@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from './Button.svelte';
+
   let {
     checked,
     ariaLabel,
@@ -21,9 +23,9 @@
 </script>
 
 {#if submit}
-  <button type="submit" class:checked role="switch" aria-checked={checked} aria-label={ariaLabel} aria-describedby={ariaDescribedBy} {disabled}>
+  <Button variant="unstyled" type="submit" class="admin-submit-toggle" role="switch" aria-checked={checked} aria-label={ariaLabel} aria-describedby={ariaDescribedBy} {disabled}>
     <span class="track" aria-hidden="true"><span class="thumb"></span></span>
-  </button>
+  </Button>
 {:else}
   <label class="toggle" class:disabled>
     <input type="checkbox" aria-label={ariaLabel} aria-describedby={ariaDescribedBy} name={inputName} value={inputValue} {checked} {disabled} {onchange} />
@@ -32,7 +34,7 @@
 {/if}
 
 <style>
-  button,
+  :global(.admin-submit-toggle),
   .toggle {
     align-items: center;
     background: transparent;
@@ -76,22 +78,22 @@
   }
 
   input:checked + .track,
-  button.checked .track {
+  :global(.admin-submit-toggle[aria-checked='true']) .track {
     background: var(--admin-accent);
   }
 
   input:checked + .track .thumb,
-  button.checked .thumb {
+  :global(.admin-submit-toggle[aria-checked='true']) .thumb {
     transform: translateX(14px);
   }
 
-  button:focus-visible,
+  :global(.admin-submit-toggle:focus-visible),
   input:focus-visible + .track {
     outline: 3px solid var(--admin-focus);
     outline-offset: 3px;
   }
 
-  button:disabled,
+  :global(.admin-submit-toggle:disabled),
   .disabled {
     cursor: not-allowed;
     opacity: 0.72;

@@ -74,6 +74,16 @@ function input(body: string, name: string): string {
   return tag;
 }
 
+function menuActionLabels(body: string): string[] {
+  const browser = new Window();
+  try {
+    browser.document.body.innerHTML = body;
+    return Array.from(browser.document.querySelectorAll('button[role="menuitem"]'), (button): string => (button.textContent ?? '').trim());
+  } finally {
+    void browser.close();
+  }
+}
+
 function indicatorValues(body: string, label: 'Status spotlight' | 'Connector indicators'): string[] {
   const list = body.match(new RegExp(`<dl[^>]*aria-label="${label}"[^>]*>(.*?)</dl>`, 's'))?.[1] ?? '';
   return Array.from(list.replace(/<!--.*?-->/gs, '').matchAll(/<dd[^>]*>(.*?)<\/dd>/gs), (match): string => match[1].trim());
@@ -91,21 +101,24 @@ describe('downstream MCP connector administration', () => {
     expect(personal).not.toContain('Search records');
     expect(personal).toContain('Registration path');
     expect(personal).toContain('Unpublished');
-    expect(personal).not.toContain('>Publish</button>');
+    const personalActions = menuActionLabels(personal);
+    expect(personalActions).not.toContain('Publish');
     expect(personal).toContain('Check unavailable');
-    expect(personal).toContain('Check configuration');
+    expect(personalActions).toContain('Check configuration');
     expect(personal).not.toContain('aria-label="Status spotlight"');
     expect(personal).toContain('Managed by admins');
     expect(personal).toContain('Managed by each user');
     expect(personal).not.toContain('Personal OAuth setup');
     expect(personal).not.toContain('Sign-in not tested');
-    expect(personal).toContain('>Delete</button>');
+    expect(personalActions).toContain('Delete');
     expect(personal).toContain('href="/dashboard"');
     expect(personal).toContain('Private to each account');
-    for (const absent of ['Discovery health', 'Bearer token missing', '0 tools', 'Search tools', 'Shared endpoint', 'Dedicated endpoint', '>Configure</button>', 'Refresh discovery', 'Edit capability description', '>Discovery</h3>', 'aria-label="Copy shared endpoint"', 'aria-label="Copy dedicated endpoint"']) expect(personal).not.toContain(absent);
+    for (const absent of ['Discovery health', 'Bearer token missing', '0 tools', 'Search tools', 'Shared endpoint', 'Dedicated endpoint', 'Refresh discovery', 'Edit capability description', '>Discovery</h3>', 'aria-label="Copy shared endpoint"', 'aria-label="Copy dedicated endpoint"']) expect(personal).not.toContain(absent);
+    expect(personalActions).not.toContain('Configure');
 
     const shared = workspace(sharedConnector());
-    for (const present of ['Discovery health', 'Discovered tools', 'Search tools', '>Configure</button>', 'Refresh discovery', 'Edit capability description', '>Publish</button>', '>Delete</button>']) expect(shared).toContain(present);
+    for (const present of ['Discovery health', 'Discovered tools', 'Search tools']) expect(shared).toContain(present);
+    expect(menuActionLabels(shared)).toEqual(expect.arrayContaining(['Configure', 'Refresh discovery', 'Edit capability description', 'Publish', 'Delete']));
     expect(shared).not.toContain('Personal OAuth settings');
   });
 
@@ -146,8 +159,9 @@ describe('downstream MCP connector administration', () => {
 
   test('existing published personal connectors remain withdrawable without a setup receipt', (): void => {
     const personal = workspace({ ...serverFixture(), publication_status: 'published' });
-    expect(personal).toContain('>Unpublish</button>');
-    expect(personal).not.toContain('>Publish</button>');
+    const personalActions = menuActionLabels(personal);
+    expect(personalActions).toContain('Unpublish');
+    expect(personalActions).not.toContain('Publish');
     expect(personal).toContain('Check unavailable');
   });
 
@@ -163,9 +177,9 @@ describe('downstream MCP connector administration', () => {
   });
 
   test('offers publication and per-tool activation controls with pending and error feedback', (): void => {
-    expect(workspace(sharedConnector())).toContain('>Publish</button>');
-    expect(workspace({ ...sharedConnector(), publication_status: 'published' })).toContain('>Unpublish</button>');
     const body = workspace(sharedConnector());
+    expect(menuActionLabels(body)).toContain('Publish');
+    expect(menuActionLabels(workspace({ ...sharedConnector(), publication_status: 'published' }))).toContain('Unpublish');
     for (const label of ['Search tools', 'Tools per page', 'search_records activation', 'Save tools']) expect(body).toContain(label);
     const toggle = render(DownstreamMcpToolActivationToggle, { props: { tool, disabled: true, onActivationChange: (): void => {} } }).body;
     const openApiToggle = render(OpenApiToolActivationToggle, { props: { operationId: tool.name, activationStatus: 'enabled', disabled: true, onActivationChange: (): void => {} } }).body;

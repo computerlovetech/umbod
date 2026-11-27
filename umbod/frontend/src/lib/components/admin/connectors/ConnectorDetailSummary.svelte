@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import Disclosure from '#lib/components/shared/Disclosure.svelte';
   import AdminPublicationStatus from '#lib/components/admin/shared/AdminPublicationStatus.svelte';
   import ConnectorIcon from './ConnectorIcon.svelte';
 
@@ -41,10 +42,12 @@
   {/if}
 
   {#if technicalDetails}
-    <details class="technical-details">
-      <summary>Technical details</summary>
-      <div class="reference-list">{@render technicalDetails()}</div>
-    </details>
+    <div class="technical-details">
+      <Disclosure --disclosure-trigger-padding="0.45rem 0">
+        {#snippet label()}<span class="technical-details-label">Technical details</span>{/snippet}
+        <div class="reference-list">{@render technicalDetails()}</div>
+      </Disclosure>
+    </div>
   {/if}
 
   <div class="body">{@render children()}</div>
@@ -64,7 +67,7 @@
   .summary-row :global(.detail-item:first-child) { padding-left: 0; }
   .summary-row :global(.detail-item + .detail-item) { border-left: 1px solid var(--admin-border); }
   .technical-details { margin-top: 0.8rem; }
-  summary { color: var(--admin-ink); cursor: pointer; font-size: 0.9rem; font-weight: 650; padding: 0.45rem 0; }
+  .technical-details-label { color: var(--admin-ink); font-size: 0.9rem; font-weight: 650; }
   .reference-list { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: 8px; margin-top: 0.5rem; }
   .reference-list :global(.reference-group + .reference-group) { border-top: 1px solid var(--admin-border); }
   .body { margin-top: 1.5rem; }

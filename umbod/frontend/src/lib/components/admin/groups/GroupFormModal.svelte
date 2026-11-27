@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import AdminConfigurationField from '#lib/components/admin/shared/AdminConfigurationField.svelte';
   import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import Form from '#lib/components/admin/shared/Form.svelte';
@@ -42,7 +43,7 @@
             {#if state.suggestions.options.length > 0}
               <ul>
                 {#each state.suggestions.options as value (value)}
-                  <li><button type="button" aria-pressed={state.groupId === value} onclick={() => state.setGroupId(value)}>{value}</button></li>
+                  <li><Button variant="unstyled" type="button" aria-pressed={state.groupId === value} onclick={() => state.setGroupId(value)}>{value}</Button></li>
                 {/each}
               </ul>
             {:else}
@@ -90,9 +91,9 @@
   .observed-groups h3 { color: var(--admin-ink); font-size: 13px; margin: 0; }
   .observed-groups p { color: var(--admin-muted); font-size: 13px; margin: 0; }
   .observed-groups ul { display: grid; gap: 4px; list-style: none; margin: 0; max-height: 160px; overflow-y: auto; padding: 3px; }
-  .observed-groups button { background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: var(--admin-radius); color: var(--admin-ink); cursor: pointer; font: inherit; font-size: 14px; overflow-wrap: anywhere; padding: 8px 10px; text-align: left; white-space: pre-wrap; width: 100%; }
-  .observed-groups button:hover, .observed-groups button[aria-pressed="true"] { background: var(--admin-soft); border-color: var(--admin-accent); }
-  .observed-groups button:focus-visible { outline: 3px solid var(--admin-focus); }
+  .observed-groups li > :global(button) { background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: var(--admin-radius); color: var(--admin-ink); cursor: pointer; font: inherit; font-size: 14px; overflow-wrap: anywhere; padding: 8px 10px; text-align: left; white-space: pre-wrap; width: 100%; }
+  .observed-groups li > :global(button:hover), .observed-groups li > :global(button[aria-pressed="true"]) { background: var(--admin-soft); border-color: var(--admin-accent); }
+  .observed-groups li > :global(button:focus-visible) { outline: 3px solid var(--admin-focus); }
   .description-field { display: grid; gap: 7px; }
   label { color: var(--admin-ink); font-size: 13px; font-weight: 650; line-height: 1.4; }
   textarea { background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: var(--admin-radius); box-sizing: border-box; color: var(--admin-ink); font: inherit; font-size: 14px; min-height: 100px; padding: 10px 12px; resize: vertical; width: 100%; }

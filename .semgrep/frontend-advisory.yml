@@ -1,0 +1,32 @@
+rules:
+  - id: frontend.use-shared-button
+    languages: [regex]
+    severity: WARNING
+    metadata:
+      dev.semgrep.actions: [monitor]
+    message: Use the shared Button component from $lib/components/admin/shared/Button.svelte instead of a native <button> for consistent styling and behavior.
+    paths:
+      include:
+        - '**/frontend/src/**/*.svelte'
+      exclude:
+        - '**/frontend/src/**/*.test-support.svelte'
+        - '**/frontend/src/lib/components/admin/shared/Button.svelte'
+        - '**/frontend/src/lib/components/admin/shared/Select.svelte'
+    pattern-regex: '<button(?=[\s/>])'
+
+  - id: frontend.use-shared-disclosure
+    languages: [regex]
+    severity: WARNING
+    metadata:
+      dev.semgrep.actions: [monitor]
+    message: Use the shared Disclosure component from $lib/components/shared/Disclosure.svelte instead of native <details>/<summary> for inline expand/collapse.
+    paths:
+      include:
+        - '**/frontend/src/**/*.svelte'
+      exclude:
+        - '**/frontend/src/**/*.test-support.svelte'
+    patterns:
+      - pattern-regex: '<details(?=[\s/>])'
+      - pattern-not-regex: '(?s)<!--.*?-->|<script(?=[\s>]).*?</script\s*>'
+      - pattern-not-regex: >-
+          (?s)\{\s*(["'`])(?:\\.|(?!\1)[^\\])*\1\s*\}

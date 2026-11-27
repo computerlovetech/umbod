@@ -10,7 +10,7 @@ description: Menus, dialogs, loading indicators, notifications, and copyable or 
 
 ## Menus and dialogs
 
-- [ActionMenu](../src/lib/components/shared/ActionMenu.svelte) — Keyboard-accessible popup menu with icon or full-width surface triggers and start or end alignment; use for contextual links and actions.
+- [ActionMenu](../src/lib/components/shared/ActionMenu.svelte) — Keyboard-accessible popup with icon or full-width triggers and reduced-motion support; use for contextual links and actions.
 - [AdminSidebarActionMenu](../src/lib/components/admin/shared/AdminSidebarActionMenu.svelte) — Ellipsis-trigger wrapper around ActionMenu; use for compact contextual actions in lists and sidebars.
 - [ModalShell](../src/lib/components/shared/ModalShell.svelte) — Native modal with heading and upper-right close button; use for dialogs with guarded dismissal and caller-selected initial focus.
 - [Native dialog attachment](../src/lib/components/shared/dialogs/native-dialog.ts) — Native-dialog lifecycle and Cancel/Close focus fallbacks; avoids automatic field preselection unless the caller requests it.
