@@ -82,8 +82,8 @@ test('production build preserves routes, metadata, shared navigation and release
     }
     assert.match(pages[0], /Shared capabilities<br><span>for the agents you already use\.<\/span>/);
     for (const html of pages) {
-      assert.match(html, /href="\/docs\/getting-started\/kubernetes-installation\/"/);
-      assert.match(html, /href="\/docs\/using-umbod\/connectors\/"/);
+      assert.match(html, /href="\/docs\/self-host\/install\/"/);
+      assert.match(html, /href="\/docs\/use\/connectors\/"/);
     }
     assert.equal((pages[0].match(/<article class="capability-card">/g) || []).length, 6);
     assert.equal((pages[0].match(/<svg viewBox="0 0 320 200"/g) || []).length, 6);
