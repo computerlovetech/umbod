@@ -20,6 +20,25 @@ jobs:
           cache: pip
           cache-dependency-path: skills/development/write-module-readme/requirements.txt
 
+      - name: Validate project directory contents
+        env:
+          ALLOWED_PROJECT_FOLDERS: |
+            architecture-records
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          allowed_folders = set(os.environ["ALLOWED_PROJECT_FOLDERS"].splitlines())
+          unexpected_entries = sorted(
+              str(entry)
+              for entry in Path("umbod/project").iterdir()
+              if entry.name not in allowed_folders or entry.is_symlink() or not entry.is_dir()
+          )
+          if unexpected_entries:
+              raise SystemExit("Unexpected entries in umbod/project:\n" + "\n".join(unexpected_entries))
+          PY
+
       - name: Install lint dependencies
         run: python -m pip install -r skills/development/write-module-readme/requirements.txt
 

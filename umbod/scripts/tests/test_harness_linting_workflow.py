@@ -1,6 +1,9 @@
 import fnmatch
+import os
+import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 WORKFLOWS = Path(__file__).resolve().parents[3] / ".github" / "workflows"
@@ -54,6 +57,68 @@ def test_harness_linting_validates_all_skills_and_tests_the_validator() -> None:
         "python -m unittest discover -s skills/development/write-skill/tests"
         in commands
     )
+
+
+def _run_project_directory_check(
+    workspace: Path, extra_allowed_folder: str = "",
+) -> subprocess.CompletedProcess[str]:
+    workflow = yaml.load(
+        (WORKFLOWS / "harness-linting.yml").read_text(), Loader=yaml.BaseLoader
+    )
+    step = next(
+        step for step in workflow["jobs"]["harness-linting"]["steps"]
+        if step.get("name") == "Validate project directory contents"
+    )
+    env = {**os.environ, **step["env"]}
+    if extra_allowed_folder:
+        env["ALLOWED_PROJECT_FOLDERS"] += f"\n{extra_allowed_folder}\n"
+    return subprocess.run(
+        ["bash", "-e", "-c", step["run"]], cwd=workspace, env=env,
+        capture_output=True, text=True, check=False,
+    )
+
+
+def test_project_directory_check_allows_contents_inside_allowed_folders(tmp_path: Path) -> None:
+    records = tmp_path / "umbod/project/architecture-records"
+    records.mkdir(parents=True)
+    (records / "index.md").touch()
+
+    result = _run_project_directory_check(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_project_directory_check_accepts_additional_configured_folders(tmp_path: Path) -> None:
+    project = tmp_path / "umbod/project"
+    (project / "architecture-records").mkdir(parents=True)
+    (project / "additional-records").mkdir()
+
+    result = _run_project_directory_check(tmp_path, "additional-records")
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("entry_name", "entry_type"),
+    [("notes.md", "file"), (".hidden", "directory"), ("architecture-records", "file"), ("architecture-records", "symlink")],
+)
+def test_project_directory_check_rejects_unexpected_entries(
+    tmp_path: Path, entry_name: str, entry_type: str,
+) -> None:
+    project = tmp_path / "umbod/project"
+    project.mkdir(parents=True)
+    entry = project / entry_name
+    if entry_type == "file":
+        entry.touch()
+    elif entry_type == "directory":
+        entry.mkdir()
+    else:
+        entry.symlink_to(tmp_path, target_is_directory=True)
+
+    result = _run_project_directory_check(tmp_path)
+
+    assert result.returncode == 1
+    assert f"umbod/project/{entry_name}" in result.stderr
 
 
 def test_ci_jobs_wait_for_harness_linting() -> None:
