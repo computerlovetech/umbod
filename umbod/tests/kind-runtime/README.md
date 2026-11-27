@@ -13,7 +13,7 @@ description: Disposable-cluster runner and fixtures for serial API and MCP servi
 - [personal_fixture.py](./personal_fixture.py) — Personal authentication fixture with controlled public/basic/post registration modes.
 - [test_personal_fixture.py](./test_personal_fixture.py) — Local registration, credential authentication and refresh contract checks.
 - [run.sh](./run.sh) — Disposable Kind runner; local/S3 checks with a shared nondefault preview limit from UMBOD_TEST_FILESYSTEM_PREVIEW_MAX_BYTES.
-- [setup_s3_runtime.py](./setup_s3_runtime.py) — Test-only Moto S3 emulator, Secret, SDK bucket provisioning and in-cluster object inspection.
+- [setup_s3_runtime.py](./setup_s3_runtime.py) — Test-only MinIO S3 storage, Secret, SDK bucket provisioning and in-cluster object inspection.
 - [setup_personal_runtime.py](./setup_personal_runtime.py) — Verified-user runtime setup.
 - [values.yaml](./values.yaml) — Test-only deployment values; separate administrator MCP on pod port 8017 avoids secondary-worker ports.
 - [connector](./connector/) — Runtime connector fixture.

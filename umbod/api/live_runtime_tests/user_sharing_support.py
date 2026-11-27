@@ -77,9 +77,12 @@ def assert_rest_recipient_scopes(
     cleared = alice.put(user_path, json={"grants": []}, headers={"If-Match": changed.headers["etag"]})
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()["grants"] == []
-    assert bob.get(node_path + "/content").status_code == 200
+    content_path = node_path + "/content?delivery=stream"
+    readable = bob.get(content_path)
+    assert readable.status_code == 200, readable.status_code
     remaining = alice.get(group_path)
     assert remaining.json()["grants"] == groups.json()["grants"]
     revoked = alice.put(group_path, json={"grants": []}, headers={"If-Match": remaining.headers["etag"]})
     assert revoked.status_code == 200, revoked.text
-    assert bob.get(node_path + "/content").status_code == 403
+    denied = bob.get(content_path)
+    assert denied.status_code == 403, denied.status_code

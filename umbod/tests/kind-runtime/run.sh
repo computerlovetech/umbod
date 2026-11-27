@@ -115,14 +115,15 @@ export UMBOD_TEST_PERSONAL_CA="${host_temporary_directory}/ca.crt"
 export UMBOD_TEST_PERSONAL_PROXY_TOKENS="${host_temporary_directory}/proxy-tokens"
 
 if [[ "${UMBOD_TEST_CONTENT_BACKEND}" == "s3" ]]; then
-    export UMBOD_TEST_S3_IMAGE="motoserver/moto:5.1.4"
+    export UMBOD_TEST_S3_IMAGE="umbod-kind-s3:ci"
     case "$(docker info --format '{{.Architecture}}')" in
-        aarch64|arm64) s3_image_digest="sha256:aa1bee6a3c50d464a926c4b857c35713f0d1cfacb030e1dea2c1862cb838e35b" ;;
-        x86_64|amd64) s3_image_digest="sha256:d8663daaec297e2aee350b9a6778b03bce85e8c710d614db83b6007c5d916235" ;;
-        *) printf '%s\n' 'Unsupported Docker architecture for the test S3 emulator' >&2; exit 1 ;;
+        aarch64|arm64) s3_image_digest="sha256:b5ca2f8161b8fb51c44a035ab7709e77faec74c3eb21580beef11b3a8cc3387c" ;;
+        x86_64|amd64) s3_image_digest="sha256:42d1514525b3c60ad77b1347a4f2733c1953016e72424dc5ea7a9d59dc8c45b3" ;;
+        *) printf '%s\n' 'Unsupported Docker architecture for the test S3 fixture' >&2; exit 1 ;;
     esac
-    docker pull "${UMBOD_TEST_S3_IMAGE}@${s3_image_digest}"
-    docker tag "${UMBOD_TEST_S3_IMAGE}@${s3_image_digest}" "${UMBOD_TEST_S3_IMAGE}"
+    s3_fixture_image="cgr.dev/chainguard/minio@${s3_image_digest}"
+    docker pull "${s3_fixture_image}"
+    docker tag "${s3_fixture_image}" "${UMBOD_TEST_S3_IMAGE}"
 fi
 
 docker build --tag ghcr.io/computerlovetech/umbod:ci --file "${app_directory}/api/Dockerfile" "${repository_directory}"

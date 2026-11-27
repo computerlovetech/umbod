@@ -27,10 +27,12 @@ def apply(document: dict[str, Any]) -> None:
     kubectl("apply", "-f", "-", payload=json.dumps(document))
 
 
+def secret_environment(name: str, key: str) -> dict[str, Any]:
+    return {"name": name, "valueFrom": {"secretKeyRef": {"name": "umbod-runtime-s3", "key": key}}}
+
+
 def credentials() -> list[dict[str, Any]]:
-    return [{"name": name, "valueFrom": {"secretKeyRef": {
-        "name": "umbod-runtime-s3", "key": name,
-    }}} for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")]
+    return [secret_environment(name, name) for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")]
 
 
 def provision() -> None:
@@ -43,9 +45,15 @@ def provision() -> None:
     apply({"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": "umbod-runtime-s3"}, "spec": {
         "replicas": 1, "selector": {"matchLabels": {"app": "umbod-runtime-s3"}}, "template": {
             "metadata": {"labels": {"app": "umbod-runtime-s3"}}, "spec": {"containers": [{
-                "name": "s3-emulator", "image": os.environ["UMBOD_TEST_S3_IMAGE"], "imagePullPolicy": "Never",
+                "name": "s3-storage", "image": os.environ["UMBOD_TEST_S3_IMAGE"], "imagePullPolicy": "Never",
+                "args": ["server", "/tmp/umbod-s3", "--address", ":5000", "--quiet"],
+                "env": [
+                    secret_environment("MINIO_ROOT_USER", "AWS_ACCESS_KEY_ID"),
+                    secret_environment("MINIO_ROOT_PASSWORD", "AWS_SECRET_ACCESS_KEY"),
+                    {"name": "MINIO_BROWSER", "value": "off"},
+                ],
                 "ports": [{"containerPort": 5000}],
-                "readinessProbe": {"httpGet": {"path": "/", "port": 5000}, "periodSeconds": 2},
+                "readinessProbe": {"httpGet": {"path": "/minio/health/ready", "port": 5000}, "periodSeconds": 2},
             }]},
         },
     }})
