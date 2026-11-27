@@ -68,6 +68,10 @@ async def ensure_schema(connection: aiosqlite.Connection) -> None:
         await _migrate_raw_archive(connection)
         await connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     await validate_current_schema(connection)
+    await connection.execute(
+        "CREATE INDEX IF NOT EXISTS analytics_logs_owner_session "
+        "ON analytics_logs (owner_id, source, session_id)"
+    )
 
 
 async def validate_current_schema(connection: aiosqlite.Connection) -> None:

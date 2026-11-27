@@ -7,6 +7,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 # Files
 
 - [__init__.py](./__init__.py) — Shared core exports; cross-kind composition belongs in delivery wiring.
+- [activity](./activity/README.md) — Owner-scoped activity overview and harness session reads.
 - [activation](./activation/README.md) — Capability enablement.
 - [admin_overview](./admin_overview/README.md) — Administration summary contracts.
 - [administrator](./administrator/README.md) — Shared administrator discovery, inspection, and changes.

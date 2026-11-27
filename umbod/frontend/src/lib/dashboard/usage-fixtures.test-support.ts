@@ -1,14 +1,13 @@
-import { personalUsageSchema, type PersonalUsage, type UsageDays } from './domain/usage-schemas';
+import { usageSummarySchema, type UsageDays, type UsageSummary } from '#lib/usage/usage-schemas.js';
 
-export function usageSnapshot(days: UsageDays = 7, identity = 'account-one', successes = 0): PersonalUsage {
+export function usageSummaryFixture(days: UsageDays = 7, successes = 0): UsageSummary {
   const end = Date.parse('2026-11-10');
   const counts = {
     tool: { success: successes, failure: 0, cancelled: 0 },
     resource: { success: 0, failure: 0, cancelled: 0 },
     prompt: { success: 0, failure: 0, cancelled: 0 }
   };
-  return personalUsageSchema.parse({
-    identity_key: identity,
+  return usageSummarySchema.parse({
     top_tools: [],
     as_of: '2026-11-09T12:00:00Z',
     range: { start: new Date(end - days * 86400000).toISOString().slice(0, 10), end: '2026-11-10', timezone: 'UTC' },

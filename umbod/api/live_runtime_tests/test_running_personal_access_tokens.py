@@ -232,6 +232,45 @@ def test_running_personal_log_counts_exclude_foreign_and_shared_exports(
 
 
 @verified_user_stage
+def test_running_activity_sessions_read_only_owned_exports(
+    runtime_endpoints: RuntimeEndpoints,
+    personal_token: tuple[PersonalAccessTokenMetadata, SecretStr],
+    otlp_bearer_token: str,
+) -> None:
+    _, token = personal_token
+    session_id = f"activity-{uuid4().hex}"
+    payload = {"resourceLogs": [{
+        "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "codex"}}]},
+        "scopeLogs": [{"logRecords": [{
+            "eventName": "codex.tool_result",
+            "attributes": [
+                {"key": "session.id", "value": {"stringValue": session_id}},
+                {"key": "tool.name", "value": {"stringValue": "Read"}},
+                {"key": "success", "value": {"boolValue": True}},
+            ],
+        }]}],
+    }]}
+    activity_url = runtime_endpoints.api_base_url + "/api/me/activity"
+    owner_headers = {"Authorization": "Bearer " + runtime_endpoints.bearer_token}
+    foreign_headers = {"Authorization": "Bearer " + os.environ["UMBOD_TEST_MEMBER_BEARER_TOKEN"]}
+    with httpx.Client(timeout=30) as client:
+        for credential in (token.get_secret_value(), otlp_bearer_token):
+            exported = client.post(
+                runtime_endpoints.otlp_base_url + "/v1/logs", json=payload,
+                headers={"Authorization": "Bearer " + credential},
+            )
+            assert exported.status_code == 200
+        listed = client.get(activity_url + "/sessions", params={"q": session_id}, headers=owner_headers)
+        assert listed.status_code == 200
+        assert [item["key"] for item in listed.json()["sessions"]] == [{"source": "codex", "session_id": session_id}]
+        detail_url = activity_url + "/sessions/codex/" + session_id
+        detail = client.get(detail_url, headers=owner_headers)
+        assert detail.status_code == 200
+        assert detail.json()["top_tools"] == [{"tool_name": "Read", "count": 1}]
+        assert client.get(detail_url, headers=foreign_headers).status_code == 404
+
+
+@verified_user_stage
 def test_running_owner_revocation_is_visible_to_collector_across_api_processes(
     runtime_endpoints: RuntimeEndpoints,
     personal_token: tuple[PersonalAccessTokenMetadata, SecretStr],

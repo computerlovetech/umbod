@@ -14,6 +14,15 @@ export class WorkspaceScope {
     return this.disposed || this.personalSuspended ? { kind: 'hidden' } : this.access.effectiveAccountIdentity;
   }
 
+  get verifiedPersonalIdentityKey(): string {
+    const account = this.personalIdentity;
+    return account.kind === 'visible' && account === this.access.accountIdentity ? account.hiddenValues.id : '';
+  }
+
+  get isPersonalSuspended(): boolean {
+    return this.personalSuspended;
+  }
+
   get personalChecking(): boolean {
     return !this.disposed && (this.personalSuspended || this.access.adminAccess === 'checking');
   }

@@ -25,7 +25,7 @@ description: Workspace frames, navigation, identity, dashboard layout, and share
 
 ## Dashboard layout
 
-- [DashboardContainer](../src/lib/components/shared/dashboard/DashboardContainer.svelte) — Named section with heading, caller-owned toolbar and footer; compose rows here without coupling layout to data loading.
+- [DashboardContainer](../src/lib/components/shared/dashboard/DashboardContainer.svelte) — Named section with an optional visible heading, caller-owned toolbar and footer; compose rows without coupling layout to data loading.
 - [DashboardRow](../src/lib/components/shared/dashboard/DashboardRow.svelte) — Twelve-track responsive row; use with DashboardColumn for aligned visual panels without fixed viewport heights.
 - [DashboardColumn](../src/lib/components/shared/dashboard/DashboardColumn.svelte) — Explicit one-to-twelve span within DashboardRow; stacks below a 760px dashboard container width.
 - [DashboardPanel](../src/lib/components/shared/dashboard/DashboardPanel.svelte) — Neutral panel with a level-three heading, metadata and optional actions; use within a labelled dashboard section.

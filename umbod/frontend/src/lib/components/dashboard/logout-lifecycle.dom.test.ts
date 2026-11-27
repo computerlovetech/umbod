@@ -4,7 +4,8 @@ import { tick, unmount } from 'svelte';
 import { logoutNavigation } from '#lib/admin/infrastructure/logout.js';
 import { InMemoryDashboardApi } from '#lib/dashboard/infrastructure/in-memory-api.js';
 import { catalogue, sharedConnector } from '#lib/dashboard/test-fixtures.js';
-import { deferred, usageSnapshot } from '#lib/dashboard/usage-fixtures.test-support.js';
+import { deferred } from '#lib/dashboard/usage-fixtures.test-support.js';
+import { dashboardActivityApi } from '#lib/insights/activity/activity.test-support.js';
 import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 import { InMemoryPersonalConnectionsApi } from '#lib/personal-connections/infrastructure/in-memory-api.js';
 import * as personalConnectionsAdapter from '#lib/personal-connections/infrastructure/personal-connections-api.js';
@@ -51,7 +52,7 @@ describe('page logout lifetimes', () => {
     if (profilePhase === 'loaded') getProfile.mockResolvedValueOnce(profile('A'));
     const inputs = new DashboardIdentityProps(identity('A'));
     const api = new InMemoryDashboardApi(catalogue);
-    const usage = vi.spyOn(api.usage, 'get').mockResolvedValue(usageSnapshot(7, 'account-one', 9));
+    const activity = dashboardActivityApi('A', 9);
     const list = vi.spyOn(api.catalogue, 'list');
     const personal = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
     const personalList = vi.spyOn(personal.connections, 'list');
@@ -63,10 +64,15 @@ describe('page logout lifetimes', () => {
       createWorkspaceApi: () => ({ profile: { get: getProfile } })
     };
     component = page === 'Dashboard'
-      ? mountWorkspace(Dashboard, { target: document.body, props }, '/dashboard')
+      ? mountWorkspace(Dashboard, { target: document.body, props: {
+        ...props, get accountIdentity(): HeaderAccountIdentityState { return inputs.identity; }, createApi: () => activity
+      } }, '/dashboard')
       : mountWorkspace(ConnectorsPage, { target: document.body, props }, '/connectors');
     if (page === 'Dashboard') {
-      await vi.waitFor(() => expect(document.querySelector('[aria-label="Tool activity"]')?.textContent).toContain('63 calls'));
+      await vi.waitFor(() => expect(getProfile).toHaveBeenCalledTimes(1));
+      if (profilePhase === 'loaded') {
+        await vi.waitFor(() => expect(document.querySelector('[aria-label="Tool activity"]')?.textContent).toContain('63 calls'));
+      } else expect(activity.overview).not.toHaveBeenCalled();
     } else {
       await vi.waitFor(() => expect(document.body.textContent).toContain(sharedConnector.display_name));
       await vi.waitFor(() => expect(health).toHaveBeenCalledTimes(1));
@@ -74,7 +80,8 @@ describe('page logout lifetimes', () => {
     if (profilePhase === 'loaded') {
       await vi.waitFor(() => expect(document.querySelector('a[href="/admin/connectors"]')).not.toBeNull());
     }
-    const readsBeforeLogout = [usage.mock.calls.length, list.mock.calls.length, personalList.mock.calls.length, health.mock.calls.length];
+    const readCounts = (): number[] => [activity.overview, activity.sessions, list, personalList, health].map((read): number => read.mock.calls.length);
+    const readsBeforeLogout = readCounts();
     const account = document.querySelector<HTMLButtonElement>('aside button[aria-haspopup="menu"]');
     expect(account).not.toBeNull();
     account!.click();
@@ -95,7 +102,7 @@ describe('page logout lifetimes', () => {
     await tick();
     refreshBrowserEvents();
     await tick();
-    expect([usage.mock.calls.length, list.mock.calls.length, personalList.mock.calls.length, health.mock.calls.length]).toEqual(readsBeforeLogout);
+    expect(readCounts()).toEqual(readsBeforeLogout);
     expect(getProfile).toHaveBeenCalledTimes(1);
     expect(document.querySelector('[aria-label="Tool activity"]')).toBeNull();
     expect(document.body.textContent).not.toContain(sharedConnector.display_name);

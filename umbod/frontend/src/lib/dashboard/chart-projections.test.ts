@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { projectActivity, projectOutcomes, projectUsage } from './chart-projections';
-import { personalUsageSchema, type UsageDays } from './domain/usage-schemas';
-import { usageSnapshot } from './usage-fixtures.test-support';
+import { usageSummarySchema, type UsageDays } from '#lib/usage/usage-schemas.js';
+import { usageSummaryFixture } from './usage-fixtures.test-support';
 
 describe('usage chart projections', (): void => {
   it.each([7, 30] as const)('keeps tool outcomes separate from other operations across %i days', (days: UsageDays): void => {
-    const snapshot = usageSnapshot(days);
+    const snapshot = usageSummaryFixture(days);
     const counts = {
       tool: { success: 8, failure: 2, cancelled: 10 },
       resource: { success: 40, failure: 30, cancelled: 10 },
       prompt: { success: 2, failure: 3, cancelled: 5 }
     };
-    const usage = personalUsageSchema.parse({
+    const usage = usageSummarySchema.parse({
       ...snapshot, totals: counts,
       daily: snapshot.daily.map((day, index) => index === 2 ? { ...day, counts } : day)
     });
@@ -30,7 +30,7 @@ describe('usage chart projections', (): void => {
   });
 
   it('has honest empty projections before loading and for zero snapshots', (): void => {
-    for (const charts of [projectUsage(), projectUsage(usageSnapshot())]) {
+    for (const charts of [projectUsage(), projectUsage(usageSummaryFixture())]) {
       expect(charts.outcomes.label).toBe('No tool calls');
       expect(charts.outcomes.successRate).toBe('');
       expect(charts.outcomes.segments.every((segment) => segment.percentage === 0)).toBe(true);
@@ -40,7 +40,7 @@ describe('usage chart projections', (): void => {
       expect(charts.activity.axisMaximum).toBe(50);
     }
     expect(projectUsage().activity.days).toEqual([]);
-    expect(projectUsage(usageSnapshot()).activity.days).toHaveLength(7);
+    expect(projectUsage(usageSummaryFixture()).activity.days).toHaveLength(7);
   });
 
   it('preserves authoritative tool order and identities while scaling against the largest count', (): void => {
@@ -49,7 +49,7 @@ describe('usage chart projections', (): void => {
       { tool_id: 'a'.repeat(64), tool_name: 'Search', connector_name: 'Calendar', count: 12 },
       { tool_id: 'c'.repeat(64), tool_name: 'Read', connector_name: 'Archive', count: 6 }
     ];
-    const charts = projectUsage(personalUsageSchema.parse({ ...usageSnapshot(7, 'account-one', 10), top_tools }));
+    const charts = projectUsage(usageSummarySchema.parse({ ...usageSummaryFixture(7, 10), top_tools }));
     expect(charts.tools).toEqual([
       { id: 'b'.repeat(64), name: 'Search', connector: 'Archive', count: 3, barWidth: 25 },
       { id: 'a'.repeat(64), name: 'Search', connector: 'Calendar', count: 12, barWidth: 100 },
@@ -58,9 +58,9 @@ describe('usage chart projections', (): void => {
   });
 
   it('does not imply tool calls when only resources were used', (): void => {
-    const snapshot = usageSnapshot();
+    const snapshot = usageSummaryFixture();
     const counts = { ...snapshot.totals, resource: { success: 5, failure: 2, cancelled: 3 } };
-    const charts = projectUsage(personalUsageSchema.parse({
+    const charts = projectUsage(usageSummarySchema.parse({
       ...snapshot, totals: counts,
       daily: snapshot.daily.map((day, index) => index === 0 ? { ...day, counts } : day)
     }));

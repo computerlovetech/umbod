@@ -1,28 +1,34 @@
-import type { ActivityChart, OperationChart, OutcomeChart, RankedTool } from '#lib/components/shared/dashboard/visualizations/types.js';
-import type { PersonalUsage, UsageCounts } from './domain/usage-schemas';
+import type { ActivityChart, OperationChart, OutcomeChart, OutcomeSegment, RankedTool } from '#lib/components/shared/dashboard/visualizations/types.js';
+import type { UsageSummary, UsageCounts } from '#lib/usage/usage-schemas.js';
 
 type OutcomeCounts = UsageCounts['tool'];
 type ActivityInput = OutcomeCounts & { readonly date: string };
 
 const outcomeKeys = ['success', 'failure', 'cancelled'] as const;
 const categoryKeys = ['tool', 'resource', 'prompt'] as const;
-const outcomeLabels = { success: 'Successful', failure: 'Failed', cancelled: 'Cancelled' };
+const outcomeLabels = { success: 'Successful', failure: 'Failed', cancelled: 'Cancelled', unknown: 'Unknown' };
+
+type HarnessCounts = { readonly success: number; readonly failure: number; readonly unknown: number };
 const categoryLabels = { tool: 'Tools', resource: 'Resources', prompt: 'Prompts' };
 const zeroCounts: OutcomeCounts = { success: 0, failure: 0, cancelled: 0 };
 
-export function projectOutcomes(counts: OutcomeCounts = zeroCounts): OutcomeChart {
-  const total = counts.success + counts.failure + counts.cancelled;
+export function projectOutcomes(counts: OutcomeCounts | HarnessCounts = zeroCounts): OutcomeChart {
+  const keys = 'unknown' in counts ? ['success', 'failure', 'unknown'] as const : outcomeKeys;
+  const values: Partial<Record<OutcomeSegment['key'], number>> = counts;
+  const total = keys.reduce((sum, key): number => sum + (values[key] ?? 0), 0);
   let offset = 0;
-  const segments = outcomeKeys.map((key) => {
-    const percentage = total > 0 ? counts[key] / total * 100 : 0;
-    const segment = { key, label: outcomeLabels[key], count: counts[key], percentage, offset };
+  const segments = keys.map((key): OutcomeSegment => {
+    const count = values[key] ?? 0;
+    const percentage = total > 0 ? count / total * 100 : 0;
+    const segment = { key, label: outcomeLabels[key], count, percentage, offset };
     offset += percentage;
     return segment;
   });
   const successRate = total > 0 ? (counts.success / total * 100).toFixed(1) : '';
+  const breakdown = segments.map((segment): string => `${segment.count} ${segment.label.toLowerCase()}`).join(', ');
   return {
     total, successRate, segments,
-    label: total > 0 ? `${successRate}% successful tool calls. ${counts.success} successful, ${counts.failure} failed, ${counts.cancelled} cancelled. ${total} tool calls.` : 'No tool calls'
+    label: total > 0 ? `${successRate}% successful tool calls. ${breakdown}. ${total} tool calls.` : 'No tool calls'
   };
 }
 
@@ -47,7 +53,7 @@ export function projectActivity(rows: readonly ActivityInput[]): ActivityChart {
   return { days, axisMaximum, total, label: `Daily tool calls for ${days.length} days. ${total} tool calls in total. UTC.` };
 }
 
-export function projectUsage(snapshot?: PersonalUsage): { outcomes: OutcomeChart; mix: OperationChart; activity: ActivityChart; tools: readonly RankedTool[] } {
+export function projectUsage(snapshot?: UsageSummary): { outcomes: OutcomeChart; mix: OperationChart; activity: ActivityChart; tools: readonly RankedTool[] } {
   const topTools = snapshot?.top_tools ?? [];
   const maximumCount = Math.max(0, ...topTools.map((tool): number => tool.count));
   return {

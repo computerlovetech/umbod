@@ -6,7 +6,7 @@ description: Neutral dashboard chart and ranking presentation for caller-prepare
 
 # Files
 
-- [OutcomeRing.svelte](./OutcomeRing.svelte) — Labelled success, failure and cancellation ring; zero calls retain the neutral ring and legend without values or explanatory text.
+- [OutcomeRing.svelte](./OutcomeRing.svelte) — Labelled outcome ring with distinct Unknown and Cancelled segments; neutral at zero calls, with optional exact zero counts.
 - [OperationMixChart.svelte](./OperationMixChart.svelte) — Proportional category strip with counts and shares; callers prepare totals and percentages.
 - [DailyActivityChart.svelte](./DailyActivityChart.svelte) — Stacked tool activity with hover and keyboard daily breakdowns and totals; callers supply a positive axis maximum.
 - [ToolRankingList.svelte](./ToolRankingList.svelte) — Ranked tool identities, connectors, counts and bars; empty inputs show five static decorative ranking silhouettes.

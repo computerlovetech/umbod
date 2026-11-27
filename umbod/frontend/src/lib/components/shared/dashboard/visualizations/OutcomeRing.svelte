@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { OutcomeChart } from './types';
   import './visualizations.css';
-  let { data }: { data: OutcomeChart } = $props();
+  let { data, showEmptyCounts = false }: { data: OutcomeChart; showEmptyCounts?: boolean } = $props();
 </script>
 
 <div class="dv-outcomes">
@@ -17,7 +17,7 @@
   </svg>
   <dl class="dv-outcome-legend">
     {#each data.segments as segment (segment.key)}
-      <div><dt><i class={`dv-${segment.key}`}></i>{segment.label}</dt><dd>{#if data.total > 0}{segment.percentage.toFixed(1)}%{/if}</dd><dd class="dv-muted">{#if data.total > 0}{segment.count.toLocaleString('en')}{/if}</dd></div>
+      <div><dt><i class={`dv-${segment.key}`}></i>{segment.label}</dt><dd>{#if data.total > 0}{segment.percentage.toFixed(1)}%{/if}</dd><dd class="dv-muted">{#if data.total > 0 || showEmptyCounts}{segment.count.toLocaleString('en')}{/if}</dd></div>
     {/each}
   </dl>
 </div>

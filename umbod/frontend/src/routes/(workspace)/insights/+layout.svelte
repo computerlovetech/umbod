@@ -27,7 +27,7 @@
 
 <svelte:document onvisibilitychange={observeVisibility} />
 
-<InsightsFrame {links} activeId={page.url.pathname === personalInsightsLogsHref ? 'logs' : 'behaviour'}>
+<InsightsFrame {links} activeId={links.find((link): boolean => link.href === page.url.pathname)?.id ?? 'behaviour'}>
   {#if workspace.personalChecking}
     <p class="admin-message" role="status">Loading insights…</p>
   {:else if workspace.personalUnavailable}

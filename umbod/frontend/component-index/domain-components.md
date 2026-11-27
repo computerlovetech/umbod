@@ -15,7 +15,10 @@ description: Dashboard charts, insights, file previews, connector and tool prese
 - [DailyActivityChart](../src/lib/components/shared/dashboard/visualizations/DailyActivityChart.svelte) — Stacked daily tool outcomes with hover/focus breakdowns and totals; caller supplies UTC labels and a positive axis maximum.
 - [ToolRankingList](../src/lib/components/shared/dashboard/visualizations/ToolRankingList.svelte) — Ranked tool bars and counts with five static silhouettes when empty; caller owns sorting, filtering and limiting.
 
-## Insights presentation
+## Activity and Insights presentation
+
+- [HarnessMetrics](../src/lib/components/personal/activity/HarnessMetrics.svelte) — Reuses the outcomes ring and ranking list for harness summaries and session details, alongside skill counts.
+- [HarnessSessionPicker](../src/lib/components/personal/activity/HarnessSessionPicker.svelte) — Controlled newest-first horizontal session cards with keyboard navigation; callers own disclosure, search, results, selection, and pagination.
 
 - [AnalyticsWorkspace](../src/lib/components/shared/analytics/AnalyticsWorkspace.svelte) — Log queries, aggregate results, and session drill-down; callers inject state with the correct data scope.
 - [ReportsView](../src/lib/components/shared/agent-behaviour/ReportsView.svelte) — Diagnostic report filters and linked results with agent-reported triggers for personal and admin Insights.
@@ -62,7 +65,7 @@ description: Dashboard charts, insights, file previews, connector and tool prese
 
 - [Namespace administration composition](../src/lib/components/admin/filesystem/README.md) — Feature-owned namespace inventory, metadata dialogs, and a separate group access editor; reuse the indexed controls, not the workflows.
 - [Agent behaviour composition](../src/lib/components/admin/agent-behaviour/README.md) — Feature-owned pattern editing, global reporting switch, and report inspection; reuse the indexed controls, not the administrator workflows.
-- [Dashboard composition](../src/lib/components/dashboard/README.md) — Separate feature-owned usage and connector pages; reuse indexed controls, not either page workflow.
+- [Dashboard composition](../src/lib/components/dashboard/README.md) — Feature-owned personal activity and connector pages plus a design preview; reuse the indexed presenters, not the page workflows.
 - [Getting started composition](../src/lib/components/getting-started/README.md) — Feature-owned harness installer wizard and optional private script preparation.
 - [Account settings composition](../src/lib/components/settings/README.md) — Feature-owned profile and personal access navigation, token management, and telemetry setup.
 - [Files compositions](../src/lib/components/files/README.md) — Feature-owned Locations navigation, details, sharing and mutation workflows; reuse neutral layouts and controls, not these compositions.

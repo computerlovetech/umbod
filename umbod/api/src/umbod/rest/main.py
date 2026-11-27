@@ -26,9 +26,9 @@ from umbod.rest.authentication.middleware import SuppliedJwtVerifierFactory
 from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
 from umbod.rest.agent_behaviour import personal_router as personal_agent_behaviour_router
 from umbod.rest.agent_behaviour import router as agent_behaviour_router
+from umbod.rest.activity import router as activity_router
 from umbod.rest.admin_overview import router as admin_overview_router
 from umbod.rest.user_catalogue import router as user_catalogue_router
-from umbod.rest.personal_usage import router as personal_usage_router
 from umbod.rest.filesystem import router as filesystem_router
 from umbod.rest.filesystem.upload_transfers import router as filesystem_transfer_router
 from umbod.rest.filesystem_administration import router as filesystem_administration_router
@@ -79,7 +79,10 @@ from umbod.rest.personal_access_tokens import router as personal_access_tokens_r
 from umbod.rest.telemetry_setup import router as telemetry_setup_router
 from umbod.rest.telemetry_setup.claim_redaction import InstallClaimQueryRedactionMiddleware
 from umbod.rest.telemetry_setup.install_claims import personal_router as personal_install_claim_router, public_router as public_install_claim_router
-from umbod.rest.telemetry.composition import install_analytics_dependencies
+from umbod.rest.telemetry.composition import (
+    install_analytics_dependencies,
+    install_harness_activity_dependency,
+)
 from umbod.rest.users import create_user_profile_router
 from umbod.rest.users.jwks import (
     CachedSigningKeyResolver,
@@ -235,7 +238,7 @@ def _mount_personal_app(
     user_router = APIRouter()
     user_router.include_router(create_user_profile_router())
     user_router.include_router(user_catalogue_router)
-    user_router.include_router(personal_usage_router)
+    user_router.include_router(activity_router)
     user_router.include_router(personal_agent_behaviour_router)
     user_router.include_router(personal_telemetry_analytics_router)
     user_router.include_router(identity_directory_personal_router)
@@ -258,6 +261,7 @@ def _mount_personal_app(
 
     _attach_dependency_factories(personal_app, dependency_factories)
     install_analytics_dependencies(personal_app, analytics_runtime)
+    install_harness_activity_dependency(personal_app, analytics_runtime)
     install_oauth_diagnostics(personal_app, application_failures)
 
     def provide_app_config() -> AppConfig:

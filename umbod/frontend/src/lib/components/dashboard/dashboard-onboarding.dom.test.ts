@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { mountWorkspace } from '#lib/components/workspace/mount-workspace.test-support.js';
 import { unmount } from 'svelte';
-import { InMemoryDashboardApi } from '#lib/dashboard/infrastructure/in-memory-api.js';
-import { catalogue } from '#lib/dashboard/test-fixtures.js';
+import { dashboardActivityApi } from '#lib/insights/activity/activity.test-support.js';
 import { InMemoryWorkspaceApi } from '#lib/workspace/in-memory-api.test-support.js';
 import Dashboard from './Dashboard.svelte';
 
@@ -19,14 +18,15 @@ describe('Dashboard onboarding entry', () => {
     component = mountWorkspace(Dashboard, {
       target: document.body,
       props: {
-        createApi: () => new InMemoryDashboardApi({ ...catalogue, personal_enabled: false }),
+        createApi: () => dashboardActivityApi('opaque-member-key', 0),
         createWorkspaceApi: () => new InMemoryWorkspaceApi({
           identity_key: 'opaque-member-key', user: { id: 'member', name: 'Member', email: null, picture: null },
           capabilities: { administration: false }
         })
       }
     }, '/dashboard');
-    await vi.waitFor(() => expect(document.querySelector('h1')?.textContent).toBe('Dashboard'));
+    await vi.waitFor(() => expect(document.querySelector('[aria-label="Tool activity"]')).not.toBeNull());
+    expect(document.querySelector('h1')?.textContent).toBe('Dashboard');
     expect(document.querySelector('a[href="/getting-started"]')?.textContent?.trim()).toBe('Getting started');
     expect(document.querySelector('[aria-label="MCP setup"]')).toBeNull();
     expect(document.body.textContent).not.toContain('claude mcp add');

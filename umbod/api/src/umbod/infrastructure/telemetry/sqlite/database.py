@@ -8,6 +8,7 @@ from pathlib import Path
 import aiosqlite
 
 from umbod.config.defaults import TELEMETRY_ANALYTICS_RAW_ARCHIVE_RETENTION_DAYS
+from umbod.core.activity.ports import HarnessActivityReader
 from umbod.core.telemetry.analytics import (
     TelemetryAnalyticsReader,
     TelemetryAnalyticsUnavailable,
@@ -110,6 +111,11 @@ class SqliteAnalyticsRuntime:
         from .reader import SqliteAnalyticsReader
 
         return SqliteAnalyticsReader(self)
+
+    def create_harness_activity_reader(self) -> HarnessActivityReader:
+        from .activity_reader import SqliteHarnessActivityReader
+
+        return SqliteHarnessActivityReader(self)
 
     def create_writer(self) -> TelemetryAnalyticsWriter:
         from .writer import SqliteAnalyticsWriter

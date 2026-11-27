@@ -6,6 +6,8 @@ description: Set up log analytics, check ingestion, and interpret reported activ
 
 # Log analytics
 
+For a personal overview, open **Dashboard** and switch between **Harness activity** and **MCP Activity**. Both views use the same 7- or 30-day UTC period, but their counts are separate. Use **Insights → Log analytics** for grouped reports and custom log queries.
+
 Administrators can open **Log analytics** in workspace navigation or visit `/admin/analytics`. This view and its API cover the whole instance, including unowned exports. Signed-in users can query their own log counts through `POST /api/me/telemetry/log-counts`.
 
 To see new exports, enable both the analytics backend and the authenticated private collector, then configure clients to export to that collector. Application and Helm defaults leave analytics disabled; see [Development storage](#development-storage) for the Compose defaults and [telemetry ingestion](../operations/telemetry-ingestion.md) for setup.

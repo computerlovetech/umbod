@@ -9,7 +9,8 @@ from mcp.shared.exceptions import MCPError
 
 from conftest import RuntimeEndpoints
 from test_running_personal_mcp_execution import mcp_client, proxy_token
-from umbod.rest.personal_usage.models import PersonalUsageResponse
+from umbod.core.usage import UsageSummary
+from umbod.rest.activity.models import ActivityOverviewResponse
 
 
 pytestmark = pytest.mark.skipif(
@@ -18,11 +19,13 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def read_usage(client: httpx.Client, base_url: str, token: str) -> PersonalUsageResponse:
-    response = client.get(base_url + '/api/me/usage', headers={'Authorization': 'Bearer ' + token})
+def read_mcp_activity(client: httpx.Client, base_url: str, token: str) -> UsageSummary:
+    response = client.get(base_url + '/api/me/activity', headers={'Authorization': 'Bearer ' + token})
     assert response.status_code == 200
     assert response.headers['cache-control'] == 'no-store'
-    return PersonalUsageResponse.model_validate(response.json())
+    overview = ActivityOverviewResponse.model_validate(response.json())
+    assert overview.mcp.status == 'available'
+    return overview.mcp.summary
 
 
 async def exercise_usage(url: str, token: str) -> None:
@@ -39,7 +42,7 @@ async def exercise_usage(url: str, token: str) -> None:
             await client.get_prompt('personal_usage_missing_prompt', {})
 
 
-def test_running_usage_crosses_mcp_and_rest_processes_without_crossing_users(runtime_endpoints: RuntimeEndpoints) -> None:
+def test_running_mcp_activity_crosses_processes_without_crossing_users(runtime_endpoints: RuntimeEndpoints) -> None:
     member_token = os.environ['UMBOD_TEST_MEMBER_BEARER_TOKEN']
     other_token = runtime_endpoints.bearer_token
     second_api = os.environ['UMBOD_TEST_API_B_BASE_URL']
@@ -47,15 +50,15 @@ def test_running_usage_crosses_mcp_and_rest_processes_without_crossing_users(run
     with httpx.Client(timeout=30) as http, httpx.Client(
         base_url=os.environ['UMBOD_TEST_PERSONAL_URL'], verify=tls, timeout=30, follow_redirects=False,
     ) as identity:
-        before = read_usage(http, runtime_endpoints.api_base_url, member_token)
-        other_before = read_usage(http, runtime_endpoints.api_base_url, other_token)
+        before = read_mcp_activity(http, runtime_endpoints.api_base_url, member_token)
+        other_before = read_mcp_activity(http, runtime_endpoints.api_base_url, other_token)
         previous_browse_count = sum(tool.count for tool in before.top_tools if tool.tool_name == 'filesystem_browse')
         authenticated_token = proxy_token(runtime_endpoints.mcp_url, member_token, identity)
         asyncio.run(exercise_usage(runtime_endpoints.mcp_url, authenticated_token))
         deadline = time.monotonic() + 20
         observed = before
         while time.monotonic() < deadline:
-            observed = read_usage(http, second_api, member_token)
+            observed = read_mcp_activity(http, second_api, member_token)
             if (
                 observed.totals.tool.success >= before.totals.tool.success + 1
                 and observed.totals.resource.success >= before.totals.resource.success + 1
@@ -72,17 +75,17 @@ def test_running_usage_crosses_mcp_and_rest_processes_without_crossing_users(run
         assert len(browse_tools) == 1
         assert browse_tools[0].count == previous_browse_count + 1
         assert browse_tools[0].connector_name == 'Umbod'
-        same_owner = read_usage(http, runtime_endpoints.api_base_url, member_token)
+        same_owner = read_mcp_activity(http, runtime_endpoints.api_base_url, member_token)
         assert same_owner.totals == observed.totals
         assert same_owner.top_tools == observed.top_tools
-        other_owner = read_usage(http, runtime_endpoints.api_base_url, other_token)
+        other_owner = read_mcp_activity(http, runtime_endpoints.api_base_url, other_token)
         assert other_owner.totals == other_before.totals
         assert other_owner.top_tools == other_before.top_tools
         assert len(observed.daily) == 7
         assert 'personal_usage_missing_prompt' not in observed.model_dump_json()
-        assert http.get(runtime_endpoints.api_base_url + '/api/me/usage').status_code == 401
+        assert http.get(runtime_endpoints.api_base_url + '/api/me/activity').status_code == 401
         injected = http.get(
-            runtime_endpoints.api_base_url + '/api/me/usage',
+            runtime_endpoints.api_base_url + '/api/me/activity',
             params={'owner': 'another-user'}, headers={'Authorization': 'Bearer ' + member_token},
         )
         assert injected.status_code == 422

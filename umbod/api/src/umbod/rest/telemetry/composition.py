@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from umbod.core.activity.ports import HarnessActivityReader, HarnessActivityReaderProvider
 from umbod.core.diagnostics import PublishingSignalFailureHandler
 from umbod.core.signals import Signal, SignalPublisher
 from umbod.logging import create_application_failure_signal
@@ -17,6 +18,7 @@ from umbod.core.telemetry.analytics import (
     TelemetryAnalyticsWriter,
 )
 from umbod.infrastructure import create_disabled_analytics_runtime
+from umbod.rest.activity.deps import get_harness_activity_reader
 from umbod.rest.telemetry.dependencies import (
     get_analytics_reader,
     get_analytics_writer,
@@ -70,3 +72,13 @@ def install_analytics_dependencies(app: FastAPI, runtime: TelemetryAnalyticsRunt
 
     app.dependency_overrides[get_analytics_writer] = provide_writer
     app.dependency_overrides[get_analytics_reader] = provide_reader
+
+
+def install_harness_activity_dependency(app: FastAPI, runtime: TelemetryAnalyticsRuntime) -> None:
+    if not isinstance(runtime, HarnessActivityReaderProvider):
+        return
+
+    def provide_harness_reader() -> HarnessActivityReader:
+        return runtime.create_harness_activity_reader()
+
+    app.dependency_overrides[get_harness_activity_reader] = provide_harness_reader

@@ -12,6 +12,7 @@ description: Workspace routes, shared UI, and feature state.
 - [Agent behaviour](lib/agent-behaviour/README.md) — Atomic definition editing and original diagnostic report snapshots.
 - [Workspace](lib/workspace/README.md) — Workspace composition.
 - [Dashboard](lib/dashboard/README.md) — Dashboard state.
+- [Personal activity](lib/insights/activity/README.md) — Owner activity API and Dashboard state.
 - [Files](lib/files/README.md) — File browsing and uploads.
 - [Personal connections](lib/personal-connections/README.md) — User connections.
 - [Personal access tokens](lib/personal-access-tokens/README.md) — Validated owner-token management API.

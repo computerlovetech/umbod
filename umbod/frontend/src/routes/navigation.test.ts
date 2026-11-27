@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { load } from './+page';
+import { load as loadLegacyActivity } from './(workspace)/insights/activity/+page';
 import { load as loadLegacyTelemetry } from './(workspace)/getting-started/telemetry/+page';
 import { usesWorkspaceShell } from '#lib/workspace/navigation.js';
 
@@ -14,6 +15,11 @@ describe('workspace entry', () => {
   test.each(['', '?tab=tokens#setup'])('redirects legacy telemetry bookmarks to Tokens (%s)', (suffix: string): void => {
     const url = new URL(`https://umbod.test/getting-started/telemetry${suffix}`);
     expect(() => loadLegacyTelemetry({ url })).toThrow(expect.objectContaining({ status: 307, location: `/settings/tokens${suffix}` }));
+  });
+
+  test.each(['', '?days=30#recent'])('redirects legacy activity bookmarks to Dashboard (%s)', (suffix: string): void => {
+    const url = new URL(`https://umbod.test/insights/activity${suffix}`);
+    expect(() => loadLegacyActivity({ url })).toThrow(expect.objectContaining({ status: 307, location: `/dashboard${suffix}` }));
   });
 
   test('root redirects temporarily to the dashboard', async (): Promise<void> => {

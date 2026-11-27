@@ -1,4 +1,4 @@
-export type OutcomeKey = 'success' | 'failure' | 'cancelled';
+export type OutcomeKey = 'success' | 'failure' | 'cancelled' | 'unknown';
 
 export type OutcomeSegment = {
   readonly key: OutcomeKey;
@@ -47,7 +47,7 @@ export type ActivityChart = {
 export type RankedTool = {
   readonly id: string;
   readonly name: string;
-  readonly connector: string;
+  readonly connector?: string;
   readonly count: number;
   readonly barWidth: number;
 };

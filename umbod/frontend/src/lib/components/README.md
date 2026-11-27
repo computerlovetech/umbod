@@ -8,13 +8,14 @@ description: "Reusable and actor-owned Svelte presentation and interaction modul
 
 - [admin/](./admin/README.md) — Administration workspaces, permissions and shared controls.
 - [Workspace frame](./workspace/README.md) — Route-group-owned sidebar, profile access and scoped page lifetimes.
-- [dashboard](./dashboard/README.md) — User catalogue workspace.
+- [Dashboard and Connectors](./dashboard/README.md) — Account-scoped Dashboard composition, catalogue workspace, and standalone design preview.
 - [feedback/](./feedback/) — Toast presentation and state.
 - [files](./files/README.md) — User filesystem workspace.
 - [Getting started](./getting-started/README.md) — Harness installation and connection guidance.
 - [Settings](./settings/README.md) — Personal token management and one-time telemetry configuration.
 - [Identity observation](./identity-directory/README.md) — Root-mounted browser observation lifecycle.
 - [header/](./header/) — Header and account presentation.
+- [Personal activity](./personal/activity/README.md) — Harness and MCP reports with personal session navigation.
 - [personal-connections](./personal-connections/README.md) — Owner-scoped connection controls.
 - [shared](./shared/README.md) — Actor-independent presentation.
 

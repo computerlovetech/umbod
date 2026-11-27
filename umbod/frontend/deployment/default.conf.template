@@ -4,6 +4,7 @@ server {
     root /usr/share/nginx/html;
     index index.html 200.html;
     client_max_body_size 12m;
+    large_client_header_buffers 4 24k;
     resolver ${DNS_RESOLVER} ipv6=off;
     set $api_proxy_origin "${API_PROXY_ORIGIN}";
 

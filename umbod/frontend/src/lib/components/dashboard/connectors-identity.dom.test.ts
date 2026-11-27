@@ -171,13 +171,12 @@ describe('Connectors identity source epochs', () => {
     await vi.waitFor(() => expect(document.body.textContent).toContain('Account B connector'));
   });
 
-  test.each(['pending', 'loaded'] as const)('resolved profile B fences %s catalogue A without usage requests', async (initialPhase): Promise<void> => {
+  test.each(['pending', 'loaded'] as const)('resolved profile B fences %s catalogue A', async (initialPhase): Promise<void> => {
     const profileB = deferred<WorkspaceProfile>();
     const catalogueReadA = deferred<typeof catalogue>();
     const catalogueReadB = deferred<typeof catalogue>();
     const api = new InMemoryDashboardApi(catalogueA);
     const list = vi.spyOn(api.catalogue, 'list').mockReturnValueOnce(catalogueReadA.promise).mockReturnValue(catalogueReadB.promise);
-    const usage = vi.spyOn(api.usage, 'get');
     component = mountWorkspace(ConnectorsPage, { target: document.body, props: {
       accountIdentity: identity('A'),
       createApi: () => api,
@@ -200,6 +199,5 @@ describe('Connectors identity source epochs', () => {
     catalogueReadB.resolve(catalogueB);
     await vi.waitFor(() => expect(document.body.textContent).toContain('Account B connector'));
     expect(document.querySelector('[aria-label="Workspace sidebar"]')?.textContent).toContain('Account B');
-    expect(usage).not.toHaveBeenCalled();
   });
 });

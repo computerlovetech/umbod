@@ -1,9 +1,10 @@
 .dv-success, .dv-tool { --dv-color: var(--chart-success, #278367); }
 .dv-failure { --dv-color: var(--chart-failure, #d46b55); }
 .dv-cancelled { --dv-color: var(--chart-cancelled, #a9b7af); }
+.dv-unknown { --dv-color: var(--chart-unknown, #8794ac); }
 .dv-resource { --dv-color: var(--chart-resource, #9abfae); }
 .dv-prompt { --dv-color: var(--chart-prompt, #cfded5); }
-.dv-success, .dv-failure, .dv-cancelled, .dv-tool, .dv-resource, .dv-prompt { background: var(--dv-color); stroke: var(--dv-color); }
+.dv-success, .dv-failure, .dv-cancelled, .dv-unknown, .dv-tool, .dv-resource, .dv-prompt { background: var(--dv-color); stroke: var(--dv-color); }
 .dv-muted { color: var(--admin-muted); font-size: 12px; }
 .dv-outcomes { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; min-height: 150px; }
 .dv-ring { width: 140px; height: 140px; flex-shrink: 0; }
