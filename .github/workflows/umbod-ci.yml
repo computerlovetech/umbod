@@ -40,25 +40,47 @@ jobs:
     name: Detect relevant changes
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
+      actions: read
       contents: read
       pull-requests: read
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      sdk: ${{ steps.filter.outputs.sdk }}
-      lint: ${{ steps.filter.outputs.lint }}
-      semgrep: ${{ steps.filter.outputs.semgrep }}
-      installers: ${{ steps.filter.outputs.installers }}
-      scripts: ${{ steps.filter.outputs.scripts }}
-      website: ${{ steps.filter.outputs.website }}
-      core: ${{ steps.filter.outputs.core }}
-      connector: ${{ steps.filter.outputs.connector }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-      helm: ${{ steps.filter.outputs.helm }}
-      kind: ${{ steps.filter.outputs.kind }}
+      backend: ${{ steps.recovery.outputs.full || steps.filter.outputs.backend }}
+      sdk: ${{ steps.recovery.outputs.full || steps.filter.outputs.sdk }}
+      lint: ${{ steps.recovery.outputs.full || steps.filter.outputs.lint }}
+      semgrep: ${{ steps.recovery.outputs.full || steps.filter.outputs.semgrep }}
+      installers: ${{ steps.recovery.outputs.full || steps.filter.outputs.installers }}
+      scripts: ${{ steps.recovery.outputs.full || steps.filter.outputs.scripts }}
+      website: ${{ steps.recovery.outputs.full || steps.filter.outputs.website }}
+      core: ${{ steps.recovery.outputs.full || steps.filter.outputs.core }}
+      connector: ${{ steps.recovery.outputs.full || steps.filter.outputs.connector }}
+      frontend: ${{ steps.recovery.outputs.full || steps.filter.outputs.frontend }}
+      helm: ${{ steps.recovery.outputs.full || steps.filter.outputs.helm }}
+      kind: ${{ steps.recovery.outputs.full || steps.filter.outputs.kind }}
     steps:
-      - uses: useblacksmith/checkout@v1
+      - name: Recover work from an unsuccessful main push
+        id: recovery
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE_SHA: ${{ github.event.before }}
+          FORCED_PUSH: ${{ github.event.forced }}
+        run: |
+          set -euo pipefail
+          if [[ "$FORCED_PUSH" != 'true' ]] &&
+            previous_successful_sha="$(timeout 15s gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/umbod-ci.yml/runs" \
+              -f branch=main -f event=push -F per_page=100 \
+              --jq "[.workflow_runs[] | select(.run_number < ${GITHUB_RUN_NUMBER})] | max_by(.run_number) | select(.conclusion == \"success\") | .head_sha")" &&
+            [[ -n "$previous_successful_sha" && "$previous_successful_sha" == "$BEFORE_SHA" ]]; then
+            exit 0
+          fi
+          echo 'Previous main push is not confirmed green; selecting all CI jobs.'
+          echo 'full=true' >> "$GITHUB_OUTPUT"
+
+      - if: steps.recovery.outputs.full != 'true'
+        uses: useblacksmith/checkout@v1
 
       - id: filter
+        if: steps.recovery.outputs.full != 'true'
         uses: dorny/paths-filter@v3
         with:
           filters: .github/ci-paths.yml

@@ -2,6 +2,7 @@ import fnmatch
 import json
 import os
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -111,6 +112,76 @@ def test_component_jobs_use_the_published_change_selection(workflow: dict[str, A
         assert component in jobs["changes"]["outputs"]
     assert jobs["changes"]["steps"][-1]["with"]["filters"] == ".github/ci-paths.yml"
     assert set(jobs["ci-complete"]["needs"]) == {*COMPONENT_JOBS, "changes", "harness-linting"}
+
+
+def test_full_recovery_overrides_path_filters_only_on_main_pushes(workflow: dict[str, Any]) -> None:
+    changes = workflow["jobs"]["changes"]
+    recovery, _, path_filter = changes["steps"]
+    assert recovery["if"] == "github.event_name == 'push' && github.ref == 'refs/heads/main'"
+    assert path_filter["if"] == "steps.recovery.outputs.full != 'true'"
+    for component in COMPONENT_JOBS.values():
+        assert changes["outputs"][component] == (
+            f"${{{{ steps.recovery.outputs.full || steps.filter.outputs.{component} }}}}"
+        )
+
+
+@pytest.mark.parametrize(
+    ("preceding_runs", "lookup_exit", "forced_push", "expected_output"),
+    [
+        ([(2, "preceding-commit", "success")], 0, "false", ""),
+        ([(1, "preceding-commit", "success"), (2, "preceding-commit", "failure")], 0, "false", "full=true\n"),
+        ([(1, "preceding-commit", "success"), (2, "preceding-commit", "cancelled")], 0, "false", "full=true\n"),
+        ([(2, "preceding-commit", None)], 0, "false", "full=true\n"),
+        ([], 0, "false", "full=true\n"),
+        ([(2, "older-commit", "success")], 0, "false", "full=true\n"),
+        ([(2, "preceding-commit", "success")], 1, "false", "full=true\n"),
+        ([(2, "preceding-commit", "success")], 0, "true", "full=true\n"),
+    ],
+    ids=["green", "failed", "cancelled", "running", "first-run", "unverified-gap", "lookup-fails", "force-push"],
+)
+def test_main_push_falls_back_to_full_ci_without_confirmed_preceding_success(
+    workflow: dict[str, Any],
+    tmp_path: Path,
+    preceding_runs: list[tuple[int, str, str | None]],
+    lookup_exit: int,
+    forced_push: str,
+    expected_output: str,
+) -> None:
+    if not shutil.which("jq") or not shutil.which("timeout"):
+        pytest.skip("Workflow history replay requires jq and timeout")
+    workflow_runs = [
+        {"run_number": number, "head_sha": sha, "conclusion": conclusion}
+        for number, sha, conclusion in [(4, "preceding-commit", "success"), *preceding_runs]
+    ]
+    gh = tmp_path / "gh"
+    gh.write_text(
+        '#!/usr/bin/env bash\n'
+        'if [[ "$LOOKUP_EXIT" != 0 ]]; then exit "$LOOKUP_EXIT"; fi\n'
+        'printf "%s\\n" "$WORKFLOW_HISTORY" | jq -r "${@: -1}"\n'
+    )
+    gh.chmod(0o755)
+    output = tmp_path / "output"
+    output.touch()
+    recovery = next(step for step in workflow["jobs"]["changes"]["steps"] if step.get("id") == "recovery")
+
+    subprocess.run(
+        ["bash", "-c", recovery["run"]],
+        env={
+            **os.environ,
+            "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
+            "GITHUB_OUTPUT": str(output),
+            "GITHUB_REPOSITORY": "computerlovetech/umbod",
+            "GITHUB_RUN_NUMBER": "3",
+            "BEFORE_SHA": "preceding-commit",
+            "FORCED_PUSH": forced_push,
+            "WORKFLOW_HISTORY": json.dumps({"workflow_runs": workflow_runs}),
+            "LOOKUP_EXIT": str(lookup_exit),
+        },
+        check=True,
+        timeout=10,
+    )
+
+    assert output.read_text() == expected_output
 
 
 @pytest.fixture
