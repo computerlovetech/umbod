@@ -12,11 +12,11 @@ Umbod's filesystem does not expose the host filesystem. Names, policies and meta
 
 ## Shared namespace administration
 
-Open **Group permissions → Filesystem** at `/admin/group-permissions/filesystem`. Use **+** to create a shared namespace with a name and an optional **Description**. Creation assigns no group access and does not depend on which group is selected. Use the namespace's edit action to change its name or description; clearing the description removes it.
+Open **Administration → Shared namespaces** at `/admin/namespaces`. Use **+** to create a shared namespace with a name and an optional **Description**. Creation assigns no group access. Use the namespace's edit action to change its name or description; clearing the description removes it.
 
 Descriptions appear when browsing the namespace and in REST and MCP namespace discovery. Check the namespace and its access with an account in the intended group, not just an administrator account. They use the same metadata as the namespace's root folder, so editing that folder's description updates the namespace description too.
 
-Select a group in the sidebar, then choose **No access**, **Read** or **Read and write** for existing namespaces. Changes remain local until you choose **Save permissions**. Switching between the Filesystem and Connectors tabs retains unsaved permission changes; switching groups asks you to discard those changes or cancel.
+In **Permissions → Filesystem** at `/admin/group-permissions/filesystem`, select a group in the sidebar, then choose **No access**, **Read** or **Read and write** for existing namespaces. Changes remain local until you choose **Save permissions**. Switching between the Filesystem and Connectors tabs retains unsaved permission changes; switching groups asks you to discard those changes or cancel.
 
 Multiple groups can use the same namespace; switching groups changes whose access you edit, not the namespace itself. An assignment supplies baseline access to every descendant. Item ownership and explicit file or folder shares can add rights. Removing an assignment removes that group's baseline, not any independent right to an item. Editing a namespace's name or description does not save staged permission changes.
 
@@ -93,8 +93,6 @@ Known textual MIME types return UTF-8 text; binary or unspecified types return b
 Use the returned home UUID as `parent_id` when the user did not choose a destination, and check `permissions.can_write`. If tools are missing immediately after the home is created, refresh discovery. `visible_to` describes the containing namespace, not everyone with access; `restricted` means the audience is unknown, not private.
 
 ### Uploading from an agent
-
-The two-step MCP upload tools are not included in Umbod `0.0.1-beta.9`. If `filesystem_begin_upload` and `filesystem_complete_upload` are absent from `tools/list`, use `filesystem_upload` within its inline size limit or upload through the workspace.
 
 Use `filesystem_begin_upload` with the original file’s byte count and, if available, computed SHA-256. Follow the returned HTTP PUT instructions using the original bytes, without cookies, Umbod bearer credentials, or redirects. Treat the URL and transfer headers as secrets. Then call `filesystem_complete_upload` as the session owner; PUT alone does not publish.
 

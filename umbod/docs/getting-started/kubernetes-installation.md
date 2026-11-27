@@ -155,6 +155,15 @@ Open the shared HTTPS address and sign in with an account in the administrator g
 !!! warning
     The chart runs one copy of the core service with a SQLite database. Persistent storage keeps data when Kubernetes replaces the Pod, but it does not make Umbod highly available. Use this chart for development and evaluation.
 
+## Upgrade from 0.0.1-beta.9
+
+Back up the application database and file bytes together. Export any files outside registered namespaces before upgrading. Rehearse the upgrade on a copy; Umbod does not automatically migrate incompatible database schemas or move files into registered namespaces. Keep the root secret unchanged, and upgrade API, MCP, and frontend together.
+
+- Move administrator clients to the [private MCP listener](../operations/configuration.md#administrator-mcp-hosting). Rediscover the available tools and update scripts to use `admin_discover`, `admin_inspect`, and `admin_apply`.
+- For file automation, use MCP `resources/read` instead of `filesystem_read_file`. New folder grants made through `filesystem_share` are recursive by default; pass `recursive: false` for a grant on the folder alone. Review the [current tool contracts](../reference/built-in-tools.md) before reusing older requests.
+- If you collect OTLP telemetry, remove any public `/v1/*` route and point exporters at the [private collector](../operations/telemetry-ingestion.md). Enable analytics storage separately if you need to query logs.
+- Check that users can still reach their files after the upgrade. Files outside registered namespaces are not visible, but their stored bytes are not deleted. See [Filesystem access](../using-umbod/files.md#personal-and-shared-files).
+
 ## Uninstall
 
 Remove the local release and kind cluster. Deleting the cluster also removes data stored only in that cluster:

@@ -17,7 +17,7 @@ Use an existing Umbod workspace to connect an agent, share access to apps and fi
 
 -   :material-server-network: **Connect an agent**
 
-    Sign in and discover tools. Use the Codex installer on supported releases, or connect your client to MCP directly.
+    Sign in and discover tools. Use the Codex installer or connect your client to MCP directly.
 
     [Install for Codex](using-umbod/codex-plugin.md) · [Connect directly](operations/service-topology.md)
 
@@ -35,7 +35,7 @@ Use an existing Umbod workspace to connect an agent, share access to apps and fi
 
 -   :material-clipboard-check-outline: **Enable agent diagnostics**
 
-    On releases with Agent diagnostics, set up a playbook so signed-in agents can submit reports.
+    Enable diagnostic reporting and set up a playbook so signed-in agents can submit reports.
 
     [Enable diagnostic reporting :material-arrow-right:](operations/configuration.md#diagnostic-reporting)
 
@@ -54,4 +54,4 @@ Use an existing Umbod workspace to connect an agent, share access to apps and fi
 
 ## Early beta
 
-The [installation guide](getting-started/kubernetes-installation.md) uses published chart `{{ release.chartVersion }}` and images `{{ release.imageTag }}`. Some guides describe newer features and call out when those releases lack support. The chart is for evaluation, not high availability. Questions or feedback? [Join the community on Discord](https://discord.gg/Njy4GnurpE) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).
+The [installation guide](getting-started/kubernetes-installation.md) uses published chart `{{ release.chartVersion }}` and images `{{ release.imageTag }}`. The chart is for evaluation, not high availability. Questions or feedback? [Join the community on Discord](https://discord.gg/Njy4GnurpE) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).

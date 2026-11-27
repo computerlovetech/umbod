@@ -20,7 +20,7 @@ An approved immutable tag/SHA publishes verified artifacts and matching Cloudfla
 ## Rules
 
 - R1: Run only on explicit user invocation; installation is not authorization. Preserve unrelated work and require approval of the final tag/SHA.
-- R2: Require main ancestry, exact successful main CI, preview checks, production fast-forward eligibility, and workflow-only production updates; never push production directly.
+- R2: Require main ancestry, exact successful main CI, preview checks, and production fast-forward eligibility; use the release workflow to promote production.
 - R3: Publish one immutable tag only; block collisions and lookup errors. Never move tags, overwrite artifacts, force production, run concurrent releases, or blindly retry.
 
 ## Workflow

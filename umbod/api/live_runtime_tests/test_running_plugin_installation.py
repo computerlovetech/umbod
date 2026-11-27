@@ -62,10 +62,10 @@ def test_running_public_plugin_artifacts_use_configured_endpoint(
             assert json.loads(package.read("plugins/umbod/.mcp.json")) == {
                 "mcpServers": {"umbod": {"type": "http", "url": expected_endpoint}},
             }
-            for skill_name in ("umbod-connected-apps", "umbod-agent-behaviour"):
-                assert package.read(f"plugins/umbod/skills/{skill_name}/SKILL.md").strip()
+            skill = "plugins/umbod/skills/run-diagnostics/SKILL.md"
+            assert {name for name in package.namelist() if name.startswith("plugins/umbod/skills/")} == {skill}
             canonical_skill = Path(__file__).resolve().parents[3] / "skills/integrations/run-diagnostics/SKILL.md"
-            assert package.read("plugins/umbod/skills/run-diagnostics/SKILL.md") == canonical_skill.read_bytes()
+            assert package.read(skill) == canonical_skill.read_bytes()
             catalog_path = (
                 ".agents/plugins/marketplace.json" if harness == "codex" else ".claude-plugin/marketplace.json"
             )

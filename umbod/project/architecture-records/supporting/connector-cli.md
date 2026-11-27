@@ -29,7 +29,7 @@ Check connector metadata, entry-point declarations, identifier consistency, and 
 
 Checks are read-only. They must not rewrite dependencies, refresh locks, select a newer target, or upgrade a deployment. Diagnostics should identify the failed check and an actionable next step.
 
-SDK compatibility must be assessed against the SDK supplied by the target runtime, not by treating matching PyPI SDK and image versions as runtime validation. New builder and core images use the synchronized SDK release; the Helm chart version is selected independently.
+SDK compatibility must be assessed against the SDK supplied by the target runtime, not by treating matching PyPI SDK and image versions as runtime validation. Current releases publish the builder and core images, SDK, and Helm chart together. Older artifacts were released separately.
 
 If required compatibility information is unavailable, report that the check could not establish compatibility rather than treating matching version strings as proof.
 

@@ -39,7 +39,7 @@ The core image supplies the Connector SDK. A plugin bundle contains connector co
 
 - One plugin-bundle image can be configured for an Umbod release. Combine all required connector distributions into that bundle.
 - Plugins share one Python runtime and dependency namespace with Umbod and each other.
-- Connector-builder and core image tags must match. Helm chart versions are selected separately and need not match image tags.
+- Use the same release version for the connector-builder, core and frontend images and the Helm chart. For beta releases, `-beta.N` corresponds to `bN` on PyPI. Older, independently published artifacts may use different versions.
 - Plugin images should use immutable tags. Floating tags such as `latest` are unsupported.
 - Structural validation does not verify credentials, external service availability, or the safety of connector operations.
 

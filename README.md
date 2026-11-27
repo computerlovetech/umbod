@@ -37,7 +37,7 @@ kubectl --context kind-umbod create secret generic umbod-secrets \
 
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
-  --version 0.0.1-beta.9 \
+  --version 0.1.0-beta.1 \
   --kube-context kind-umbod \
   --set existingSecret=umbod-secrets \
   --set config.profile=local \
@@ -66,7 +66,7 @@ Need a custom integration? **[Build a connector →](https://umbod.ai/docs/plugi
 | | |
 | --- | --- |
 | [Installation](https://umbod.ai/docs/getting-started/kubernetes-installation/) | Install locally or configure a shared cluster. |
-| [Codex CLI plugin](umbod/docs/using-umbod/codex-plugin.md) | Install Umbod's connection and connected-app skill through a local marketplace. |
+| [Codex CLI plugin](umbod/docs/using-umbod/codex-plugin.md) | Install Umbod's MCP connection and `run-diagnostics` skill through a local marketplace. |
 | [Files](https://umbod.ai/docs/using-umbod/files/) | Upload, share, and access files through the workspace or MCP. |
 | [Architecture](https://umbod.ai/docs/operations/service-topology/) | Understand the services, data flow, and storage. |
 | [Configuration](https://umbod.ai/docs/operations/configuration/) | Configure authentication, public origins, and persistence. |

@@ -13,8 +13,6 @@ RUN uv sync --project umbod/api --frozen --no-default-groups --group shared --gr
 
 COPY umbod/api/README.md umbod/api/
 COPY umbod/api/src umbod/api/src
-COPY skills/integrations/umbod-connected-apps/SKILL.md skills/integrations/umbod-connected-apps/SKILL.md
-COPY skills/integrations/umbod-agent-behaviour/SKILL.md skills/integrations/umbod-agent-behaviour/SKILL.md
 COPY skills/integrations/run-diagnostics/SKILL.md skills/integrations/run-diagnostics/SKILL.md
 COPY LICENSE LICENSE
 COPY packages/umbod-sdk/src packages/umbod-sdk/src

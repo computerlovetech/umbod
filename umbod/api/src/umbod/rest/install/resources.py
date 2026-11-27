@@ -19,17 +19,11 @@ class BundledInstallerSourceReader:
 class BundledPackageResourceReader:
     def read(self) -> PackageResources:
         resources = distribution("umbod-core").locate_file("umbod/harness_plugin_resources")
-        with resources.joinpath("SKILL.md").open("rb") as stream:
-            skill = stream.read(262145).decode("utf-8")
-        with resources.joinpath("AGENT_BEHAVIOUR_SKILL.md").open("rb") as stream:
-            behaviour_skill = stream.read(262145).decode("utf-8")
         with resources.joinpath("RUN_DIAGNOSTICS_SKILL.md").open("rb") as stream:
             run_diagnostics_skill = stream.read(262145).decode("utf-8")
         with resources.joinpath("LICENSE").open("rb") as stream:
             license_text = stream.read(262145).decode("utf-8")
         return PackageResources(
-            skill=skill,
-            behaviour_skill=behaviour_skill,
             run_diagnostics_skill=run_diagnostics_skill,
             license_text=license_text,
         )

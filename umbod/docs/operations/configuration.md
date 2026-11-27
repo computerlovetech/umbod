@@ -16,8 +16,6 @@ API and MCP need the same nonblank `UMBOD_ROOT_SECRET` at startup, including in 
 
 ## Administrator MCP hosting
 
-The Helm steps below require a chart that lists `core.mcp.administrator` in `helm show values`; chart `0.0.1-beta.9` does not include the separate administrator Service.
-
 Keep the default `core.mcp.administrator.hosting=separate` for privileged tools on a private listener. Sign in with the configured administrator membership; network access alone is not enough. For the default Helm release, run `kubectl port-forward service/umbod-mcp-administrator 8013:8013` and connect to `http://localhost:8013/mcp`. Do not add public ingress. For a different port or client origin, set `core.mcp.administrator.port` and `.baseUrl`; register the separate origin’s `/auth/callback` with your OIDC provider. Use HTTPS outside loopback.
 
 Set hosting to `shared` only to expose these tools on ordinary MCP. To disable the tools and the private listener, set `config.features.mcp.administratorEnabled=false`. Source deployments select hosting with `UMBOD_MCP_ADMINISTRATOR_HOSTING`; the listener belongs to `umbod mcp serve`. Compose publishes the separate listener only on loopback; use `docker-compose.mcp-shared.yml` with the base Compose file to opt into shared hosting (Compose 2.24.4 or newer).
@@ -37,8 +35,6 @@ Use the [Codex plugin guide](../using-umbod/codex-plugin.md) for installation an
 On custom gateways, allow unauthenticated GET/HEAD for `install.sh`, `install.ps1`, `package.zip`, `package.sha256`, `marketplace.txt`, and `endpoint.txt` under `/api/install/v1/codex/` and `/api/install/v1/claude-code/`. Allow POST to `telemetry/redeem` under those paths without a browser session; forward its one-time bearer code without logging it. Keep `/api/me/telemetry/install-claims` and other protected routes authenticated. Docker Compose already configures these exceptions.
 
 ## Diagnostic reporting
-
-Agent diagnostics are not included in Umbod `0.0.1-beta.9`. Use a deployment with the **Agent diagnostics** settings and the `report_diagnostic` MCP tool.
 
 New installations start with reporting off. In **System settings → Agent diagnostics**, enable reporting and configure an enabled playbook with at least one enabled pattern. Turning reporting off blocks submissions without deleting instructions or reports. See the [agent diagnostics MCP reference](../reference/built-in-tools.md#agent-diagnostics) for the tool and receipt contract.
 

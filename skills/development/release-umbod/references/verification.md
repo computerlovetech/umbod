@@ -66,7 +66,7 @@ A release publishes artifacts; it does not install or upgrade a user's Kubernete
 
 ## Production branch and live website
 
-1. Confirm GitHub rules restrict production updates to the authorized promotion identity with no human push bypass. The existing history-protection rule alone does not provide that guarantee; see `website/deployment.md` and stop if strict update enforcement is still missing.
+1. Confirm the release workflow advanced `production`. Authorized accounts retaining normal fast-forward access is not a release blocker.
 2. Fetch production afresh. `git rev-parse origin/production` must equal `git rev-parse "${TAG}^{commit}"` for a new ordinary release. Stop if the branch is ahead or divergent; do not force it backward.
 3. Inspect Cloudflare's separate production build and deployment: correct commit, successful deployment, Worker `umbod-website`, custom domain `umbod.ai`. A GitHub promotion success or a custom-domain attachment alone is insufficient. Record pending, failed or inaccessible Cloudflare evidence honestly, even if HTTP probes already work.
 4. Check these paths on both `https://umbod.ai` and `https://preview.umbod.ai`: `/`, `/docs/`, `/enterprise`, `/enterprise/`, `/enterprise.html`, `/download`, `/download/`, and a new unknown path. Require successful real pages, Enterprise/legacy redirects to their documented destinations, working asset links, and a genuine 404 for the unknown path.

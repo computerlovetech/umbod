@@ -17,15 +17,13 @@ from umbod.core.harness_plugins.rendering import (
     render_package as render_harness_package,
 )
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-SKILL_PATH = REPOSITORY_ROOT / "skills/integrations/umbod-connected-apps/SKILL.md"
-BEHAVIOUR_SKILL_PATH = REPOSITORY_ROOT / "skills/integrations/umbod-agent-behaviour/SKILL.md"
 RUN_DIAGNOSTICS_SKILL_PATH = REPOSITORY_ROOT / "skills/integrations/run-diagnostics/SKILL.md"
 
 
 def render_package(
-    endpoint: str, skill: str, license_text: str, behaviour_skill: str, run_diagnostics_skill: str,
+    endpoint: str, license_text: str, run_diagnostics_skill: str,
 ) -> Mapping[str, str]:
-    return render_harness_package(endpoint, skill, license_text, "codex", behaviour_skill, run_diagnostics_skill)
+    return render_harness_package(endpoint, license_text, "codex", run_diagnostics_skill)
 
 
 def write_package(destination: Path, files: Mapping[str, str]) -> None:
@@ -47,9 +45,7 @@ def write_package(destination: Path, files: Mapping[str, str]) -> None:
 def build_package(endpoint: str, destination: Path) -> str:
     files = render_package(
         endpoint,
-        SKILL_PATH.read_text(encoding="utf-8"),
         (REPOSITORY_ROOT / "LICENSE").read_text(encoding="utf-8"),
-        BEHAVIOUR_SKILL_PATH.read_text(encoding="utf-8"),
         RUN_DIAGNOSTICS_SKILL_PATH.read_text(encoding="utf-8"),
     )
     write_package(destination, files)

@@ -4,7 +4,7 @@ Enable collection only if agents need to send logs, metrics, or traces. Keep the
 
 ## Helm collector deployment
 
-Check for `telemetry.*` in `helm show values` for your chart. Chart `0.0.1-beta.9` lacks the private collector Service and routes ingestion through the API. Leave ingestion off on that release unless your deployment keeps `/v1/*` private.
+When upgrading from a deployment that routed OTLP through the public API, remove that route and point exporters at the private collector.
 
 1. Put the ingestion token in a Kubernetes Secret. Set `telemetry.bearerTokenSecret.name` and, if needed, `telemetry.bearerTokenSecret.key` (default `UMBOD_OTLP_BEARER_TOKEN`).
 2. Set `telemetry.enabled=true`. The collector runs inside API and gets a private ClusterIP Service. `telemetry.port` and `telemetry.servicePort` default to `4318`. Do not route `/v1/*` through public Ingress.

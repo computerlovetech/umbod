@@ -35,7 +35,7 @@ For Personal, register only servers you trust: users can connect only to servers
 ### Register a Personal connector
 
 1. Add a Personal server with its name, endpoint, and naming settings. These server definition fields are read-only after registration.
-2. Configure the OAuth application and requested scopes. **Automatic registration** requires provider support for public dynamic client registration. Otherwise use **Use an existing client ID** or **Use an existing client ID and secret**. Confidential clients require an explicit Basic or POST authentication method.
+2. Configure the OAuth application and requested scopes. **Automatic registration** requires provider support for dynamic client registration, either public or confidential. Otherwise use **Use an existing client ID** or **Use an existing client ID and secret**. Confidential clients require an explicit Basic or POST authentication method.
 3. Register the exact callback URI required by the provider when using a preconfigured client. Follow the [operator prerequisites](../operations/configuration.md#personal-connections-identity-policy); Umbod login and downstream account authorization are separate.
 4. Publish the server explicitly. New registrations start unpublished, without user consent, discovery, or permissions.
 5. Open **Group permissions** and grant connector-level access only to the intended groups.

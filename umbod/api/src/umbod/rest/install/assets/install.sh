@@ -1144,7 +1144,7 @@ def main() -> None:
             fail("Package SHA256 mismatch; no configuration was changed")
         catalog = ".agents/plugins/marketplace.json" if cli == "codex" else ".claude-plugin/marketplace.json"
         manifest = "plugins/umbod/" + (".codex-plugin" if cli == "codex" else ".claude-plugin") + "/plugin.json"
-        allowed = {catalog, manifest, "plugins/umbod/.mcp.json", "plugins/umbod/skills/umbod-connected-apps/SKILL.md", "plugins/umbod/skills/umbod-agent-behaviour/SKILL.md", "plugins/umbod/skills/run-diagnostics/SKILL.md", "plugins/umbod/LICENSE"}
+        allowed = {catalog, manifest, "plugins/umbod/.mcp.json", "plugins/umbod/skills/run-diagnostics/SKILL.md", "plugins/umbod/LICENSE"}
         stage = work / "staging"
         stage.mkdir(mode=0o700)
         with zipfile.ZipFile(work / "package.zip") as archive:

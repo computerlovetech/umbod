@@ -54,7 +54,8 @@
     "release-umbod": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "9b1428bc50f79444dbaa616806719923d8357fab16a291228f07decfd029463f"
+      "computedHash": "cb6ed75ba2370af2920a2fe61c381e5dda7a4a90b7721d74c6188f8f63e4b2c2",
+      "installMode": "copy"
     },
     "reusable-components": {
       "source": "./skills",

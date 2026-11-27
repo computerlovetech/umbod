@@ -8,8 +8,6 @@ ResourceText = Annotated[str, StringConstraints(min_length=1, max_length=262144,
 class PackageResources(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    skill: ResourceText
-    behaviour_skill: ResourceText
     run_diagnostics_skill: ResourceText
     license_text: ResourceText
 
