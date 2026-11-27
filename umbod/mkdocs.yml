@@ -41,28 +41,24 @@ extra:
 
 nav:
   - Home: index.md
-  - Getting started:
-      - Overview: getting-started/index.md
-      - Kubernetes installation: getting-started/kubernetes-installation.md
-  - Access and integrations:
-      - Connector setup and access: using-umbod/connectors.md
-      - File access and sharing: using-umbod/files.md
-      - Codex CLI plugin: using-umbod/codex-plugin.md
-  - Operations:
-      - Configuration: operations/configuration.md
-      - Connect to Umbod: operations/service-topology.md
-      - Store files in S3: operations/s3-file-storage.md
-      - Telemetry collection: operations/telemetry-ingestion.md
-      - Log analytics: using-umbod/log-analytics.md
-      - Scheduled cleanup: operations/cleanup.md
-      - Troubleshoot failures: operations/application-diagnostics.md
-  - Connector plugins:
-      - Overview: plugins/index.md
-      - Build a connector: plugins/build-a-connector.md
+  - Use Umbod:
+      - Connectors: use/connectors.md
+      - Connect an agent: use/connect-agents.md
+      - Files: use/files.md
+      - Insights: use/insights.md
+  - Self-host:
+      - Try it locally: self-host/local.md
+      - Install for a team: self-host/install.md
+      - Operate: self-host/operate.md
+      - Store files in S3: self-host/s3.md
+      - Collect telemetry: self-host/telemetry.md
+      - Troubleshooting: self-host/troubleshooting.md
+  - Extend:
+      - Build a connector: extend/build-a-connector.md
   - Reference:
       - Helm values: reference/helm-values.md
       - Built-in MCP tools: reference/built-in-tools.md
-      - Personal access token API: operations/personal-access-tokens.md
+      - REST API: reference/rest-api.md
 
 markdown_extensions:
   - admonition
@@ -93,5 +89,6 @@ hooks:
 exclude_docs: |
   __pycache__/
   *.pyc
+  hooks.py
 
 strict: true

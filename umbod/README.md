@@ -43,7 +43,7 @@ No `.env` file is required for the default local development profile. The stack 
 - API health: `http://localhost:18010/system/health`
 - MCP server: `http://localhost:8011`
 
-Administrator MCP defaults to the separate endpoint `http://localhost:8013/mcp`, published only on loopback by Compose. See [administrator MCP deployment](docs/operations/configuration.md#administrator-mcp-hosting) for private Helm access and explicit shared hosting.
+Administrator MCP defaults to the separate endpoint `http://localhost:8013/mcp`, published only on loopback by Compose. See [administrator MCP deployment](docs/self-host/operate.md#administrator-mcp) for private Helm access and explicit shared hosting.
 
 Stop the stack with `docker compose down`. Use `docker compose down --volumes` when the local SQLite data and plugin volumes should also be removed.
 
@@ -144,7 +144,7 @@ an explicit namespace. Real providers and production require an explicit namespa
 never inherit this development fallback. Owner OAuth still requires durable SQLite,
 a stable configured root secret and supported provider policy; no secret is generated,
 and development authentication does not provide real-account sign-in. See the
-[identity policy](docs/operations/configuration.md#personal-connections-identity-policy).
+[identity policy](docs/self-host/operate.md#personal-connectors).
 `.env.example` remains the production checklist.
 
 Inspect the resolved configuration (secrets redacted):
@@ -161,7 +161,7 @@ The administration frontend is a static SvelteKit SPA served by nginx, without a
 
 Native clients can use the same API with bearer credentials. Production JWT verification requires the configured issuer, audience, and administrator membership. Browser login remains the responsibility of an external authentication gateway; API failures must not be replaced with login HTML. Cookie-bearing writes require a trusted Origin and `X-Umbod-Web-Request: 1`.
 
-Connector setup executes in the backend with compensation on failure. UI validation and route guards never replace backend authorization. See [service routing and API access](docs/operations/service-topology.md).
+Connector setup executes in the backend with compensation on failure. UI validation and route guards never replace backend authorization. See [service routing and API access](docs/self-host/operate.md).
 
 ## Endpoints
 

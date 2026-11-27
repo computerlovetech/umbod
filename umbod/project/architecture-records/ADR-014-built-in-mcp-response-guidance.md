@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-11-02
 - **Scope:** Built-in filesystem and administrator MCP tools; connector-tool adoption is deferred
-- **Implementation status:** Initial `schema_version: 1` contract implemented with shared guidance, rendering, and separate extension boundaries; see [application diagnostics](../../docs/operations/application-diagnostics.md).
+- **Implementation status:** Initial `schema_version: 1` contract implemented with shared guidance, rendering, and separate extension boundaries; see [application diagnostics](../../docs/self-host/troubleshooting.md).
 
 ## Decision
 

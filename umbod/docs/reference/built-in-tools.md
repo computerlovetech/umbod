@@ -1,15 +1,19 @@
+---
+description: Contracts for the built-in Umbod MCP tools for files, sharing, agent diagnostics, and administration.
+---
+
 # Built-in MCP tools
 
-Use this reference to choose an Umbod built-in tool and understand its behavior. For the exact contract on your deployment, call `tools/list` on the relevant MCP endpoint and read the tool’s `inputSchema` and, when advertised, its `outputSchema`. Discovery reflects the signed-in caller’s permissions and the server’s configuration. Tools supplied by connectors are not covered here. On a tool failure, follow the recovery guidance in the returned content rather than assuming the operation did not run. See [response diagnostics](../operations/application-diagnostics.md#conversation-visible-response-diagnostics) for request correlation and operation states.
+Use this reference to choose an Umbod built-in tool and understand its behavior. For the exact contract on your deployment, call `tools/list` on the relevant MCP endpoint and read the tool’s `inputSchema` and, when advertised, its `outputSchema`. Discovery reflects the signed-in caller’s permissions and the server’s configuration. Tools supplied by connectors are not covered here. On a tool failure, follow the recovery guidance in the returned content rather than assuming the operation did not run. See [response diagnostics](#response-guidance) for request correlation and operation states.
 
-- [Filesystem tools](#filesystem-tools) and [sharing](#filesystem-sharing-tools) use the [ordinary MCP endpoint](../operations/service-topology.md).
+- [Filesystem tools](#filesystem-tools) and [sharing](#filesystem-sharing-tools) use the [ordinary MCP endpoint](../use/connect-agents.md#with-any-mcp-client).
 - [Agent diagnostics](#agent-diagnostics) uses the ordinary MCP endpoint and requires diagnostic reporting to be enabled.
 - [Administrator tools](#administrator-tools) use the private administrator endpoint by default, or the ordinary endpoint when shared hosting is configured.
 - [Connector discovery and execution](#connector-discovery-and-execution) depends on the configured connector tool exposure mode.
 
 ## Filesystem tools
 
-These tools are permission-filtered and are not available on connector-scoped endpoints. Node and parent IDs are UUIDs. See [agent file access](../using-umbod/files.md#agent-access) for resource reads and destination selection.
+These tools are permission-filtered and are not available on connector-scoped endpoints. Node and parent IDs are UUIDs. See [agent file access](#reading-and-uploading-files) for resource reads and destination selection.
 
 | Tool | Main inputs | Successful result |
 | --- | --- | --- |
@@ -24,7 +28,7 @@ These tools are permission-filtered and are not available on connector-scoped en
 | `filesystem_begin_upload` | `parent_id`, `name`, `metadata`, exact `size_bytes`, and optional lowercase hexadecimal `expected_sha256`. | `upload_id`, `expires_at`, `transfer` instructions for HTTP PUT, and `complete_tool`. PUT alone does not publish. |
 | `filesystem_complete_upload` | `upload_id` from begin, called as the session owner after transferring the bytes. | `{node, size_bytes, sha256}` and a resource link for the published file. |
 
-Creation and upload metadata contains `content_type` (a string or an empty object for unspecified) and `attributes` (a map of strings to strings). For larger uploads, follow the [HTTP transfer workflow](../using-umbod/files.md#uploading-from-an-agent). Inline upload and begin are not idempotent. Completion can return the original verified receipt while the published file exists.
+Creation and upload metadata contains `content_type` (a string or an empty object for unspecified) and `attributes` (a map of strings to strings). For larger uploads, follow the [HTTP transfer workflow](#reading-and-uploading-files). Inline upload and begin are not idempotent. Completion can return the original verified receipt while the published file exists.
 
 ### `filesystem_browse`
 
@@ -42,9 +46,17 @@ When deletion requires confirmation, a client may receive a nonterminal input-re
 
 Read bytes with `resources/read` at `umbod://filesystem/files/{node_id}`, not a filesystem tool call. The URI identifies current content and does not grant access. Reads require current discover and read permission and return complete UTF-8 text or a base64 blob within the configured preview limit (default 1 MiB). Use authenticated HTTP download for larger files.
 
+### Reading and uploading files
+
+- **Find a destination:** `filesystem_browse` with operation `namespaces` lists the personal and shared namespaces. Operation `home` returns the personal default. Use the returned UUIDs as `parent_id`, never invented paths, and check `permissions.can_write`.
+- **Read:** files have the URI `umbod://filesystem/files/{node_id}`. Read them with MCP `resources/read`. Text types return UTF-8 text, other types return base64. Reads are never truncated: a file above the preview limit fails, so download it over [REST](rest-api.md#files).
+- **Upload a small file:** `filesystem_upload` with inline content.
+- **Upload a large file:** call `filesystem_begin_upload` with the exact byte count, `PUT` the bytes to the returned URL with the returned headers and nothing else, then call `filesystem_complete_upload`. The file exists only after completion. Treat the URL as a secret. Sessions expire after one hour.
+- **Retry safely:** begin is not idempotent. After an uncertain `PUT`, call complete instead of starting again.
+
 ## Filesystem sharing tools
 
-Both tools require current `discover` and `share` permissions on the node and exclude namespace roots. User discovery requires verified authentication under the configured issuer. See [file and folder sharing](../using-umbod/files.md#share-files-and-folders) for access rules and the [file access API](../using-umbod/files.md#file-access-api) for REST policy management.
+Both tools require current `discover` and `share` permissions on the node and exclude namespace roots. User discovery requires verified authentication under the configured issuer. See [file and folder sharing](../use/files.md#share-a-file-or-folder) for access rules and the [file access API](rest-api.md#files) for REST policy management.
 
 ### `filesystem_search_sharing_recipients`
 
@@ -81,7 +93,7 @@ Search inputs and share inputs/outputs advertise alternative `anyOf` schema bran
 
 ## Agent diagnostics
 
-Diagnostic reports are durable agent self-reports, not independently verified findings or application logs. These MCP capabilities are discoverable to eligible signed-in callers only when [diagnostic reporting is enabled](../operations/configuration.md#diagnostic-reporting) and at least one enabled playbook has an enabled pattern.
+Diagnostic reports are durable agent self-reports, not independently verified findings or application logs. These MCP capabilities are discoverable to eligible signed-in callers only when [diagnostic reporting is enabled](../use/insights.md#agent-diagnostics) and at least one enabled playbook has an enabled pattern.
 
 | MCP capability | Name or URI | Contract |
 | --- | --- | --- |
@@ -116,7 +128,7 @@ Success returns `structuredContent` with `report_id` (UUID), `received_at` (time
 
 ## Administrator tools
 
-Use the [administrator MCP endpoint](../operations/configuration.md#administrator-mcp-hosting) and sign in with the required administrator membership. These tools configure existing connectors; they cannot create or publish them. Discover exact IDs, capability keys, and revisions before applying changes. If a write’s outcome is uncertain, inspect current state before retrying.
+Use the [administrator MCP endpoint](../self-host/operate.md#administrator-mcp) and sign in with the required administrator membership. These tools configure existing connectors; they cannot create or publish them. Discover exact IDs, capability keys, and revisions before applying changes. If a write’s outcome is uncertain, inspect current state before retrying.
 
 Input: `request` object with `operation` and the fields below (`?` = optional). Success: `structuredContent.result` contains `{operation, result}`; the table describes the inner `result`.
 
@@ -170,3 +182,9 @@ These are Umbod’s entry points for discovering and calling connected-app tools
 | `execute_code` | Requires `code` (sandboxed Python using accessible connector tools). `structuredContent` reports `outcome` (`success`, `failure`, or `timeout`), `printed_output`, and `nested_calls`, plus `final_value` on success or `error` otherwise. Check individual call outcomes as well as the enclosing result; a later failure does not undo earlier calls. |
 
 In `codemode`, an OpenAPI search match can name `execute_openapi`. This is a function inside the `execute_code` sandbox, not a standalone MCP tool. Use the match’s input schema for the operation. The `body` argument distinguishes `state: missing` from `state: present` with a `value`; an empty object is a present value.
+
+## Response guidance
+
+Built-in tools put recovery advice in the result text. The same guidance is available as structured data in `_meta["computerlove.tech/umbod"]` (`schema_version: 1`), with the request ID and build. Connector tools do not carry it.
+
+A failed call reports one of three outcomes: `not_started`, `unknown`, or `completed`. Never repeat a write whose outcome is `unknown` or `completed` unless the guidance says so. Two calls are safe to retry: upload completion with the same session ID, and `report_diagnostic` with identical data and the same key.

@@ -9,6 +9,11 @@ from mkdocs.config.defaults import MkDocsConfig
 RELEASE_FIELDS = ("chartVersion", "imageTag", "sdkVersion")
 RELEASE_TOKEN = re.compile(r"\{\{\s*release\.([A-Za-z]+)\s*\}\}")
 
+# Agent-readable output: each page is also published as Markdown next to its HTML,
+# with llms.txt as the index and llms-full.txt as the whole site in one file.
+_nav_order: list[str] = []
+_rendered_pages: dict[str, tuple[str, str, str]] = {}
+
 
 VALUE_SECTIONS = {
     "nameOverride": ("Chart name override", "Override the chart name used to name Kubernetes resources."),
@@ -108,7 +113,30 @@ def on_page_markdown(markdown: str, **kwargs: Any) -> str:
             raise ValueError(f"Unknown release metadata field: {field}")
         return metadata[field]
 
-    return RELEASE_TOKEN.sub(replace_token, markdown)
+    rendered = RELEASE_TOKEN.sub(replace_token, markdown)
+    page = kwargs["page"]
+    _rendered_pages[page.file.src_uri] = (page.title, str(page.meta.get("description", "")), rendered)
+    return rendered
+
+
+def on_nav(nav: Any, **kwargs: Any) -> Any:
+    _nav_order[:] = [page.file.src_uri for page in nav.pages]
+    return nav
+
+
+def on_post_build(config: MkDocsConfig, **kwargs: Any) -> None:
+    site_directory = Path(config.site_dir)
+    index = [f"# {config.site_name}", "", f"> {config.site_description}", "", "## Pages", ""]
+    full: list[str] = []
+    for src_uri in _nav_order:
+        title, description, markdown = _rendered_pages[src_uri]
+        target = site_directory / src_uri
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(markdown.strip() + "\n")
+        index.append(f"- [{title}]({src_uri}): {description}" if description else f"- [{title}]({src_uri})")
+        full.append(markdown.strip())
+    (site_directory / "llms.txt").write_text("\n".join(index) + "\n")
+    (site_directory / "llms-full.txt").write_text("\n\n---\n\n".join(full) + "\n")
 
 
 def on_config(config: MkDocsConfig) -> MkDocsConfig:
@@ -117,17 +145,15 @@ def on_config(config: MkDocsConfig) -> MkDocsConfig:
     chart_directory = app_directory / "deploy" / "helm" / "umbod"
     values_path = chart_directory / "values.yaml"
     schema_path = chart_directory / "values.schema.json"
-    chart_path = chart_directory / "Chart.yaml"
     values_text = values_path.read_text()
     values = yaml.safe_load(values_text)
     schema = json.loads(schema_path.read_text())
-    chart = yaml.safe_load(chart_path.read_text())
     sections: list[str] = []
     for key, value in values.items():
         title, description = VALUE_SECTIONS[key]
         sections.extend(
             [
-                f"### {title} (`{key}`)",
+                f"## {title} (`{key}`)",
                 "",
                 description,
                 "",
@@ -139,26 +165,19 @@ def on_config(config: MkDocsConfig) -> MkDocsConfig:
         )
     content = "\n".join(
         [
-            "# Helm values reference",
+            "---",
+            "description: Every Umbod Helm chart value with its type, default, and constraints.",
+            "---",
             "",
-            f"This reference is generated from the checked-in chart source (`{chart['version']}`). Its image defaults reflect that source version, not necessarily the latest published chart.",
+            "# Helm values",
             "",
-            f"For the published chart `{release['chartVersion']}` (core and frontend image tags `{release['imageTag']}`), inspect its defaults directly:",
+            f"Defaults for the chart in the repository. For the published chart `{release['chartVersion']}`, which pins images `{release['imageTag']}`, run:",
             "",
             "```bash",
             f"helm show values oci://ghcr.io/computerlovetech/charts/umbod --version {release['chartVersion']}",
             "```",
             "",
-            "## Values",
-            "",
             *sections,
-            "",
-            "## Complete defaults",
-            "",
-            "```yaml",
-            values_text.rstrip(),
-            "```",
-            "",
         ]
     )
     output_path = app_directory / "docs" / "reference" / "helm-values.md"

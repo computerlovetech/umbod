@@ -68,6 +68,6 @@ Confidence and decision date were not recorded. Exact command names and compatib
 
 - [Accepted constraints and supporting detail](supporting/connector-cli.md)
 
-- [Build a connector](../../docs/plugins/build-a-connector.md)
+- [Build a connector](../../docs/extend/build-a-connector.md)
 - [Umbod Connector SDK](../../../packages/umbod-sdk/README.md)
 - [Release workflow](../../../.github/workflows/umbod-release.yml)

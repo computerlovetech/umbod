@@ -51,7 +51,7 @@ kubectl --context kind-umbod port-forward \
 
 Open **[localhost:3000](http://localhost:3000)**. Keep the port-forward running while you explore.
 
-This local setup uses development authentication. For a shared cluster, follow the [installation guide](https://umbod.ai/docs/getting-started/kubernetes-installation/) to set up sign-in, HTTPS, and persistent storage.
+This local setup uses development authentication. For a shared cluster, follow the [installation guide](https://umbod.ai/docs/self-host/install/) to set up sign-in, HTTPS, and persistent storage.
 
 ## Give your agents something to work with
 
@@ -59,17 +59,17 @@ This local setup uses development authentication. For a shared cluster, follow t
 2. **Publish its tools.** Configure the connector and choose the tools to make available.
 3. **Grant access.** Set group permissions, then connect a compatible MCP client.
 
-Need a custom integration? **[Build a connector →](https://umbod.ai/docs/plugins/build-a-connector/)**
+Need a custom integration? **[Build a connector →](https://umbod.ai/docs/extend/build-a-connector/)**
 
 ## Explore the docs
 
 | | |
 | --- | --- |
-| [Installation](https://umbod.ai/docs/getting-started/kubernetes-installation/) | Install locally or configure a shared cluster. |
-| [Codex CLI plugin](umbod/docs/using-umbod/codex-plugin.md) | Install Umbod's MCP connection and `run-diagnostics` skill through a local marketplace. |
-| [Files](https://umbod.ai/docs/using-umbod/files/) | Upload, share, and access files through the workspace or MCP. |
-| [Architecture](https://umbod.ai/docs/operations/service-topology/) | Understand the services, data flow, and storage. |
-| [Configuration](https://umbod.ai/docs/operations/configuration/) | Configure authentication, public origins, and persistence. |
+| [Installation](https://umbod.ai/docs/self-host/install/) | Install locally or configure a shared cluster. |
+| [Codex CLI plugin](umbod/docs/use/connect-agents.md) | Install Umbod's MCP connection and `run-diagnostics` skill through a local marketplace. |
+| [Files](https://umbod.ai/docs/use/files/) | Upload, share, and access files through the workspace or MCP. |
+| [Architecture](https://umbod.ai/docs/self-host/operate/) | Understand the services, data flow, and storage. |
+| [Configuration](https://umbod.ai/docs/self-host/install/) | Configure authentication, public origins, and persistence. |
 | [Helm reference](https://umbod.ai/docs/reference/helm-values/) | Find chart settings and defaults. |
 
 ## Project status

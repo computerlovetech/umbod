@@ -24,7 +24,7 @@ description: Kubernetes workloads, private listeners, networking, storage, and c
 
 **Read when working with:** Automated chart validation or rendered-resource invariants.
 
-- [Administrator MCP deployment](../../../docs/operations/configuration.md#administrator-mcp-hosting) — Private separate hosting by default, shared opt-in, environment settings, and Compose configuration.
+- [Administrator MCP deployment](../../../docs/self-host/operate.md#administrator-mcp) — Private separate hosting by default, shared opt-in, environment settings, and Compose configuration.
 - [Administrator listener Service](templates/mcp-administrator.yaml) — Private ClusterIP networking enabled only for separate, enabled administrator hosting.
 - [Administrator render validation](scripts/validate-mcp-administrator.py) — Hosting matrix, MCP ownership, ingress exclusion, and negative settings checks.
 - [Collector resources](templates/telemetry.yaml) — Optional private OTLP Service targeting the API container's collector listener.
@@ -73,7 +73,7 @@ Migration: remove `frontend.bodySizeLimit`, `frontend.privateAuthTokenHeader`, a
 
 The default standalone configuration uses an ephemeral `emptyDir` volume for SQLite, so data is lost when the core Pod is replaced. Set `persistence.enabled=true` to create a 1 Gi ReadWriteOnce claim. Configure `persistence.size`, `persistence.storageClass`, and `persistence.accessModes` as needed, or select an existing ReadWriteOnce claim with `persistence.existingClaim`.
 
-Configure analytics through `config.telemetryAnalytics.enabled` (default `false`) and `config.telemetryAnalytics.sqlitePath` (default `/app/data/analytics.sqlite3`). Only the API container receives these settings. Analytics uses its own SQLite file, schema and lifecycle, never application persistence or its migrations. The files share the mounted data volume, so analytics is ephemeral unless persistence is enabled; no separate analytics PVC is created. The schema requires a canonical file beneath `/app/data` and rejects the default application database and its sidecars. Final `core.api.env` overrides remain supported without duplicate analytics environment entries. Enabling analytics does not enable the OTLP receiver or supply credentials. See [analytics backend configuration](../../../docs/operations/configuration.md#analytics-backend) for collection prerequisites and storage boundaries.
+Configure analytics through `config.telemetryAnalytics.enabled` (default `false`) and `config.telemetryAnalytics.sqlitePath` (default `/app/data/analytics.sqlite3`). Only the API container receives these settings. Analytics uses its own SQLite file, schema and lifecycle, never application persistence or its migrations. The files share the mounted data volume, so analytics is ephemeral unless persistence is enabled; no separate analytics PVC is created. The schema requires a canonical file beneath `/app/data` and rejects the default application database and its sidecars. Final `core.api.env` overrides remain supported without duplicate analytics environment entries. Enabling analytics does not enable the OTLP receiver or supply credentials. See [analytics backend configuration](../../../docs/self-host/telemetry.md) for collection prerequisites and storage boundaries.
 
 ## Networking
 

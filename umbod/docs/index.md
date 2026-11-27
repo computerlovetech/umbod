@@ -1,57 +1,42 @@
+---
+description: What Umbod is and where to start.
+---
+
 # Umbod documentation
 
-<div class="umbod-intro" markdown>
+Umbod gives your AI agents one MCP endpoint for your company's APIs, MCP servers, and shared files. An administrator decides which tools exist and which groups can use them.
 
-Connect your agents to apps and files
+## Start here
 
-Use an existing Umbod workspace to connect an agent, share access to apps and files, or turn on agent diagnostics.
+| You want to | Go to |
+| --- | --- |
+| Try Umbod on your own computer | [Try it locally](self-host/local.md) |
+| Run Umbod for your organization | [Install for a team](self-host/install.md) |
+| Set up a workspace that is already running | [Set up a workspace](#set-up-a-workspace) |
 
-[Choose a task :material-arrow-right:](#choose-a-task){ .md-button .md-button--primary }
-[Install Umbod](getting-started/kubernetes-installation.md){ .umbod-secondary-link }
+## Set up a workspace
 
-</div>
+These steps are the same whether Umbod is hosted for you or you host it yourself.
 
-## Choose a task
+1. [Add a connector](use/connectors.md) for an API or an MCP server, and grant a group access.
+2. [Connect an agent](use/connect-agents.md) and check that it sees the tools.
+3. Optional: [share files](use/files.md) between people and agents.
+4. Optional: [see what agents do](use/insights.md).
 
-<div class="grid cards" markdown>
+## How it fits together
 
--   :material-server-network: **Connect an agent**
+| Term | Meaning |
+| --- | --- |
+| Connector | A source of tools: an OpenAPI description, an MCP server, or a [custom plugin](extend/build-a-connector.md). |
+| Group | A group from your identity provider. Access is always granted to groups. |
+| Administrator | A member of the configured administrator group. Sees **Administration** in the workspace. |
+| Namespace | A file workspace: personal (**My files**) or shared with groups. |
+| MCP endpoint | The one URL agents connect to: `https://<your-umbod-host>/mcp`. |
 
-    Sign in and discover tools. Use the Codex installer or connect your client to MCP directly.
+## For agents
 
-    [Install for Codex](using-umbod/codex-plugin.md) · [Connect directly](operations/service-topology.md)
-
--   :material-puzzle-outline: **Connect an app**
-
-    Publish an OpenAPI or MCP connector and give the right groups access.
-
-    [Set up connectors :material-arrow-right:](using-umbod/connectors.md)
-
--   :material-folder-outline: **Share files**
-
-    Give a group a shared workspace or grant access to just one file or folder.
-
-    [Share files and folders :material-arrow-right:](using-umbod/files.md#share-files-and-folders)
-
--   :material-clipboard-check-outline: **Enable agent diagnostics**
-
-    Enable diagnostic reporting and set up a playbook so signed-in agents can submit reports.
-
-    [Enable diagnostic reporting :material-arrow-right:](operations/configuration.md#diagnostic-reporting)
-
-</div>
-
-## Deploy and operate Umbod
-
-- [Install on Kubernetes](getting-started/kubernetes-installation.md), then [configure sign-in and persistence](operations/configuration.md).
-- [Connect clients and configure routing](operations/service-topology.md).
-- [Store files in S3](operations/s3-file-storage.md), [collect agent telemetry](operations/telemetry-ingestion.md), or [schedule cleanup](operations/cleanup.md).
-- [Troubleshoot service and tool failures](operations/application-diagnostics.md).
-
-## Look up a setting or contract
-
-[Helm values](reference/helm-values.md) · [Built-in MCP tools](reference/built-in-tools.md) · [Build a connector plugin](plugins/index.md)
+Every page is also published as Markdown: replace the trailing `/` of its URL with `.md`. <a href="llms.txt"><code>llms.txt</code></a> lists all pages, and <a href="llms-full.txt"><code>llms-full.txt</code></a> holds them in one file.
 
 ## Early beta
 
-The [installation guide](getting-started/kubernetes-installation.md) uses published chart `{{ release.chartVersion }}` and images `{{ release.imageTag }}`. The chart is for evaluation, not high availability. Questions or feedback? [Join the community on Discord](https://discord.gg/Njy4GnurpE) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).
+Chart `{{ release.chartVersion }}` and images `{{ release.imageTag }}`. The chart runs one replica on SQLite and is not highly available. Ask questions on [Discord](https://discord.gg/Njy4GnurpE) or read the [source on GitHub](https://github.com/computerlovetech/umbod).

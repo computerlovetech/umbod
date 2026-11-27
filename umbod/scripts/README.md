@@ -22,5 +22,5 @@ description: Backend pytest runner, README validation, release metadata checks, 
 - [Release workflow](../../.github/workflows/umbod-release.yml) — Tag provenance, publication gates, artifact stamping, and production promotion.
 - [Release skill](../../skills/development/release-umbod/SKILL.md) — Manual preparation, publication approval, verification, and partial-release recovery.
 - [Website deployment](../../website/deployment.md) — Preview/production builds, version checks, and branch protection requirements.
-- [Codex CLI installation](../docs/using-umbod/codex-plugin.md) — Package installation, account authentication, connection verification, and lifecycle instructions.
+- [Codex CLI installation](../docs/use/connect-agents.md) — Package installation, account authentication, connection verification, and lifecycle instructions.
 - [Canonical integration skills](../../skills/integrations/README.md) — Source guidance distributed by agent-client packages.

@@ -156,7 +156,7 @@ my-umbod-connectors/
             └── configuration_check.py
 ```
 
-The public [connector authoring guide](https://umbod.ai/docs/plugins/build-a-connector/) describes the supported image build and deployment workflow.
+The public [connector authoring guide](https://umbod.ai/docs/extend/build-a-connector/) describes the supported image build and deployment workflow.
 
 ## Tool schemas
 
@@ -166,7 +166,7 @@ Declaration validation deliberately rejects duplicate tool operation names withi
 
 An explicit `output_schema` must be a JSON Schema dictionary. Omitting it means no declared output schema, which is distinct from supplying an empty dictionary; `None` is invalid. Registration metadata represents this distinction with `output_schema_status` set to `absent` or `present`, and includes `output_schema` when present.
 
-These SDK contracts are separate from Umbod's built-in filesystem tools. For personal/shared namespace discovery and administrator-managed group access, see the [Files guide](https://umbod.ai/docs/using-umbod/files/#shared-namespace-administration).
+These SDK contracts are separate from Umbod's built-in filesystem tools. For personal/shared namespace discovery and administrator-managed group access, see the [Files guide](https://umbod.ai/docs/use/files/#shared-namespace-administration).
 
 ## Declaring plugin discovery metadata
 
