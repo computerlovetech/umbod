@@ -63,7 +63,9 @@ def test_wheel_contains_connector_authoring_skill(tmp_path: Path) -> None:
 
     assert skill_files == {
         "umbod_sdk/skills/draft-agent-connector/SKILL.md",
-        "umbod_sdk/skills/draft-agent-connector/REFERENCE.md",
+        "umbod_sdk/skills/draft-agent-connector/references/portable-connector.md",
+        "umbod_sdk/skills/draft-agent-connector/references/portable-http.md",
+        "umbod_sdk/skills/draft-agent-connector/references/trusted-plugin.md",
     }
 
 

@@ -1,12 +1,20 @@
 from inspect import Parameter, signature
 from typing import Annotated, Any, Protocol, get_args, get_origin
 
+from jsonschema import Draft3Validator
+from jsonschema.validators import validator_for
 from pydantic import TypeAdapter
 from umbod_sdk.connectors.proxies import Model
 from umbod_sdk.connectors.uploaded_file import UploadedFile
 from pydantic.fields import FieldInfo
 
-from umbod_sdk.connectors.api.definition import PromptDefinition, ResourceDefinition, ToolDefinition
+from umbod_sdk.connectors.api.definition import (
+    PresentConnectorValue,
+    PromptDefinition,
+    ResourceDefinition,
+    ToolDefinition,
+)
+from umbod_sdk.connectors.api.manifest import validate_tool_input_schema
 
 
 class ConnectorToolParameterDescription(Model):
@@ -20,7 +28,37 @@ CapabilityDefinition = ToolDefinition | PromptDefinition | ResourceDefinition
 
 
 def tool_parameter_descriptions(tool: ToolDefinition) -> list[ConnectorToolParameterDescription]:
+    if isinstance(tool.input_schema, PresentConnectorValue):
+        return _explicit_tool_parameter_descriptions(tool, tool_parameters_schema(tool))
     return create_parameter_metadata(tool).descriptions()
+
+
+def _explicit_tool_parameter_descriptions(
+    tool: ToolDefinition, schema: dict[str, Any]
+) -> list[ConnectorToolParameterDescription]:
+    required_properties = schema.get("required", [])
+    required = set(required_properties) if isinstance(required_properties, list) else set()
+    uses_property_required = validator_for(schema) is Draft3Validator
+    return [
+        ConnectorToolParameterDescription(
+            name=name,
+            description=_explicit_parameter_description(tool, name, property_schema),
+            required=name in required or (
+                uses_property_required
+                and isinstance(property_schema, dict)
+                and property_schema.get("required") is True
+            ),
+        )
+        for name, property_schema in schema.get("properties", {}).items()
+    ]
+
+
+def _explicit_parameter_description(
+    tool: ToolDefinition, name: str, property_schema: dict[str, Any] | bool
+) -> str:
+    if isinstance(property_schema, dict) and "description" in property_schema:
+        return property_schema["description"]
+    return tool.parameters.get(name, "")
 
 
 def prompt_parameter_descriptions(
@@ -30,6 +68,8 @@ def prompt_parameter_descriptions(
 
 
 def tool_parameters_schema(tool: ToolDefinition) -> dict[str, Any]:
+    if isinstance(tool.input_schema, PresentConnectorValue):
+        return validate_tool_input_schema(tool.input_schema.value, tool.operation_name)
     return create_parameter_metadata(tool).schema()
 
 

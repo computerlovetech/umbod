@@ -18,7 +18,9 @@ def test_install_skill_in_project(tmp_path: Path, harness: str, folder: str) -> 
     target = tmp_path / folder / "skills" / "draft-agent-connector"
     assert result.exit_code == 0, result.output
     assert (target / "SKILL.md").is_file()
-    assert (target / "REFERENCE.md").is_file()
+    assert (target / "references/portable-connector.md").is_file()
+    assert (target / "references/portable-http.md").is_file()
+    assert (target / "references/trusted-plugin.md").is_file()
     assert str(target) in result.output
 
 

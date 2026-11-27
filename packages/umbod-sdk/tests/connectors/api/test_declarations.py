@@ -129,7 +129,7 @@ def test_resource_accepts_supported_options(connector: Connector) -> None:
 
 @pytest.mark.parametrize(
     "document",
-    ["README.md", "src/umbod_sdk/skills/draft-agent-connector/REFERENCE.md"],
+    ["README.md", "src/umbod_sdk/skills/draft-agent-connector/references/trusted-plugin.md"],
 )
 def test_documented_connector_constructors_supply_required_arguments(document: str) -> None:
     package_root = Path(__file__).resolve().parents[3]

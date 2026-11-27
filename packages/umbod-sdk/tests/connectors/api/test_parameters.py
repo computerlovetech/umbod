@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
@@ -40,6 +40,77 @@ def _connector() -> Connector:
         capability_description="Search Project Board tasks.",
         configuration=ConnectorConfiguration,
     )
+
+
+def test_trusted_registration_uses_explicit_tool_input_schema() -> None:
+    connector = _connector()
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "record": {"type": "string", "description": "Record from explicit schema."},
+            "limit": {"type": "integer"},
+        },
+        "required": ["record"],
+    }
+
+    @connector.configuration_check
+    def check_configuration(configuration: ConnectorConfiguration) -> bool:
+        return bool(configuration.endpoint)
+
+    @connector.tool(
+        description="Read a record.",
+        parameters={"record": "Overridden description.", "limit": "Result limit."},
+        input_schema=input_schema,
+    )
+    def read_record(record: str = "default", limit: int = 10) -> str:
+        return record
+
+    registration = connector.registration()
+    tool = connector.definition().tools[0]
+    descriptions = registration["tool_descriptions"][0]["parameters"]
+
+    assert registration["configuration_schema"] is ConnectorConfiguration
+    assert tool.function is read_record
+    assert tool_parameters_schema(tool) == input_schema
+    assert [(parameter.name, parameter.description, parameter.required) for parameter in descriptions] == [
+        ("record", "Record from explicit schema.", True),
+        ("limit", "Result limit.", False),
+    ]
+
+
+def test_trusted_registration_preserves_draft_three_property_requiredness() -> None:
+    connector = _connector()
+    input_schema: dict[str, Any] = {
+        "$schema": "http://json-schema.org/draft-03/schema#",
+        "properties": {"record": {"type": "string", "required": True}},
+    }
+
+    @connector.configuration_check
+    def check_configuration(configuration: ConnectorConfiguration) -> bool:
+        return bool(configuration.endpoint)
+
+    @connector.tool(description="Read a record.", input_schema=input_schema)
+    def read_record(record: str) -> str:
+        return record
+
+    parameters = connector.registration()["tool_descriptions"][0]["parameters"]
+    assert [(parameter.name, parameter.required) for parameter in parameters] == [("record", True)]
+
+
+@pytest.mark.parametrize("annotation", [UploadedFile, "UploadedFile"])
+def test_trusted_uploaded_file_tools_reject_explicit_input_schema(annotation: type[UploadedFile] | str) -> None:
+    connector = _connector()
+
+    @connector.configuration_check
+    def check_configuration(configuration: ConnectorConfiguration) -> bool:
+        return bool(configuration.endpoint)
+
+    @connector.tool(description="Read an uploaded file.", input_schema={})
+    def read_file(upload: annotation) -> str:
+        return "read"
+
+    with pytest.raises(ValueError, match="UploadedFile tools cannot declare input_schema"):
+        connector.registration()
 
 
 def test_model_arguments_publish_resolvable_nested_references() -> None:

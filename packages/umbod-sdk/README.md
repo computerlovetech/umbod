@@ -8,7 +8,7 @@ Canonical `umbod-v` tag pushes publish the SDK first, followed by all three imag
 
 The SDK is published to PyPI as `umbod` (`pip install umbod`) and exposes the `umbod_sdk.connectors` Python package. It contains the public contracts used to implement connector plugins, including `umbod_sdk.connectors.plugin_api`, configuration models, registration contracts, uploaded files, and plugin discovery.
 
-The SDK wheel includes the connector-authoring skill at `umbod_sdk/skills/draft-agent-connector/` (`SKILL.md` and `REFERENCE.md`). The `umbod skills` CLI lists bundled skills and installs a named skill or all bundled skills into a selected harness. Claude uses `.claude/skills/`; Codex and the shared agents convention use `.agents/skills/`. Installations default to the current project, with options for a different project or the user's home directory. Existing skill directories require explicit replacement. The CLI does not install skills automatically.
+The SDK wheel includes the connector-authoring skill at `umbod_sdk/skills/draft-agent-connector/` (`SKILL.md` and its portable and trusted authoring references). The `umbod skills` CLI lists bundled skills and installs a named skill or all bundled skills into a selected harness. Claude uses `.claude/skills/`; Codex and the shared agents convention use `.agents/skills/`. Installations default to the current project, with options for a different project or the user's home directory. Existing skill directories require explicit replacement. The CLI does not install skills automatically.
 
 The SDK's `umbod connectors check` command reads a connector project's `pyproject.toml` (the current directory by default, or the directory selected with `--project`) and checks that its `umbod.connectors` entry-point group is nonempty and has well-formed names and module/export targets. Without a version option, it stays offline and checks metadata syntax only.
 
@@ -160,13 +160,33 @@ The public [connector authoring guide](https://umbod.ai/docs/extend/build-a-conn
 
 ## Tool schemas
 
-The tool decorator requires `description` and accepts optional `name`, `parameters`, and `output_schema` settings. Input schemas are derived from public function parameters and their type annotations; parameters without defaults and required Pydantic `Field(...)` declarations are required. Shared model definitions live in the input schema's root `$defs`, with references resolved from that root. Injected arguments such as `configuration` are excluded from the agent-facing schema. The `parameters` setting supplies parameter descriptions, not a replacement input schema.
+The tool decorator requires `description` and accepts optional `name`, `parameters`, `input_schema`, and `output_schema` settings. Without `input_schema`, the SDK derives it from public function parameters and annotations, as before. Parameters without defaults and required Pydantic `Field(...)` declarations are required. Shared model definitions live in the input schema's root `$defs`, with references resolved from that root. Injected arguments such as `configuration` are excluded from the agent-facing schema. An explicit `input_schema` replaces inference and cannot declare `configuration` as a public argument. References that describe the argument object itself must use a local JSON Pointer; the SDK does not fetch remote schemas. `UploadedFile` tools continue to use inference.
 
 Declaration validation deliberately rejects duplicate tool operation names within a connector and unknown prompt/resource decorator options. Prompt and resource decorators accept only `name`, `description`, and `parameters`.
 
 An explicit `output_schema` must be a JSON Schema dictionary. Omitting it means no declared output schema, which is distinct from supplying an empty dictionary; `None` is invalid. Registration metadata represents this distinction with `output_schema_status` set to `absent` or `present`, and includes `output_schema` when present.
 
 These SDK contracts are separate from Umbod's built-in filesystem tools. For personal/shared namespace discovery and administrator-managed group access, see the [Files guide](https://umbod.ai/docs/use/files/#shared-namespace-administration).
+
+## Portable connector manifests
+
+The same `Connector` constructor accepts a JSON Schema dictionary as `configuration` for portable declarations. Use `manifest()` to export the versioned JSON contract, including configuration and tool schemas and local handler IDs. Portable tools must declare `name` and `input_schema` explicitly and put parameter metadata in the schema. A configuration check is still required. Portable manifests do not include prompts, resources, icons, or extensions.
+
+Installed plugins still use a Pydantic `Model` with `registration()`. A JSON Schema configuration is for `manifest()` only. Manifest export checks schema declarations, not configuration values or tool calls. The SDK tests run the same declaration and pure tool under CPython and Monty; uploading or running portable connectors in Umbod is not yet supported.
+
+## Portable HTTP requests
+
+Portable connectors can declare named `http_targets` with descriptions and receive an `HttpContext` as the injected `context` keyword in tools and configuration checks. A declaration with targets exports manifest version 2; connectors without targets still export version 1. Target declarations contain no destination URLs, credentials, or grants. An eventual Umbod runtime will bind each target to an admin-approved HTTPS origin and base path.
+
+Await `context.request` for a relative GET with path segments, ordered query pairs, and a required `response_schema`. For checks that only need the HTTP status, use `context.request_status`, which never returns a body. JSON bodies are decoded and validated before the handler sees them. A schema mismatch returns `response_contract_mismatch` without the upstream payload. Non-redirect HTTP errors return their status without the upstream body. The REST response schema is separate from the tool's `output_schema`. It uses JSON Schema Draft 2020-12 with in-document references only, a 16 KiB schema limit, and no `pattern` or `patternProperties`.
+
+Use `context.post` for JSON-in/JSON-out requests or `context.post_status` when only the response status matters. Both require `json_body` and `request_schema`. The boundary validates the body against the same restricted JSON Schema dialect, then passes at most 1 MiB of UTF-8 JSON bytes to the transport as `HttpPostRequest.body`. POST is denied by default: the host must supply an exact `(target, path segments)` entry in `approved_post_paths`. Target declarations and GET access do not grant writes.
+
+The boundary never retries POST. A transport failure or timeout returns `outcome_unknown`, and cancellation propagates. Transports should raise `HttpPolicyDenied` only when they rejected the request before sending it. An upstream write may already have happened, even if the response schema failed or the invocation was cancelled. Check upstream state before repeating a write.
+
+For offline tests, inject a fake `HttpTransport` into `HttpRequestBoundary` and use `HttpContext` with that boundary's dispatcher. The fake records requests and supplies raw replies; the boundary still validates them. Base fixtures on an authoritative API contract or redacted real responses, and test a missing or incorrectly typed field as well as a valid reply. `HttpInvocation` owns the dispatcher for invocations that can be cancelled, including an async Monty host callback.
+
+The SDK does not open sockets, import `httpx2`, enforce outbound grants, or provide a production connector runner.
 
 ## Declaring plugin discovery metadata
 

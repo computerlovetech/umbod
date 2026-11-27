@@ -13,7 +13,9 @@ from umbod_sdk.connectors.api.definition import (
     resource_decorator,
     tool_decorator,
 )
+from umbod_sdk.connectors.api.manifest import validate_manifest_schemas
 from umbod_sdk.connectors.api.registration import connector_registration
+from umbod_sdk.connectors.declaration import Connector as ConnectorDeclaration
 from umbod_sdk.connectors.models import ConnectorConfigurationCheckResult
 from umbod_sdk.connectors.proxies import Model
 from umbod_sdk.connectors.types import ConnectorRegistration, ConnectorToolOperation
@@ -103,37 +105,46 @@ class _ValidConfigurationCheckResultDescriptor:
 ConfigurationCheckResult.valid = _ValidConfigurationCheckResultDescriptor()
 
 
-class _ConnectorMetadataMixin:
+class _ConnectorMetadataMixin(ConnectorDeclaration):
     _definition: ConnectorDefinition
+    _declared_metadata: dict[str, Any]
+
+    def _set_declaration_metadata(self, metadata: dict[str, Any]) -> None:
+        self._declared_metadata = metadata
+
+    def _connector_metadata(self) -> Mapping[str, Any]:
+        if self._uses_explicit_configuration():
+            return self._declared_metadata
+        return vars(self._definition)
 
     @property
     def id(self) -> str:
-        return self._definition.id
+        return self._connector_metadata()["id"]
 
     @property
     def name(self) -> str:
-        return self._definition.name
+        return self._connector_metadata()["name"]
 
     @property
     def description(self) -> str:
-        return self._definition.description
+        return self._connector_metadata()["description"]
 
     @property
     def capability_description(self) -> str:
-        return self._definition.capability_description
+        return self._connector_metadata()["capability_description"]
 
     @property
-    def configuration(self) -> type[Model]:
-        return self._definition.configuration
+    def configuration(self) -> type[Model] | dict[str, Any]:
+        return self._connector_metadata()["configuration"]
 
     @property
     def extension(self) -> Mapping[str, object] | None:
-        extension = self._definition.extension
+        extension = self._connector_metadata().get("extension", AbsentConnectorValue())
         return extension.value if isinstance(extension, PresentConnectorValue) else None
 
     @property
     def icon(self) -> Path | None:
-        icon = self._definition.icon
+        icon = self._connector_metadata().get("icon", AbsentConnectorValue())
         return icon.value if isinstance(icon, PresentConnectorValue) else None
 
 
@@ -143,6 +154,10 @@ class _ConnectorIconOptions(TypedDict, total=False):
 
 class _ConnectorExtensionOptions(_ConnectorIconOptions):
     extension: Mapping[str, object]
+
+
+class _PortableConnectorOptions(TypedDict, total=False):
+    http_targets: dict[str, str]
 
 
 class ConnectorFacade(_ConnectorMetadataMixin):
@@ -170,6 +185,7 @@ class ConnectorFacade(_ConnectorMetadataMixin):
         **definition_options: Unpack[_ConnectorExtensionOptions],
     ) -> None: ...
 
+    @overload
     def __init__(
         self,
         *,
@@ -177,16 +193,40 @@ class ConnectorFacade(_ConnectorMetadataMixin):
         name: str,
         description: str,
         capability_description: str,
-        configuration: type[Model],
+        configuration: dict[str, Any],
+        **definition_options: Unpack[_PortableConnectorOptions],
+    ) -> None: ...
+
+    def __init__(
+        self,
+        *,
+        id: str,
+        name: str,
+        description: str,
+        capability_description: str,
+        configuration: type[Model] | dict[str, Any],
         **definition_options: object,
     ) -> None:
-        unknown_options = set(definition_options) - {"extension", "icon"}
+        allowed_options = {"extension", "icon"}
+        if isinstance(configuration, dict):
+            allowed_options.add("http_targets")
+        unknown_options = set(definition_options) - allowed_options
         if unknown_options:
             option = min(unknown_options)
             raise TypeError(
                 f"ConnectorFacade.__init__() got an unexpected keyword argument '{option}'"
             )
         extension = cast(Mapping[str, object] | None, definition_options.get("extension"))
+        super().__init__(
+            id=id,
+            name=name,
+            description=description,
+            capability_description=capability_description,
+            configuration=configuration,
+            **(definition_options if isinstance(configuration, dict) else {}),
+        )
+        if isinstance(configuration, dict):
+            return
         icon = cast(Path | None, definition_options.get("icon"))
         self._definition = ConnectorDefinition(
             id=id,
@@ -202,31 +242,43 @@ class ConnectorFacade(_ConnectorMetadataMixin):
             ),
         )
 
-    def configuration_check(
-        self,
-        function: Callable[..., bool | ConnectorConfigurationCheckResult],
-    ) -> Callable[..., bool | ConnectorConfigurationCheckResult]:
+    def _register_configuration_check(self, function: Callable[..., Any]) -> None:
+        if self._uses_explicit_configuration():
+            super()._register_configuration_check(function)
+            return
         self._definition.configuration_check = PresentConnectorValue(function)
-        return function
 
     def tool(
         self, *, description: str, **options: Any
     ) -> Callable[[ConnectorToolOperation], ConnectorToolOperation]:
+        if self._uses_explicit_configuration():
+            return super().tool(description=description, **options)
         return tool_decorator(self._definition, description=description, options=options)
 
+    def manifest(self) -> dict[str, Any]:
+        return validate_manifest_schemas(super().manifest())
+
     def prompt(self, **options: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-        return prompt_decorator(self._definition, options=options)
+        return prompt_decorator(self._trusted_definition(), options=options)
 
     def resource(
         self, uri_template: str, **options: Any
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-        return resource_decorator(self._definition, uri_template, options=options)
+        return resource_decorator(self._trusted_definition(), uri_template, options=options)
 
-    def definition(self) -> ConnectorDefinition:
+    def _trusted_definition(self) -> ConnectorDefinition:
+        if self._uses_explicit_configuration():
+            raise ValueError(
+                "trusted plugin registration requires a configuration Model; "
+                "use manifest() for an explicit JSON Schema"
+            )
         return self._definition
 
+    def definition(self) -> ConnectorDefinition:
+        return self._trusted_definition()
+
     def registration(self) -> ConnectorRegistration:
-        return connector_registration(self._definition)
+        return connector_registration(self._trusted_definition())
 
 
 class Connector(ConnectorFacade):

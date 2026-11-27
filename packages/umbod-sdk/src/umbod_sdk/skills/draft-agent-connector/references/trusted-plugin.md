@@ -1,6 +1,12 @@
-# Connector Interface Reference
+# Trusted Pydantic plugins
 
-Everything a connector needs comes from `umbod_sdk.connectors.plugin_api` and `umbod_sdk.connectors.proxies`. A connector is one Python package with four files. Use the `rejseplanen` plugin as the canonical example.
+Use this format for an installed Python plugin that owns its HTTP client. For a single-file connector with explicit schemas, use the [portable connector reference](portable-connector.md) instead.
+
+The connector interface comes from `umbod_sdk.connectors.plugin_api` and `umbod_sdk.connectors.proxies`. Organize the plugin as one Python package with the four files below. Use the `rejseplanen` plugin as an existing reference when it is available in the checkout.
+
+## Plan the plugin
+
+Confirm the base URL, authentication type, and the selected endpoints' request and response shapes against an authoritative source such as OpenAPI. List any contract gaps instead of inventing fields. Keep the tool set focused and choose a read-only endpoint for the configuration check. When providing an icon, use an SVG file referenced by its `.svg` path. Leave entry points, packaging, installation, and deployment to the SDK's connector distribution guide.
 
 ## Public interface
 
@@ -43,7 +49,7 @@ class MyApiSettings(Model):
 ```
 
 ### `configuration_check.py` — live check
-Calls the safe live-check endpoint. Returns `ConnectorConfigurationCheckResult(valid=True)` on success, or `valid=False` with a `field_messages` entry naming the offending config field on failure. Distinguish "rejected" (bad credential) from "unreachable" (upstream down).
+Calls the safe live-check endpoint. Return `ConfigurationCheckResult.valid()` on success and `ConfigurationCheckResult.invalid(...)` on failure. Include a `field_messages` entry when an individual configuration field is invalid. Distinguish "rejected" (bad credential) from "unreachable" (upstream down).
 
 ### `__init__.py` — assembly
 
@@ -71,7 +77,7 @@ def search_things(
 
 ## Injected `configuration` — the one non-obvious rule
 
-Every tool and the config-check function declare a parameter typed as the config `Model`. Umbod injects the saved, decrypted configuration at call time. The agent user never passes it. Put it after the real tool inputs; keep tool inputs as `Annotated[..., Field(description=...)]` so descriptions reach the MCP schema.
+When a tool or configuration check needs settings, declare a parameter named `configuration` and annotate it with the config `Model`. Umbod injects the saved, decrypted configuration by parameter name, not by annotation or position. The agent user never passes it, and tools that do not need settings can omit it. Use `Annotated[..., Field(description=...)]` for public tool inputs so their descriptions reach the MCP schema.
 
 ## Tools return raw JSON
 

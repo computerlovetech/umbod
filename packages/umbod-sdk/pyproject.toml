@@ -8,6 +8,7 @@ dependencies = [
     "jsonschema>=4.26.0",
     "packaging>=26.3",
     "pydantic>=2.14.3",
+    "referencing>=0.37.0",
     "typer>=0.29.1",
 ]
 
@@ -26,6 +27,7 @@ dev-mode-dirs = ["src"]
 
 [dependency-groups]
 dev = [
+    "pydantic-monty==1.6.0",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0,<8",
     "ruff>=0.17.5",

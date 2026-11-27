@@ -1,36 +1,57 @@
 ---
 name: draft-agent-connector
-description: Use when a developer wants to build, draft, or add an Umbod connector for an external API or service. Guides authoring a connector plugin package against the connectors interface, with a Pydantic config, a live configuration check, tool functions, and mocked tests.
+description: >
+  Author and test Umbod connectors. Use when drafting or editing a portable single-file connector or a trusted Pydantic plugin.
 ---
 
 # Draft Agent Connector
 
-Author one connector plugin implementation against the `umbod_sdk.connectors.plugin_api` interface. The user has the connector module, not the whole Umbod app: do **not** touch `pyproject.toml`, connector deployment configuration, Docker Compose, or MCP runtime — packaging and deployment are a separate integration step. Stop when the connector implementation is written and its mocked tests pass.
+## Outcome
 
-Read [REFERENCE.md](REFERENCE.md) for the exact interface before writing code. For the subsequent distribution packaging, `umbod.connectors` entry-point declaration, installation, and deployment-enablement steps, read the Umbod SDK's connector distribution guide (`README.md` in the SDK distribution).
+A connector in the requested format, with passing offline tests.
 
-## Steps
+## Inputs
 
-1. **Find the real schema**
-   Do not build from pasted docs alone. Look for a machine-readable source: a live OpenAPI/Swagger endpoint, WADL, XSD, or a Postman collection. Confirm base URL, auth mechanism, response format, and the exact endpoints for the wanted tools from that source.
-   Completion criterion: base URL, auth type, and each candidate endpoint's request/response shape are confirmed from an authoritative source, with any gap listed explicitly.
-
-2. **Decide the v1 shape**
-   Choose the smallest useful tool set (≤5) tied to what the user wants their agent to do, the config fields (secrets as `SecretStr`), and one safe live-check endpoint that proves the credential without creating, sending, or changing data.
-   Completion criterion: the tool list, config fields, and the live-check endpoint are named, and output is confirmed raw-passthrough unless the user asked otherwise.
-
-3. **Write the package**
-   Create the plugin following the [REFERENCE.md](REFERENCE.md) shape: `admin_configuration.py` (config `Model`), `api_client.py` (HTTP + typed errors), `configuration_check.py` (live check), and `__init__.py` (`Connector(...)`, `@connector.configuration_check`, `@connector.tool(...)`). Each tool declares `configuration: <YourConfigModel>` as an injected parameter — never a caller argument. Connector icons are optional, but when provided they must be SVG files referenced by their `.svg` path; PNG, JPEG, WebP, ICO, and other formats are not supported.
-   Completion criterion: every planned tool and the config check are implemented against the interface, with no reference to app wiring, deployment, or docker.
-
-4. **Test with mocked HTTP**
-   Write unit tests that mock the HTTP client — no real credentials, no live calls. Cover the config check's valid and invalid paths and each tool's request building and response passthrough. Run them.
-   Completion criterion: the tests import the connector package and pass; no test performs a real network call.
+- Required: Connector format and the tools or behavior the user wants.
+- Optional: Existing source, upstream API contract, and redacted response fixtures.
+- Default: Preserve the format of an existing connector when the user is not asking to migrate it.
 
 ## Rules
 
-- Never request or hardcode an API key; the admin enters it in Umbod later.
-- Only use SVG connector icons. Other image formats are unsupported and prevent the connector from loading.
-- Return the API's raw JSON unless the user explicitly asked for normalized output.
-- If schema facts are missing, write the package with explicit `TODO` gaps rather than inventing endpoints or fields.
-- Do not add entry points, deployment availability, or run the app. Delivery and integration are out of scope for this skill.
+- R1: Confirm the format before opening a reference; do not ask again if the request already answers it.
+- R2: Never ask for secrets or run tests against a live API.
+- R3: Stop at authoring and offline verification; do not change packaging, deployment, or runtime wiring.
+
+## Workflow
+
+1. Use the request and existing source to identify the format and API needs. If the format is unclear, ask: "Are you authoring a portable single-file connector or a trusted installed plugin?" If a portable connector's API needs are unclear, ask: "Will it call an external API to read, write, or both, or does it work without HTTP?" Wait for the missing answer before reading references.
+2. Open only the applicable references below. For portable HTTP, read both portable references; for a trusted plugin with its own HTTP client, read only the trusted reference.
+3. Confirm the wanted tools and upstream contracts before implementing the requested behavior.
+4. Run the connector's offline tests using pytest and report what passed.
+
+## Decisions
+
+| Condition | Action |
+|---|---|
+| The user is unsure about the format | Explain that portable is a single file with explicit schemas and offline-only HTTP today. For live Umbod execution, choose a trusted installed Pydantic plugin with its own client. Ask which they need. |
+| A portable connector does not call an API | Read only the portable connector reference. |
+| A test fails | Fix the connector or its offline fixture, then rerun the tests. |
+| An upstream contract cannot be confirmed | Report the missing information; do not invent endpoints or fields. |
+
+## Output
+
+Return:
+- Connector and test file paths.
+- Offline verification results.
+- Unresolved contract gaps or runtime limitations.
+
+## Completion criteria
+
+- The connector matches the selected authoring format and requested tools.
+- Its offline tests pass without credentials or network access, or the blocker is reported.
+
+## References
+
+- Read `references/portable-connector.md` when authoring a single-file connector with explicit JSON schemas.
+- Read `references/portable-http.md` when a portable connector needs GET, POST, or an HTTP configuration check.
+- Read `references/trusted-plugin.md` when authoring or editing an installed Pydantic plugin.

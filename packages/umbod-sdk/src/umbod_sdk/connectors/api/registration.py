@@ -1,9 +1,9 @@
 import base64
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from pathlib import Path
 from inspect import Parameter, signature
-from typing import Annotated, get_args, get_origin
+from typing import Annotated, get_args, get_origin, get_type_hints
 
 from jsonschema.validators import validator_for
 
@@ -17,6 +17,7 @@ from umbod_sdk.connectors.api.definition import (
     PresentConnectorValue,
     PromptDefinition,
     ResourceDefinition,
+    ToolDefinition,
 )
 from umbod_sdk.connectors.output_schema import PresentConnectorToolOutputSchema
 from umbod_sdk.connectors.api.parameters import (
@@ -128,7 +129,7 @@ def validate_connector(definition: ConnectorDefinition) -> None:
     _validate_prompts(definition.prompts)
     _validate_resources(definition.resources)
     for tool in definition.tools:
-        _validate_uploaded_file_declaration(tool.function)
+        _validate_uploaded_file_declaration(tool)
         tool_parameter_descriptions(tool)
         tool_parameters_schema(tool)
         if isinstance(tool.output_schema, PresentConnectorToolOutputSchema):
@@ -137,10 +138,12 @@ def validate_connector(definition: ConnectorDefinition) -> None:
             )
 
 
-def _validate_uploaded_file_declaration(function: Callable[..., object]) -> None:
+def _validate_uploaded_file_declaration(tool: ToolDefinition) -> None:
+    parameters = signature(tool.function).parameters.values()
+    annotations = _explicit_tool_annotations(tool, parameters)
     file_parameters: list[Parameter] = []
-    for parameter in signature(function).parameters.values():
-        annotation = parameter.annotation
+    for parameter in parameters:
+        annotation = annotations.get(parameter.name, parameter.annotation)
         if get_origin(annotation) is Annotated:
             annotation = get_args(annotation)[0]
         if annotation is UploadedFile:
@@ -152,11 +155,13 @@ def _validate_uploaded_file_declaration(function: Callable[..., object]) -> None
         raise ValueError("file connector tools must declare exactly one UploadedFile parameter")
     if not file_parameters:
         return
+    if isinstance(tool.input_schema, PresentConnectorValue):
+        raise ValueError("UploadedFile tools cannot declare input_schema")
     if file_parameters[0].default is not Parameter.empty:
         raise ValueError("UploadedFile parameter must be required and have no default")
     public_parameters = [
         parameter
-        for parameter in signature(function).parameters.values()
+        for parameter in parameters
         if parameter.name != "configuration"
     ]
     if public_parameters != file_parameters:
@@ -164,6 +169,14 @@ def _validate_uploaded_file_declaration(function: Callable[..., object]) -> None
             "file connector tools may expose only one required UploadedFile parameter; "
             "configuration is the only optional hidden parameter"
         )
+
+
+def _explicit_tool_annotations(tool: ToolDefinition, parameters: Collection[Parameter]) -> dict[str, object]:
+    if isinstance(tool.input_schema, PresentConnectorValue) and any(
+        isinstance(parameter.annotation, str) for parameter in parameters
+    ):
+        return get_type_hints(tool.function, include_extras=True)
+    return {}
 
 
 def _validate_prompts(prompts: list[PromptDefinition]) -> None:

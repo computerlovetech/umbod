@@ -1,9 +1,11 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any, Generic, TypeVar
 
 from umbod_sdk.connectors.capability_description import CapabilityDescription
+from umbod_sdk.connectors.declaration import tool_decorator as declaration_tool_decorator
 from umbod_sdk.connectors.output_schema import (
     AbsentConnectorToolOutputSchema,
     ConnectorToolOutputSchema,
@@ -42,6 +44,9 @@ class ToolDefinition:
     parameters: Mapping[str, str]
     output_schema: ConnectorToolOutputSchema = field(
         default_factory=AbsentConnectorToolOutputSchema
+    )
+    input_schema: AbsentConnectorValue | PresentConnectorValue[dict[str, Any]] = field(
+        default_factory=AbsentConnectorValue
     )
 
 
@@ -85,35 +90,35 @@ def tool_decorator(
     description: str,
     options: Mapping[str, Any],
 ) -> Callable[[ConnectorToolOperation], ConnectorToolOperation]:
-    if not description:
-        raise ValueError("tool requires a description")
-    unknown_options = set(options) - {"name", "parameters", "output_schema"}
-    if unknown_options:
-        option = sorted(unknown_options)[0]
-        raise TypeError(f"tool() got an unexpected keyword argument '{option}'")
-    output_schema = (
-        PresentConnectorToolOutputSchema(options["output_schema"])
-        if "output_schema" in options
-        else AbsentConnectorToolOutputSchema()
+    return declaration_tool_decorator(
+        partial(_register_tool, definition), description=description, options=dict(options)
     )
-    if isinstance(output_schema, PresentConnectorToolOutputSchema) and not isinstance(
-        output_schema.output_schema, dict
-    ):
-        raise TypeError("tool output_schema must be a JSON Schema object")
 
-    def decorate(function: ConnectorToolOperation) -> ConnectorToolOperation:
-        definition.tools.append(
-            ToolDefinition(
-                operation_name=options.get("name") or function.__name__,
-                function=function,
-                description=description,
-                parameters=options.get("parameters") or {},
-                output_schema=output_schema,
-            )
+
+def _register_tool(
+    definition: ConnectorDefinition,
+    description: str,
+    options: Mapping[str, Any],
+    function: ConnectorToolOperation,
+) -> None:
+    definition.tools.append(
+        ToolDefinition(
+            operation_name=options.get("name") or function.__name__,
+            function=function,
+            description=description,
+            parameters=options.get("parameters") or {},
+            output_schema=(
+                PresentConnectorToolOutputSchema(options["output_schema"])
+                if "output_schema" in options
+                else AbsentConnectorToolOutputSchema()
+            ),
+            input_schema=(
+                PresentConnectorValue(options["input_schema"])
+                if "input_schema" in options
+                else AbsentConnectorValue()
+            ),
         )
-        return function
-
-    return decorate
+    )
 
 
 def prompt_decorator(
