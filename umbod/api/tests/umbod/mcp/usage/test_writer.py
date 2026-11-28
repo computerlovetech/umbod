@@ -3,12 +3,13 @@ from uuid import UUID
 
 import pytest
 
+from umbod.config.usage import PersonalUsageConfig
 from umbod.core.usage.models import BuiltinUsageToolTarget, UsageRecord, UsageTool
 from umbod.mcp.usage.statistics import UsageDropReason, UsageObservations
 from umbod.core.usage.otel import serialize_usage_otel
 from umbod.mcp.usage.writer import UsageWriteBehind
 
-from .conftest import UsageHarness
+from .conftest import FailureCollector, MemoryUsageWriter, UsageHarness
 
 
 @pytest.mark.asyncio
@@ -65,9 +66,10 @@ async def test_exhausted_write_drops_once_without_sensitive_failure_evidence(har
     assert harness.runtime.statistics.persisted == 0
     assert dict(harness.runtime.statistics.dropped)[UsageDropReason.WRITE] == 1
     assert len(harness.writer.batches) == 4
-    assert 'SECRET' not in repr(harness.failures.events)
-    assert record.owner_id not in repr(harness.failures.events)
-    assert 'exception.stacktrace' not in repr(harness.failures.events)
+    failure_evidence = repr(harness.failures.events)
+    assert 'SECRET' not in failure_evidence
+    assert record.owner_id not in failure_evidence
+    assert 'exception.stacktrace' not in failure_evidence
 
 
 @pytest.mark.asyncio
@@ -128,23 +130,28 @@ async def test_partial_batch_flushes_on_deadline_without_shutdown(harness: Usage
 
 
 @pytest.mark.asyncio
-async def test_worker_never_prunes_after_one_day(harness: UsageHarness, record: UsageRecord) -> None:
+async def test_worker_never_prunes_after_one_day(
+    usage_settings: PersonalUsageConfig, usage_writer: MemoryUsageWriter,
+    usage_failures: FailureCollector, record: UsageRecord,
+) -> None:
     monotonic = [0.0]
-    runtime = UsageWriteBehind(harness.settings, harness.writer, UsageObservations(harness.failures, lambda: monotonic[0]),
-                              lambda: monotonic[0], asyncio.sleep)
+    runtime = UsageWriteBehind(
+        usage_settings, usage_writer, UsageObservations(usage_failures, lambda: monotonic[0]),
+        lambda: monotonic[0], asyncio.sleep,
+    )
     runtime.start()
     try:
         runtime.enqueue(record)
         runtime.enqueue(record)
-        await asyncio.wait_for(harness.writer.attempted.wait(), timeout=1)
+        await asyncio.wait_for(usage_writer.attempted.wait(), timeout=1)
         monotonic[0] = 86401
-        harness.writer.attempted.clear()
+        usage_writer.attempted.clear()
         runtime.enqueue(record)
         runtime.enqueue(record)
-        await asyncio.wait_for(harness.writer.attempted.wait(), timeout=1)
+        await asyncio.wait_for(usage_writer.attempted.wait(), timeout=1)
     finally:
         await runtime.stop()
-    assert harness.writer.pruned == []
+    assert usage_writer.pruned == []
 
 
 @pytest.mark.asyncio

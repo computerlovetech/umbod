@@ -9,20 +9,20 @@ from umbod.infrastructure.metrics.rest import RestMetricsHttpServer
 from umbod.infrastructure.metrics.rest.http_server import Server
 
 
+def _signal_handlers() -> tuple[object, object]:
+    return signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
+
+
 @pytest.mark.asyncio
-async def test_embedded_metrics_listener_does_not_replace_process_signal_handlers() -> (
-    None
-):
-    previous = {
-        number: signal.getsignal(number) for number in (signal.SIGINT, signal.SIGTERM)
-    }
+async def test_embedded_metrics_listener_does_not_replace_process_signal_handlers() -> None:
+    previous = _signal_handlers()
     server = RestMetricsHttpServer(PrometheusRestMetricsRecorder(), 0)
     try:
         await server.start()
-        assert {number: signal.getsignal(number) for number in previous} == previous
+        assert _signal_handlers() == previous
     finally:
         await server.stop()
-    assert {number: signal.getsignal(number) for number in previous} == previous
+    assert _signal_handlers() == previous
 
 
 @pytest.mark.asyncio

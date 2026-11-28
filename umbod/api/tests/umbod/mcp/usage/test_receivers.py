@@ -3,7 +3,7 @@ import math
 import pytest
 
 from umbod.mcp.usage.ports import NoUsageCorrelation
-from umbod.core.usage.models import BuiltinUsageToolTarget, ConnectorUsageToolTarget, UnavailableUsageTool, UsageKind, UsageOwner, UsageRecord, UsageTool, usage_tool_id
+from umbod.core.usage.models import BuiltinUsageToolTarget, ConnectorUsageToolTarget, UnavailableUsageTool, UsageKind, UsageOwner, UsageRecord, UsageTool
 from umbod.core.usage.otel import serialize_usage_otel
 from umbod.mcp.signals.capabilities import (
     McpCapabilityCompleted, McpCapabilityMethod, McpCapabilitySucceeded, prompt_target,
@@ -54,8 +54,9 @@ def test_wrappers_are_excluded_but_nested_and_builtin_tools_count(
     if count:
         assert admission.records[0].occurred_at_unix_nano == 2_500_100
         assert admission.records[0].observed_at_unix_nano == 999
-        assert 'SECRET' not in serialize_usage_otel(admission.records[0])
-        assert name not in serialize_usage_otel(admission.records[0])
+        serialized = serialize_usage_otel(admission.records[0])
+        assert 'SECRET' not in serialized
+        assert name not in serialized
 
 
 @pytest.mark.parametrize('method,kind', [
@@ -132,8 +133,8 @@ def test_receiver_queues_canonical_identity_with_bounded_display_snapshots(
     tool = admission.records[0].tool
     assert isinstance(tool, UsageTool)
     assert tool.target == target
-    assert usage_tool_id(tool.target) == usage_tool_id(target)
     assert len(tool.tool_name) == 256
     assert tool.connector_name == ('Umbod' if isinstance(target, BuiltinUsageToolTarget) else ('Connector' * 100)[:256])
-    assert 'Alias' not in serialize_usage_otel(admission.records[0])
-    assert 'registered_name' not in serialize_usage_otel(admission.records[0])
+    serialized = serialize_usage_otel(admission.records[0])
+    assert 'Alias' not in serialized
+    assert 'registered_name' not in serialized

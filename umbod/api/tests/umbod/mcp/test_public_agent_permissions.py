@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
+from uuid import uuid4
 
 import httpx2
 import pytest
@@ -38,6 +39,7 @@ from umbod.core.permissions.domain import ConnectorCapabilityRef, GroupPermissio
 from umbod.core.permissions.factories import create_group_instance_permission_reader, create_group_permission_store
 from umbod.core.permissions.ports import GroupInstancePermissionReader, GroupPermissionStore
 from umbod.core.persistence import Database
+from umbod.core.system_settings import UpdatePortableConnectorSettings, create_system_settings_service
 from umbod.mcp.auth.agent_tokens import create_public_agent_auth
 from umbod.mcp.auth.factory import MCPAuthProviderFactory
 from umbod.mcp.auth.transport import AuthenticatedMcpTransport
@@ -258,3 +260,18 @@ async def test_revoked_agent_is_rejected_on_the_next_http_request_with_same_sess
         for next_headers in (authenticated_headers, headers):
             response = await session.http.post("/mcp", headers=next_headers, json=payload)
             assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_enabled_portable_submission_never_accepts_agent_credentials(tmp_path: Path) -> None:
+    async with _agent_session(tmp_path, "flat", stateless=False) as session:
+        await create_system_settings_service(session.database).set_portable_connectors_enabled(
+            "administrator", UpdatePortableConnectorSettings(portable_connectors_enabled=True),
+        )
+        name = "portable_connector_submit_revision"
+        assert name not in {tool.name for tool in await session.client.list_tools()}
+        result = await session.client.call_tool(
+            name, {"draft_id": str(uuid4()), "revision_id": str(uuid4())}, raise_on_error=False,
+        )
+        assert result.is_error
+        assert result.structured_content is None

@@ -53,19 +53,33 @@ class UsageHarness:
 
 
 @pytest.fixture
-def harness() -> UsageHarness:
-    settings = PersonalUsageConfig(queue_capacity=4, batch_size=2, flush_interval_seconds=0.001,
-                                   shutdown_timeout_seconds=0.02, write_timeout_seconds=0.01)
-    writer = MemoryUsageWriter()
-    failures = FailureCollector()
+def usage_settings() -> PersonalUsageConfig:
+    return PersonalUsageConfig(queue_capacity=4, batch_size=2, flush_interval_seconds=0.001,
+                               shutdown_timeout_seconds=0.02, write_timeout_seconds=0.01)
+
+
+@pytest.fixture
+def usage_writer() -> MemoryUsageWriter:
+    return MemoryUsageWriter()
+
+
+@pytest.fixture
+def usage_failures() -> FailureCollector:
+    return FailureCollector()
+
+
+@pytest.fixture
+def harness(
+    usage_settings: PersonalUsageConfig, usage_writer: MemoryUsageWriter, usage_failures: FailureCollector,
+) -> UsageHarness:
     delays: list[float] = []
 
     async def sleep(delay: float) -> None:
         delays.append(delay)
 
-    runtime = UsageWriteBehind(settings, writer, UsageObservations(failures, lambda: 0.0),
+    runtime = UsageWriteBehind(usage_settings, usage_writer, UsageObservations(usage_failures, lambda: 0.0),
                               lambda: asyncio.get_running_loop().time(), sleep)
-    return UsageHarness(settings, writer, failures, delays, runtime)
+    return UsageHarness(usage_settings, usage_writer, usage_failures, delays, runtime)
 
 
 @pytest.fixture

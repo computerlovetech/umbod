@@ -194,19 +194,30 @@ def _mounted_activity_api(
     with TestClient(root) as client:
         assert client.portal is not None
         try:
-            client.portal.call(_seed_usage, persistence)
             yield ActivityApi(client, personal, signing_key, settings, persistence)
         finally:
             client.portal.call(analytics.shutdown)
             client.portal.call(persistence.shutdown)
 
 
+def _seed_activity_api(activity_api: ActivityApi) -> ActivityApi:
+    portal = activity_api.client.portal
+    assert portal is not None
+    portal.call(_seed_usage, activity_api.persistence)
+    return activity_api
+
+
 @pytest.fixture
-def api(settings: AppConfig, signing_key: rsa.RSAPrivateKey) -> Iterator[ActivityApi]:
+def unseeded_api(settings: AppConfig, signing_key: rsa.RSAPrivateKey) -> Iterator[ActivityApi]:
     persistence = create_inmemory_runtime()
     analytics = ActivityAnalyticsRuntime(persistence.database, persistence.readiness)
     with _mounted_activity_api(settings, signing_key, persistence, analytics) as activity_api:
         yield activity_api
+
+
+@pytest.fixture
+def api(unseeded_api: ActivityApi) -> ActivityApi:
+    return _seed_activity_api(unseeded_api)
 
 
 @pytest.fixture
@@ -215,3 +226,8 @@ def disabled_harness_api(settings: AppConfig, signing_key: rsa.RSAPrivateKey) ->
         settings, signing_key, create_inmemory_runtime(), create_disabled_analytics_runtime(),
     ) as activity_api:
         yield activity_api
+
+
+@pytest.fixture
+def seeded_disabled_harness_api(disabled_harness_api: ActivityApi) -> ActivityApi:
+    return _seed_activity_api(disabled_harness_api)

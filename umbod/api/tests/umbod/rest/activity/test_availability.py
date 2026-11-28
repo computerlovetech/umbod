@@ -7,8 +7,8 @@ from umbod.rest.activity.models import ActivityOverviewResponse
 from .conftest import BASE, DETAIL, SESSIONS, ActivityApi
 
 
-def test_overview_preserves_mcp_summary_when_harness_is_disabled(disabled_harness_api: ActivityApi) -> None:
-    response = disabled_harness_api.client.get(BASE, headers=disabled_harness_api.headers("alice"))
+def test_overview_preserves_mcp_summary_when_harness_is_disabled(seeded_disabled_harness_api: ActivityApi) -> None:
+    response = seeded_disabled_harness_api.client.get(BASE, headers=seeded_disabled_harness_api.headers("alice"))
 
     assert response.status_code == 200
     overview = ActivityOverviewResponse.model_validate(response.json())
@@ -17,9 +17,9 @@ def test_overview_preserves_mcp_summary_when_harness_is_disabled(disabled_harnes
     assert overview.mcp.summary.totals.tool.success == 1
 
 
-def test_overview_preserves_harness_summary_when_mcp_usage_is_disabled(api: ActivityApi) -> None:
-    api.settings.personal_usage.enabled = False
-    response = api.client.get(BASE, headers=api.headers("alice"))
+def test_overview_preserves_harness_summary_when_mcp_usage_is_disabled(unseeded_api: ActivityApi) -> None:
+    unseeded_api.settings.personal_usage.enabled = False
+    response = unseeded_api.client.get(BASE, headers=unseeded_api.headers("alice"))
 
     assert response.status_code == 200
     overview = ActivityOverviewResponse.model_validate(response.json())
@@ -28,12 +28,14 @@ def test_overview_preserves_harness_summary_when_mcp_usage_is_disabled(api: Acti
     assert overview.mcp.status == "unavailable"
 
 
-def test_mcp_readiness_failure_does_not_abort_harness_overview(api: ActivityApi, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mcp_readiness_failure_does_not_abort_harness_overview(
+    unseeded_api: ActivityApi, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def fail_readiness() -> None:
         raise RuntimeError("private availability detail")
 
-    monkeypatch.setattr(api.persistence.readiness, "ensure_ready", fail_readiness)
-    response = api.client.get(BASE, headers=api.headers("alice"))
+    monkeypatch.setattr(unseeded_api.persistence.readiness, "ensure_ready", fail_readiness)
+    response = unseeded_api.client.get(BASE, headers=unseeded_api.headers("alice"))
 
     assert response.status_code == 200
     overview = ActivityOverviewResponse.model_validate(response.json())
@@ -51,9 +53,9 @@ def _unavailable_usage_reader() -> UsageReader:
     return UnavailableUsageReader()
 
 
-def test_mcp_usage_read_failure_does_not_abort_harness_overview(api: ActivityApi) -> None:
-    api.personal_app.dependency_overrides[get_mcp_activity_usage_reader] = _unavailable_usage_reader
-    response = api.client.get(BASE, headers=api.headers("alice"))
+def test_mcp_usage_read_failure_does_not_abort_harness_overview(unseeded_api: ActivityApi) -> None:
+    unseeded_api.personal_app.dependency_overrides[get_mcp_activity_usage_reader] = _unavailable_usage_reader
+    response = unseeded_api.client.get(BASE, headers=unseeded_api.headers("alice"))
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"

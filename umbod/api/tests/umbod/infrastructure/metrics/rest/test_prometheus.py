@@ -100,14 +100,12 @@ def test_prometheus_recorder_uses_only_approved_labels() -> None:
     request_samples = samples["umbod_rest_requests"]
     duration_samples = samples["umbod_rest_request_duration_seconds"]
     assert all(sample.labels == expected_labels for sample in request_samples)
-    assert all(
-        sample.labels == expected_labels or "le" in sample.labels for sample in duration_samples
-    )
-    assert all(
-        set(sample.labels) == {"method", "route", "status_class", "le"}
-        for sample in duration_samples
-        if "le" in sample.labels
-    )
+    bucket_label_keys = {*expected_labels, "le"}
+    for sample in duration_samples:
+        if "le" in sample.labels:
+            assert set(sample.labels) == bucket_label_keys
+        else:
+            assert sample.labels == expected_labels
 
 
 def test_prometheus_recorder_exposes_process_platform_and_gc_collectors() -> None:

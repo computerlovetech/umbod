@@ -51,16 +51,16 @@ def test_activity_is_not_an_admin_or_root_endpoint(disabled_harness_api: Activit
     assert api.client.get("/api/admin/activity", headers=admin_headers).status_code == 404
 
 
-def test_session_list_without_search_only_returns_owned_sessions(api: ActivityApi) -> None:
-    response = api.client.get(SESSIONS, headers=api.headers("bob"))
+def test_session_list_without_search_only_returns_owned_sessions(unseeded_api: ActivityApi) -> None:
+    response = unseeded_api.client.get(SESSIONS, headers=unseeded_api.headers("bob"))
 
     assert response.status_code == 200
     page = ActivitySessionsResponse.model_validate(response.json())
     assert [session.key.session_id for session in page.sessions] == ["bob-private"]
 
 
-def test_session_list_search_pages_remain_scoped_to_verified_owner(api: ActivityApi) -> None:
-    first = api.client.get(SESSIONS, params={"q": "alice", "limit": 1}, headers=api.headers("alice"))
+def test_session_list_search_pages_remain_scoped_to_verified_owner(unseeded_api: ActivityApi) -> None:
+    first = unseeded_api.client.get(SESSIONS, params={"q": "alice", "limit": 1}, headers=unseeded_api.headers("alice"))
     assert first.status_code == 200
     assert first.headers["cache-control"] == "no-store"
     first_page = ActivitySessionsResponse.model_validate(first.json())
@@ -68,21 +68,21 @@ def test_session_list_search_pages_remain_scoped_to_verified_owner(api: Activity
     assert first_page.page.kind == "more"
 
     continuation = {"q": "alice", "limit": 1, "cursor": first_page.page.cursor}
-    second = api.client.get(SESSIONS, params=continuation, headers=api.headers("alice"))
+    second = unseeded_api.client.get(SESSIONS, params=continuation, headers=unseeded_api.headers("alice"))
     assert second.status_code == 200
     second_page = ActivitySessionsResponse.model_validate(second.json())
     assert [item.key.session_id for item in second_page.sessions] == ["alice-second"]
     assert second_page.page.kind == "end"
 
-    foreign_cursor = api.client.get(SESSIONS, params=continuation, headers=api.headers("bob"))
+    foreign_cursor = unseeded_api.client.get(SESSIONS, params=continuation, headers=unseeded_api.headers("bob"))
     assert foreign_cursor.status_code == 422
     assert foreign_cursor.headers["cache-control"] == "no-store"
 
 
-def test_session_detail_accepts_path_session_id_without_disclosing_foreign_session(api: ActivityApi) -> None:
-    found = api.client.get(DETAIL, headers=api.headers("alice"))
-    foreign = api.client.get(DETAIL, headers=api.headers("bob"))
-    missing = api.client.get(SESSIONS + "/codex/not-a-session", headers=api.headers("bob"))
+def test_session_detail_accepts_path_session_id_without_disclosing_foreign_session(unseeded_api: ActivityApi) -> None:
+    found = unseeded_api.client.get(DETAIL, headers=unseeded_api.headers("alice"))
+    foreign = unseeded_api.client.get(DETAIL, headers=unseeded_api.headers("bob"))
+    missing = unseeded_api.client.get(SESSIONS + "/codex/not-a-session", headers=unseeded_api.headers("bob"))
 
     assert found.status_code == 200
     assert ActivitySessionResponse.model_validate(found.json()).session.key.session_id == "alice/segment"

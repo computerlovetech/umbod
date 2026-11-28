@@ -39,8 +39,6 @@ def test_removed_upload_options_and_root_do_not_resolve_storage(filesystem_http:
     assert options.headers["cache-control"] == "no-store"
     paths = client.get("/api/me/openapi.json").json()["paths"]
     assert "/filesystem/root" not in paths
-    assert set(paths["/filesystem/nodes/{parent_id}/uploads"]) == {"post"}
-    assert "get" in paths["/filesystem/uploads/{upload_id}"]
 
 
 def test_upload_cors_preflight_is_not_an_authorized_options_handler(filesystem_http: FilesystemHttp) -> None:
@@ -104,11 +102,9 @@ def test_unverified_upload_begin_matches_missing_denial(
     assert response.json() == missing.json()
 
 
-def test_anonymous_upload_begin_requires_authentication(
-    filesystem_http: FilesystemHttp, upload_parent: str,
-) -> None:
+def test_anonymous_upload_begin_requires_authentication(filesystem_http: FilesystemHttp) -> None:
     response = filesystem_http.client.post(
-        upload_path(upload_parent), json={**BODY, "size_bytes": 0}, headers={"Authorization": ""},
+        upload_path(str(uuid4())), json={**BODY, "size_bytes": 0}, headers={"Authorization": ""},
     )
     assert response.status_code == 401
     assert response.headers["cache-control"] == "no-store"

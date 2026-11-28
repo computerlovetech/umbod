@@ -7,31 +7,33 @@ from .conftest import BASE, DETAIL, SESSIONS, ActivityApi
     ("bob", SESSIONS + "/codex/bob-private"),
 ])
 def test_activity_responses_use_same_verified_identity_key_as_profile(
-    api: ActivityApi, subject: str, detail: str,
+    unseeded_api: ActivityApi, subject: str, detail: str,
 ) -> None:
-    headers = api.headers(subject)
-    profile = api.client.get("/api/me/profile", headers=headers)
+    headers = unseeded_api.headers(subject)
+    profile = unseeded_api.client.get("/api/me/profile", headers=headers)
     assert profile.status_code == 200
-    other_profile = api.client.get("/api/me/profile", headers=api.headers("bob" if subject == "alice" else "alice"))
+    other_profile = unseeded_api.client.get(
+        "/api/me/profile", headers=unseeded_api.headers("bob" if subject == "alice" else "alice"),
+    )
     assert other_profile.status_code == 200
     identity_key = profile.json()["identity_key"]
     assert identity_key and identity_key != other_profile.json()["identity_key"]
 
     for path in (BASE, SESSIONS, detail):
-        response = api.client.get(path, headers=headers)
+        response = unseeded_api.client.get(path, headers=headers)
         assert response.status_code == 200
         assert response.json()["identity_key"] == identity_key
 
 
-def test_personal_openapi_omits_retired_usage_route(api: ActivityApi) -> None:
-    response = api.client.get("/api/me/openapi.json", headers=api.headers("alice"))
+def test_personal_openapi_omits_retired_usage_route(unseeded_api: ActivityApi) -> None:
+    response = unseeded_api.client.get("/api/me/openapi.json", headers=unseeded_api.headers("alice"))
 
     assert response.status_code == 200
     assert "/usage" not in response.json()["paths"]
 
 
-def test_personal_openapi_requires_activity_identity(api: ActivityApi) -> None:
-    response = api.client.get("/api/me/openapi.json", headers=api.headers("alice"))
+def test_personal_openapi_requires_activity_identity(unseeded_api: ActivityApi) -> None:
+    response = unseeded_api.client.get("/api/me/openapi.json", headers=unseeded_api.headers("alice"))
 
     assert response.status_code == 200
     document = response.json()

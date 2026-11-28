@@ -135,7 +135,6 @@ async def test_saved_default_customization_survives_new_store(service: AgentBeha
     saved = await service.publish_configuration(PublishConfiguration(reporting_enabled=True, expected_revision=1, patterns=patterns, playbooks=playbooks))
     restarted = AgentBehaviourService(DatabaseAgentBehaviourStore(database), clock, uuid4)
     assert await restarted.get_configuration() == saved
-    assert await restarted.get_configuration() == saved
     assert saved.revision == 2
     assert restarted.get_defaults() == defaults
     if change in {"disable", "empty"}:

@@ -1,5 +1,4 @@
 import asyncio
-from typing import Any
 from unittest.mock import patch
 
 import httpx
@@ -11,6 +10,31 @@ from uvicorn import Config, Server
 from umbod.infrastructure.metrics.rest import PrometheusRestMetricsRecorder
 from umbod.infrastructure.metrics.rest import RestMetricsHttpServer
 from umbod.infrastructure.metrics.rest import create_rest_metrics_app
+
+
+class _RecordingServer:
+    def __init__(self, config: Config) -> None:
+        self.config = config
+        self.started = False
+        self.should_exit = False
+
+    async def serve(self) -> None:
+        self.started = True
+        while not self.should_exit:
+            await asyncio.sleep(0)
+
+
+@pytest.fixture
+def recording_servers(monkeypatch: pytest.MonkeyPatch) -> list[_RecordingServer]:
+    servers: list[_RecordingServer] = []
+
+    def create_server(config: Config) -> _RecordingServer:
+        server = _RecordingServer(config)
+        servers.append(server)
+        return server
+
+    monkeypatch.setattr("umbod.infrastructure.metrics.rest.http_server.Server", create_server)
+    return servers
 
 
 @pytest.fixture
@@ -96,61 +120,28 @@ async def test_metrics_server_clears_lifecycle_state_after_start_failure() -> No
 
 
 @pytest.mark.asyncio
-async def test_metrics_server_configures_uvicorn_for_all_interfaces_and_configured_port() -> None:
-    captured_config: dict[str, Any] = {}
+async def test_metrics_server_configures_uvicorn_for_all_interfaces_and_configured_port(
+    recording_servers: list[_RecordingServer],
+) -> None:
+    server = RestMetricsHttpServer(PrometheusRestMetricsRecorder(), 9876)
+    await server.start()
+    await server.stop()
 
-    class CapturingConfig:
-        def __init__(self, app: object, **kwargs: object) -> None:
-            captured_config.update(kwargs)
-
-    class CapturingServer:
-        started = False
-        should_exit = False
-
-        def __init__(self, config: object) -> None:
-            captured_config["server_config"] = config
-
-        async def serve(self) -> None:
-            self.started = True
-            while not self.should_exit:
-                await asyncio.sleep(0)
-
-    with (
-        patch("umbod.infrastructure.metrics.rest.http_server.Config", CapturingConfig),
-        patch("umbod.infrastructure.metrics.rest.http_server.Server", CapturingServer),
-    ):
-        server = RestMetricsHttpServer(PrometheusRestMetricsRecorder(), 9876)
-        await server.start()
-        await server.stop()
-
-    assert captured_config["host"] == "0.0.0.0"
-    assert captured_config["port"] == 9876
-    assert captured_config["lifespan"] == "off"
+    config = recording_servers[0].config
+    assert config.host == "0.0.0.0"
+    assert config.port == 9876
+    assert config.lifespan == "off"
 
 
 @pytest.mark.asyncio
-async def test_metrics_server_uses_fresh_uvicorn_server_after_stop() -> None:
-    created_servers: list[object] = []
-
-    class RestartableServer:
-        started = False
-        should_exit = False
-
-        def __init__(self, config: object) -> None:
-            self.config = config
-            created_servers.append(self)
-
-        async def serve(self) -> None:
-            self.started = True
-            while not self.should_exit:
-                await asyncio.sleep(0)
-
+async def test_metrics_server_uses_fresh_uvicorn_server_after_stop(
+    recording_servers: list[_RecordingServer],
+) -> None:
     server = RestMetricsHttpServer(PrometheusRestMetricsRecorder(), 9876)
-    with patch("umbod.infrastructure.metrics.rest.http_server.Server", RestartableServer):
-        await server.start()
-        await server.stop()
-        await server.start()
-        await server.stop()
+    await server.start()
+    await server.stop()
+    await server.start()
+    await server.stop()
 
-    assert len(created_servers) == 2
-    assert created_servers[0] is not created_servers[1]
+    assert len(recording_servers) == 2
+    assert recording_servers[0] is not recording_servers[1]

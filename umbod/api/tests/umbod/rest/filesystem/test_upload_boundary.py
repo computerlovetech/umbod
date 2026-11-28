@@ -7,16 +7,14 @@ from fastapi import Request
 from umbod.rest.authentication.deps import get_caller_context
 
 from .conftest import FilesystemHttp
-from .test_content import begin_upload, upload_path as upload_path
+from .test_content import begin_upload
 from .test_http_contract import BASE
 
 
 @pytest.mark.parametrize("reason", ["foreign", "unknown", "revoked", "media_type", "completed"])
 def test_raw_transfer_rejects_before_consuming_request_stream(
-    filesystem_http: FilesystemHttp, upload_path: str, monkeypatch: pytest.MonkeyPatch, reason: str,
+    filesystem_http: FilesystemHttp, monkeypatch: pytest.MonkeyPatch, reason: str,
 ) -> None:
-
-
     client = filesystem_http.client
     from .conftest import create_shared_namespace, replace_shared_access
 

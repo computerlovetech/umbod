@@ -124,18 +124,18 @@ def test_session_wire_contract_and_idempotent_completion(filesystem_http: Filesy
 
 @pytest.mark.parametrize("field", ["owner", "caller", "content", "grants", "unexpected"])
 @pytest.mark.parametrize("nested", [False, True])
-def test_begin_rejects_authority_and_unknown_fields(filesystem_http: FilesystemHttp, upload_path: str, field: str, nested: bool) -> None:
+def test_begin_rejects_authority_and_unknown_fields(filesystem_http: FilesystemHttp, field: str, nested: bool) -> None:
     body = {"name": "file", "metadata": {"content_type": {}, "attributes": {}}, "size_bytes": 0}
     if nested:
         body["metadata"][field] = "injected"
     else:
         body[field] = "injected"
-    assert filesystem_http.client.post(upload_path, json=body).status_code == 422
+    assert filesystem_http.client.post(f"{BASE}/nodes/{uuid4()}/uploads", json=body).status_code == 422
 
 
 @pytest.mark.parametrize("size", [-1, True, 1.0, "1", None])
-def test_declared_size_is_strict_nonnegative_integer(filesystem_http: FilesystemHttp, upload_path: str, size: object) -> None:
-    response = filesystem_http.client.post(upload_path, json={
+def test_declared_size_is_strict_nonnegative_integer(filesystem_http: FilesystemHttp, size: object) -> None:
+    response = filesystem_http.client.post(f"{BASE}/nodes/{uuid4()}/uploads", json={
         "name": "file", "metadata": {"content_type": {}, "attributes": {}}, "size_bytes": size,
     })
     assert response.status_code == 422

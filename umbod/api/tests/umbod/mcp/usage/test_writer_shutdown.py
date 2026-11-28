@@ -2,11 +2,12 @@ import asyncio
 
 import pytest
 
+from umbod.config.usage import PersonalUsageConfig
 from umbod.core.usage.models import UsageBatch, UsageRecord
 from umbod.mcp.usage.statistics import UsageDropReason, UsageObservations
 from umbod.mcp.usage.writer import UsageWriteBehind
 
-from .conftest import UsageHarness
+from .conftest import FailureCollector, MemoryUsageWriter
 
 
 class CleanupWriter:
@@ -29,21 +30,21 @@ class CleanupWriter:
             self.finished.set()
 
 
-def runtime(harness: UsageHarness, writer: CleanupWriter) -> UsageWriteBehind:
+def runtime(settings: PersonalUsageConfig, writer: CleanupWriter, failures: FailureCollector) -> UsageWriteBehind:
     return UsageWriteBehind(
-        harness.settings, writer, UsageObservations(harness.failures, lambda: 0.0),
+        settings, writer, UsageObservations(failures, lambda: 0.0),
         asyncio.get_running_loop().time, asyncio.sleep,
     )
 
 
 @pytest.mark.asyncio
 async def test_shutdown_reserves_one_shared_budget_for_drain_and_cancellation(
-    harness: UsageHarness, record: UsageRecord,
+    usage_settings: PersonalUsageConfig, usage_failures: FailureCollector, record: UsageRecord,
 ) -> None:
-    harness.settings.shutdown_timeout_seconds = 0.2
-    harness.settings.write_timeout_seconds = 5
+    usage_settings.shutdown_timeout_seconds = 0.2
+    usage_settings.write_timeout_seconds = 5
     writer = CleanupWriter(0.04)
-    worker = runtime(harness, writer)
+    worker = runtime(usage_settings, writer, usage_failures)
     worker.start()
     worker.enqueue(record)
     await asyncio.wait_for(writer.started.wait(), 1)
@@ -58,12 +59,12 @@ async def test_shutdown_reserves_one_shared_budget_for_drain_and_cancellation(
 
 @pytest.mark.asyncio
 async def test_cleanup_overrun_is_reported_only_after_worker_termination(
-    harness: UsageHarness, record: UsageRecord,
+    usage_settings: PersonalUsageConfig, usage_failures: FailureCollector, record: UsageRecord,
 ) -> None:
-    harness.settings.shutdown_timeout_seconds = 0.04
-    harness.settings.write_timeout_seconds = 5
+    usage_settings.shutdown_timeout_seconds = 0.04
+    usage_settings.write_timeout_seconds = 5
     writer = CleanupWriter(0.06)
-    worker = runtime(harness, writer)
+    worker = runtime(usage_settings, writer, usage_failures)
     worker.start()
     worker.enqueue(record)
     await asyncio.wait_for(writer.started.wait(), 1)
@@ -76,13 +77,14 @@ async def test_cleanup_overrun_is_reported_only_after_worker_termination(
 
 @pytest.mark.asyncio
 async def test_worker_failure_is_not_hidden_by_shutdown(
-    harness: UsageHarness, record: UsageRecord,
+    usage_settings: PersonalUsageConfig, usage_writer: MemoryUsageWriter,
+    usage_failures: FailureCollector, record: UsageRecord,
 ) -> None:
     def failing_clock() -> float:
         raise RuntimeError("worker clock failed")
 
     worker = UsageWriteBehind(
-        harness.settings, harness.writer, UsageObservations(harness.failures, lambda: 0.0),
+        usage_settings, usage_writer, UsageObservations(usage_failures, lambda: 0.0),
         failing_clock, asyncio.sleep,
     )
     worker.start()
