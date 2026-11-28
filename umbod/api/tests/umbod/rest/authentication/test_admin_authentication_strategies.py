@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from threading import get_ident
 from typing import Literal
 
 import pytest
@@ -6,6 +7,7 @@ from fastapi import Request
 from fastapi.responses import Response
 
 from umbod.rest.authentication import JwtClaims, JwtVerificationError
+from umbod.rest.authentication.authorization import AdminAuthorizationPolicy, AdminAuthorizationService
 from umbod.rest.authentication.middleware import (
     AdminAuthenticationStrategy,
     AdminAuthenticationStrategyFactory,
@@ -123,6 +125,26 @@ async def test_jwt_strategy_forbids_unauthorized_claims() -> None:
 
     assert isinstance(response, Response)
     assert response.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_admin_strategy_offloads_production_verification_when_no_claims_are_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_thread = get_ident()
+    verifier = ProductionJwksJwtVerifier("https://identity.example.com/jwks", "issuer", "audience")
+
+    def verify(token: str) -> JwtClaims:
+        assert get_ident() != request_thread
+        return JwtClaims(claims={"iss": "issuer", "sub": "admin", "groups": ["admins"]})
+
+    monkeypatch.setattr(verifier, "verify", verify)
+    service = AdminAuthorizationService(
+        verifier, AdminAuthorizationPolicy(membership_claim="groups", required_membership="admins"),
+    )
+    strategy = JwtAdminAuthenticationStrategy("X-Forwarded-Access-Token", service)
+
+    assert await strategy.authenticate(_create_request({"X-Forwarded-Access-Token": "token"})) is None
 
 
 def test_strategy_factory_returns_jwt_strategy_for_simulation_mode() -> None:

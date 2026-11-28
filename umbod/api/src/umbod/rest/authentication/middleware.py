@@ -27,6 +27,7 @@ from umbod.rest.authentication.verifiers import (
     ProductionJwksJwtVerifier,
     SemanticJwtVerifier,
     SimulatedJwtVerifier,
+    verify_request_jwt,
 )
 
 
@@ -142,15 +143,19 @@ class JwtAdminAuthenticationStrategy:
                 )
             return None
         token = extract_request_jwt_token(request.headers, self.jwt_header_name)
+        service = self.authorization_service
         try:
-            claims = self.authorization_service.verify_claims(token)
+            if type(service) is AdminAuthorizationService:
+                claims = await verify_request_jwt(service.jwt_verifier, token)
+            else:
+                claims = service.verify_claims(token)
         except JwtVerificationError:
             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
-        if not self.authorization_service.is_authorized(claims):
+        if not service.is_authorized(claims):
             return JSONResponse(status_code=403, content={"detail": "Forbidden"})
         provenance = AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED
-        if type(self.authorization_service) is AdminAuthorizationService:
-            provenance = authentication_provenance(self.authorization_service.jwt_verifier)
+        if type(service) is AdminAuthorizationService:
+            provenance = authentication_provenance(service.jwt_verifier)
         context = caller_context_from_claims(claims, provenance)
         setattr(request.state, VERIFIED_ACCESS_CLAIMS_STATE_KEY, claims)
         setattr(request.state, CALLER_CONTEXT_STATE_KEY, context)

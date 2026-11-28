@@ -12,7 +12,7 @@ from umbod.rest.authentication.deps import CALLER_CONTEXT_STATE_KEY, VERIFIED_AC
 from umbod.rest.authentication.local import LOCAL_DEVELOPMENT_ISSUER, local_rest_identity_enabled
 from umbod.rest.authentication.middleware import JwtVerifierFactory
 from umbod.rest.authentication.tokens import extract_request_jwt_token
-from umbod.rest.authentication.verifiers import SimulatedJwtVerifier
+from umbod.rest.authentication.verifiers import SimulatedJwtVerifier, verify_request_jwt
 from umbod.rest.authentication.rest_paths import delegated_upload_request, protected_rest_request, within_namespace
 
 
@@ -71,7 +71,7 @@ class RestAuthenticationMiddleware(BaseHTTPMiddleware):
         ) or (default_simulation and not self._local):
             return self._unauthorized()
         try:
-            claims = verifier.verify(token)
+            claims = await verify_request_jwt(verifier, token)
         except JwtVerificationError:
             return self._unauthorized()
         if self._local and default_simulation:

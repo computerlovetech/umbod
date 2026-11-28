@@ -1,9 +1,13 @@
+import asyncio
 import json
 import urllib.request
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
+from threading import Event
 from time import time
+from urllib.error import URLError
 
 import jwt
 import pytest
@@ -11,7 +15,9 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Request
 from fastapi.testclient import TestClient
 
+from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_caller_context
+from umbod.rest.authentication.verifiers import ProductionJwksJwtVerifier
 from umbod.rest.main import create_app
 from umbod.rest.user_catalogue.identity import catalogue_identity_key
 from umbod.rest.settings import APISettings
@@ -22,8 +28,34 @@ def signing_key() -> rsa.RSAPrivateKey:
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
+class SigningKeyFetch:
+    def __init__(self) -> None:
+        self.started = Event()
+        self.released = Event()
+        self.released.set()
+        self.requests = 0
+        self.timed_out = False
+
+    def complete(self) -> None:
+        self.requests += 1
+        self.started.set()
+        assert self.released.wait(timeout=10)
+        if self.timed_out:
+            raise URLError(TimeoutError())
+
+
 @pytest.fixture
-def client(signing_key: rsa.RSAPrivateKey, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+def signing_key_fetch() -> SigningKeyFetch:
+    return SigningKeyFetch()
+
+
+@pytest.fixture
+def client(
+    signing_key: rsa.RSAPrivateKey,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    signing_key_fetch: SigningKeyFetch,
+) -> Iterator[TestClient]:
     availability = tmp_path / "availability.json"
     availability.write_text(json.dumps({"connectors": []}), encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability))
@@ -34,7 +66,8 @@ def client(signing_key: rsa.RSAPrivateKey, tmp_path: Path, monkeypatch: pytest.M
     class JwksOpener:
         def open(self, request: urllib.request.Request, *, timeout: float) -> BytesIO:
             assert request.get_full_url() == settings.admin_authentication.jwks_url
-            assert timeout == 30
+            assert timeout == 3.0
+            signing_key_fetch.complete()
             return BytesIO(jwks)
 
     def build_opener(
@@ -61,6 +94,69 @@ def client(signing_key: rsa.RSAPrivateKey, tmp_path: Path, monkeypatch: pytest.M
 
 def _token(signing_key: rsa.RSAPrivateKey, issuer: str, audience: str) -> str:
     return jwt.encode({"iss": issuer, "aud": audience, "sub": "admin-123", "email": "admin@example.com", "groups": ["umbod-admins"], "exp": int(time()) + 600}, signing_key, algorithm="RS256", headers={"kid": "trusted-key"})
+
+
+def test_unrelated_health_request_completes_while_signing_keys_are_loading(
+    client: TestClient, signing_key: rsa.RSAPrivateKey, signing_key_fetch: SigningKeyFetch,
+) -> None:
+    signing_key_fetch.released.clear()
+    headers = {"Authorization": "Bearer " + _token(signing_key, "https://identity.example.com/", "umbod-api")}
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        first = executor.submit(client.get, "/api/probe", headers=headers)
+        try:
+            assert signing_key_fetch.started.wait(timeout=2)
+            second = executor.submit(client.get, "/api/probe", headers=headers)
+            health = executor.submit(client.get, "/api/system/health")
+            assert health.result(timeout=2).status_code == 200
+            assert not first.done()
+        finally:
+            signing_key_fetch.released.set()
+        assert first.result(timeout=2).status_code == 200
+        assert second.result(timeout=2).status_code == 200
+    assert signing_key_fetch.requests == 1
+
+
+@pytest.mark.anyio
+async def test_cancelling_a_request_keeps_the_worker_slot_until_verification_finishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    verifier = ProductionJwksJwtVerifier("https://identity.example.com/jwks", "issuer", "audience")
+    loop = asyncio.get_running_loop()
+    first_started = asyncio.Event()
+    second_started = asyncio.Event()
+    release_first = Event()
+
+    def verify(token: str) -> JwtClaims:
+        if token == "first":
+            loop.call_soon_threadsafe(first_started.set)
+            assert release_first.wait(timeout=5)
+        else:
+            loop.call_soon_threadsafe(second_started.set)
+        return JwtClaims(claims={"sub": token})
+
+    monkeypatch.setattr(verifier, "verify", verify)
+    first = asyncio.create_task(verifier.verify_async("first"))
+    try:
+        await asyncio.wait_for(first_started.wait(), timeout=2)
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        second = asyncio.create_task(verifier.verify_async("second"))
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(second_started.wait(), timeout=0.2)
+    finally:
+        release_first.set()
+    assert (await asyncio.wait_for(second, timeout=2)).claims == {"sub": "second"}
+
+
+def test_signing_key_fetch_timeout_fails_closed(
+    client: TestClient, signing_key: rsa.RSAPrivateKey, signing_key_fetch: SigningKeyFetch,
+) -> None:
+    signing_key_fetch.timed_out = True
+    headers = {"Authorization": "Bearer " + _token(signing_key, "https://identity.example.com/", "umbod-api")}
+    response = client.get("/api/probe", headers=headers)
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Unauthorized"}
 
 
 @pytest.mark.parametrize("issuer,audience,status", [
