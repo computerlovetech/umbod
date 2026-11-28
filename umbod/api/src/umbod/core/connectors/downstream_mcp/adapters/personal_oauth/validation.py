@@ -10,8 +10,9 @@ from ...personal.oauth.applications import (
 from pydantic import model_validator
 from urllib.parse import SplitResult, unquote, urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import ConfigDict, Field, SecretStr
 
+from umbod.proxies import Model
 from umbod.core.network import validate_public_address
 from ...personal.oauth.callback import GenericBinding, IssuerBinding
 
@@ -66,7 +67,7 @@ def parse_json(body: bytes) -> dict[str, object]:
     return result
 
 
-class WireModel(BaseModel):
+class WireModel(Model):
     model_config = ConfigDict(strict=True)
 
 
@@ -89,7 +90,7 @@ class AuthorizationServer(WireModel):
     scopes_supported: list[str] = Field(default_factory=list, max_length=64)
 
 
-class DiscoveredOAuthServer(BaseModel):
+class DiscoveredOAuthServer(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     server: AuthorizationServer
@@ -107,7 +108,7 @@ class RegisteredClient(WireModel):
     scope: str = ""
 
 
-class RegisteredOAuthClient(BaseModel):
+class RegisteredOAuthClient(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     client: RegisteredClient
@@ -126,7 +127,7 @@ class TokenResponse(WireModel):
     scope: str = ""
 
 
-class ProviderContext(BaseModel):
+class ProviderContext(Model):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
     issuer: str
     resource: str

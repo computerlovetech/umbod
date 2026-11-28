@@ -1,7 +1,8 @@
 from typing import Self, cast
 
-from pydantic import BaseModel, model_validator
+from pydantic import model_validator
 
+from umbod.proxies import PydanticModel
 from umbod.core.persistence import (
     Field,
     KeyCodec,
@@ -62,5 +63,5 @@ AGENT_CREDENTIAL_TABLE = Table(
     ),
 )
 AGENT_CREDENTIAL_TABLES = cast(
-    tuple[Table[BaseModel, BaseModel], ...], (AGENT_CREDENTIAL_TABLE,)
+    tuple[Table[PydanticModel, PydanticModel], ...], (AGENT_CREDENTIAL_TABLE,)
 )

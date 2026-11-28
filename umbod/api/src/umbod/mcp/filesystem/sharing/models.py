@@ -1,7 +1,8 @@
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_serializer
+from pydantic import ConfigDict, Field, TypeAdapter, field_serializer
 
+from umbod.proxies import Model
 from umbod.core.filesystem.access import Visibility
 from umbod.core.filesystem.sharing import ShareNodeResult
 from umbod.core.filesystem.sharing.models import default_recursive_scope
@@ -10,7 +11,7 @@ from umbod.core.filesystem.sharing import GroupPolicy, ShareNodePolicy, SharingR
 from umbod.core.identity_directory.user_models import SearchText
 
 
-class SearchSharingRecipientsCommand(BaseModel):
+class SearchSharingRecipientsCommand(Model):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
     node_id: UUID

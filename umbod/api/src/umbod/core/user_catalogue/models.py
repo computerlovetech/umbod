@@ -1,12 +1,13 @@
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.capabilities.domain import CapabilityOutputSchema, JsonObject
 from umbod.core.invocation import ConnectorKind
 
 
-class CatalogueModel(BaseModel):
+class CatalogueModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

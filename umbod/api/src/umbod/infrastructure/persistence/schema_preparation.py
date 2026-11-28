@@ -18,8 +18,7 @@ from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configuration_sc
 
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_schema import PERSONAL_OAUTH_ATTEMPT_TABLE
 
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.agent_behaviour.schema import AGENT_BEHAVIOUR_TABLES
 from umbod.core.agent_tokens.schema import AGENT_CREDENTIAL_TABLES
 from umbod.core.activation.stores.schema import CAPABILITY_ACTIVATION_STATE_TABLE
@@ -68,7 +67,7 @@ from umbod.core.filesystem.stores.namespaces import NAMESPACE_TABLE, adopt_exist
 from umbod.core.persistence import Database, Table
 from umbod.core.messaging import CHECKPOINT_TABLE, EVENT_TABLE
 
-APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
+APPLICATION_PERSISTENCE_TABLES: Sequence[Table[PydanticModel, PydanticModel]] = (
     NODE_TABLE,
     OWNER_TABLE,
     GRANT_TABLE,

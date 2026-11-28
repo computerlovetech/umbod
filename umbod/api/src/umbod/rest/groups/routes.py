@@ -1,8 +1,9 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
+from umbod.proxies import Model
 from umbod.core.groups import (
     Group, GroupIdentifier, GroupInUse, GroupManagementService, RegisterGroup,
     RegisterGroupMetadata, UpdateGroupMetadata, GroupNotFound, GroupRevisionConflict,
@@ -11,7 +12,7 @@ from umbod.core.groups.models import GroupLabel, GroupDescription
 from .deps import get_group_management, require_deletable_group_id, require_deletable_group_request
 
 
-class GroupListResponse(BaseModel):
+class GroupListResponse(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     groups: tuple[Group, ...]

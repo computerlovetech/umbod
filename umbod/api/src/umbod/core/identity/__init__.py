@@ -1,10 +1,12 @@
 from collections.abc import Iterable
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
+
+from umbod.proxies import Model
 
 
-class ConnectorIdentity(BaseModel):
+class ConnectorIdentity(Model):
     model_config = ConfigDict(frozen=True)
 
     connector_id: str

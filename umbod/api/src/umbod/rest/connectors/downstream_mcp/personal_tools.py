@@ -1,8 +1,9 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.capabilities.tools.names import PublicToolIdentitySource
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool
 from umbod.core.connectors.downstream_mcp.personal.tools import (
@@ -20,7 +21,7 @@ from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 
 
-class ReplacePersonalToolsRequest(BaseModel):
+class ReplacePersonalToolsRequest(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     expected_revision: str = Field(min_length=1, max_length=128)

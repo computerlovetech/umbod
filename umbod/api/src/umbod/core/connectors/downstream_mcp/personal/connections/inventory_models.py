@@ -1,9 +1,10 @@
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from pydantic import ConfigDict, Field, StrictBool
 
+from umbod.proxies import Model
 from umbod.core.capabilities.descriptions import CapabilityDescription
 
 
-class PersonalConnectorQuery(BaseModel):
+class PersonalConnectorQuery(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str = Field(min_length=1)
@@ -13,7 +14,7 @@ class SetPersonalConnectorEnablement(PersonalConnectorQuery):
     enabled: StrictBool
 
 
-class PersonalConnectorSelection(BaseModel):
+class PersonalConnectorSelection(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -23,7 +24,7 @@ class PersonalConnectorSelection(BaseModel):
     has_authorization: bool
 
 
-class PersonalConnectorSelections(BaseModel):
+class PersonalConnectorSelections(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connectors: tuple[PersonalConnectorSelection, ...]

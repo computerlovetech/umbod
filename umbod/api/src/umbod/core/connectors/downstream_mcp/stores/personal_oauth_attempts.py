@@ -17,8 +17,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Annotated, Literal, TypeVar
 
-from pydantic import AwareDatetime, BaseModel, Field, SecretStr, TypeAdapter
+from pydantic import AwareDatetime, Field, SecretStr, TypeAdapter
 
+from umbod.proxies import PydanticModel
 from umbod.core.configuration.persistence import TextCipher
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.personal.connections.models import (
@@ -132,7 +133,7 @@ def _serialize(value: object) -> str:
     raise TypeError("Unsupported encrypted document value")
 
 
-RowT = TypeVar("RowT", bound=BaseModel)
+RowT = TypeVar("RowT", bound=PydanticModel)
 
 
 def _query(predicate: Predicate[RowT]) -> Query[RowT, RowT]:

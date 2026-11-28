@@ -1,7 +1,8 @@
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt
+from pydantic import ConfigDict, Field, NonNegativeInt
 
+from umbod.proxies import Model
 from umbod.core.telemetry.analytics.models import TimeRange, UtcDatetime
 from umbod.core.telemetry.analytics.write_models import OwnedLog
 from umbod.core.usage.models import UsageSummary, UsageWindowDays
@@ -12,7 +13,7 @@ SearchTerm = Annotated[str, Field(max_length=128)]
 SessionLimit = Annotated[int, Field(ge=1, le=100)]
 
 
-class ActivityModel(BaseModel):
+class ActivityModel(Model):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
 

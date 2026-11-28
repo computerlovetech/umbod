@@ -1,7 +1,8 @@
 from typing import Optional, Protocol
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.capabilities import (
     CapabilityCatalog,
     NormalizedCapability,
@@ -9,7 +10,7 @@ from umbod.core.capabilities import (
 from umbod.mcp.connectors.native.tools.discovery.search import ConnectorToolSearchCandidate
 
 
-class OpenApiConnectorDiscoveryResult(BaseModel):
+class OpenApiConnectorDiscoveryResult(Model):
     model_config = ConfigDict(frozen=True)
 
     candidates: tuple[ConnectorToolSearchCandidate, ...]

@@ -3,7 +3,9 @@ from enum import StrEnum
 from typing import Annotated, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
+from pydantic import ConfigDict, Field, WithJsonSchema
+
+from umbod.proxies import Model
 
 NodeId = UUID
 StorageKey = str
@@ -32,7 +34,7 @@ class Permission(StrEnum):
     SHARE = "share"
 
 
-class Principal(BaseModel):
+class Principal(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     type: PrincipalType
@@ -45,14 +47,14 @@ SYSTEM_ROOT_OWNER = Principal(
 )
 
 
-class Ownership(BaseModel):
+class Ownership(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: NodeId
     owner: Principal
 
 
-class AccessGrant(BaseModel):
+class AccessGrant(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: NodeId
@@ -66,15 +68,15 @@ class NodeKind(StrEnum):
     DIRECTORY = "directory"
 
 
-class RootParent(BaseModel):
+class RootParent(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class EmptyContent(BaseModel):
+class EmptyContent(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class UnspecifiedContentType(BaseModel):
+class UnspecifiedContentType(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
@@ -82,21 +84,21 @@ class UnchangedContentType:
     pass
 
 
-class MetadataPatch(BaseModel):
+class MetadataPatch(Model):
     model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
     attributes: dict[str, str]
     content_type: Union[str, UnspecifiedContentType, UnchangedContentType]
 
 
-class ContentRef(BaseModel):
+class ContentRef(Model):
     model_config = ConfigDict(frozen=True)
 
     key: StorageKey
     size: int = Field(ge=0)
 
 
-class NodeMetadata(BaseModel):
+class NodeMetadata(Model):
     model_config = ConfigDict(frozen=True)
 
     content_type: Union[str, UnspecifiedContentType] = Field(
@@ -109,7 +111,7 @@ class NodeMetadata(BaseModel):
     ))
 
 
-class NodeUpdate(BaseModel):
+class NodeUpdate(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
@@ -117,7 +119,7 @@ class NodeUpdate(BaseModel):
     metadata: NodeMetadata
 
 
-class Node(BaseModel):
+class Node(Model):
     model_config = ConfigDict(frozen=True)
 
     id: NodeId

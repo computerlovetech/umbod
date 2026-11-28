@@ -1,8 +1,9 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
+from pydantic import ConfigDict, Field, StrictBool
 
+from umbod.proxies import Model
 from umbod.core.system_settings import (
     EffectiveFilesystemSettings,
     SettingsSource,
@@ -15,20 +16,20 @@ from .route_policy import SystemSettingsRoute
 router = APIRouter(prefix="/filesystem", route_class=SystemSettingsRoute)
 
 
-class SetDeletionApproval(BaseModel):
+class SetDeletionApproval(Model):
     model_config = ConfigDict(extra="forbid")
 
     operation: Literal["set"]
     value: StrictBool
 
 
-class ResetDeletionApproval(BaseModel):
+class ResetDeletionApproval(Model):
     model_config = ConfigDict(extra="forbid")
 
     operation: Literal["reset"]
 
 
-class FilesystemSettingsPatch(BaseModel):
+class FilesystemSettingsPatch(Model):
     model_config = ConfigDict(extra="forbid")
 
     require_mcp_file_deletion_approval: Annotated[
@@ -36,12 +37,12 @@ class FilesystemSettingsPatch(BaseModel):
     ]
 
 
-class DeletionApprovalSetting(BaseModel):
+class DeletionApprovalSetting(Model):
     value: bool
     source: SettingsSource
 
 
-class FilesystemSettingsResponse(BaseModel):
+class FilesystemSettingsResponse(Model):
     require_mcp_file_deletion_approval: DeletionApprovalSetting
 
 

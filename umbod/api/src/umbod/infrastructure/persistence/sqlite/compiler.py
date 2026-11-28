@@ -1,7 +1,8 @@
 from collections.abc import Mapping
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model, PydanticModel
 from umbod.core.persistence.query import (
     AllFields,
     AllOf,
@@ -32,7 +33,7 @@ from umbod.infrastructure.persistence.sqlite.identifiers import validate_sqlite_
 from umbod.infrastructure.persistence.sqlite.value_mapping import SQLiteValueMapper
 
 
-class CompiledStatement(BaseModel):
+class CompiledStatement(Model):
     model_config = ConfigDict(frozen=True)
     statement: str
     parameters: tuple[object, ...] = ()
@@ -148,7 +149,7 @@ class SQLiteCompiler:
             statement=f"DELETE FROM {self._quote(table.name)}{where}", parameters=parameters
         )
 
-    def create_table(self, table: Table[BaseModel, BaseModel]) -> CompiledStatement:
+    def create_table(self, table: Table[PydanticModel, PydanticModel]) -> CompiledStatement:
         self._validate_table(table)
         types = {
             ColumnType.TEXT: "TEXT NOT NULL",

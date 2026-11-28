@@ -4,7 +4,9 @@ import re
 from pathlib import PurePath
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 from umbod_sdk.connectors.uploaded_file import UploadedFile, create_uploaded_file
 
@@ -15,7 +17,7 @@ DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES = 10 * 1024 * 1024
 _SAFE_FILENAME_PATTERN = re.compile(r"^[^\x00-\x1f\x7f]+$")
 
 
-class UploadedFileWirePayload(BaseModel):
+class UploadedFileWirePayload(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: str = Field(min_length=1, max_length=255)

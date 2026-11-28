@@ -2,7 +2,8 @@
 
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from umbod.proxies import Model
 from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
 from umbod.core.connectors.downstream_mcp.oauth.ports import RetainOAuthScopes, ReplaceOAuthScopes
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
@@ -16,19 +17,19 @@ from umbod.rest.connectors.downstream_mcp.dependencies import get_definition_sto
 router = APIRouter(prefix="/connectors/mcp/oauth", tags=["Downstream MCP OAuth"])
 
 
-class BeginRequest(BaseModel):
+class BeginRequest(Model):
     model_config = ConfigDict(extra="forbid")
     client_id: str = Field(default="", max_length=4096)
     scopes: str | None = Field(default=None, max_length=8192)
 
 
-class Diagnostic(BaseModel):
+class Diagnostic(Model):
     time: int
     stage: str
     result: Literal["started", "failed"]
 
 
-class OAuthDetails(BaseModel):
+class OAuthDetails(Model):
     status: str
     error: str | None
     callback_url: str

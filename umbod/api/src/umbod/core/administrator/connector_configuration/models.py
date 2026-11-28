@@ -1,9 +1,11 @@
 from typing import Annotated, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 
-class _StrictModel(BaseModel):
+class _StrictModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

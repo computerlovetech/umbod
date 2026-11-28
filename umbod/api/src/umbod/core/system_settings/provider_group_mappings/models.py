@@ -1,6 +1,8 @@
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr
+from pydantic import AfterValidator, ConfigDict, StrictStr
+
+from umbod.proxies import Model
 
 from ..models import SettingsSource
 
@@ -18,7 +20,7 @@ def _validate_mapping_value(value: str) -> str:
 type MappingValue = Annotated[StrictStr, AfterValidator(_validate_mapping_value)]
 
 
-class ProviderGroupMapping(BaseModel):
+class ProviderGroupMapping(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     external_value: MappingValue
@@ -38,7 +40,7 @@ type ProviderGroupMappings = Annotated[
 ]
 
 
-class EffectiveProviderGroupMappings(BaseModel):
+class EffectiveProviderGroupMappings(Model):
     model_config = ConfigDict(frozen=True)
 
     mappings: ProviderGroupMappings

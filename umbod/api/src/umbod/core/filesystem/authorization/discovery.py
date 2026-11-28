@@ -2,7 +2,9 @@ from collections.abc import Iterable
 from enum import StrEnum
 from typing import Self, Union
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
+
+from umbod.proxies import Model
 
 from ..models import AccessGrant, NodeId, NodeKind, Ownership, Permission, Principal, RootParent
 from ..namespace import ROOT_ID
@@ -24,7 +26,7 @@ class FilesystemOperation(StrEnum):
     SHARE = "share"
 
 
-class AuthorizationNode(BaseModel):
+class AuthorizationNode(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: NodeId
@@ -32,7 +34,7 @@ class AuthorizationNode(BaseModel):
     parent_id: Union[NodeId, RootParent]
 
 
-class AuthorizationGrant(BaseModel):
+class AuthorizationGrant(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: NodeId
@@ -41,7 +43,7 @@ class AuthorizationGrant(BaseModel):
     recursive: bool
 
 
-class FilesystemAuthorizationSnapshot(BaseModel):
+class FilesystemAuthorizationSnapshot(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     nodes: tuple[AuthorizationNode, ...]

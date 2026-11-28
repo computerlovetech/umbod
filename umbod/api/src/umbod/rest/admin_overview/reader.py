@@ -1,7 +1,8 @@
 from typing import Literal, TypeVar
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import TypeAdapter
 
+from umbod.proxies import PydanticModel
 from umbod.core.activation.stores.reads import EnabledToolReadScope, plan_enabled_tool_reads
 from umbod.core.configuration.persistence.stores.reads import plan_configuration_presence_reads
 from umbod.core.connectors.downstream_mcp.models import (
@@ -28,7 +29,7 @@ from umbod.core.admin_overview.models import (
     Available, ConnectorCounts, OverviewBreakdown, OverviewSnapshot, ToolCounts,
 )
 
-RowT = TypeVar("RowT", bound=BaseModel)
+RowT = TypeVar("RowT", bound=PydanticModel)
 ToolKey = tuple[str, str, str]
 
 

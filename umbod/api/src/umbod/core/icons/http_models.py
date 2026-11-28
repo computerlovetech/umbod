@@ -1,9 +1,11 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import ConfigDict, Field, HttpUrl
+
+from umbod.proxies import Model
 
 
-class FaviconHttpPolicy(BaseModel):
+class FaviconHttpPolicy(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     max_body_bytes: int = Field(gt=0)
@@ -11,13 +13,13 @@ class FaviconHttpPolicy(BaseModel):
     timeout_seconds: float = Field(gt=0, allow_inf_nan=False)
 
 
-class FaviconHttpRequest(BaseModel):
+class FaviconHttpRequest(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     url: HttpUrl
 
 
-class FaviconHttpResponse(BaseModel):
+class FaviconHttpResponse(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     url: HttpUrl
@@ -26,7 +28,7 @@ class FaviconHttpResponse(BaseModel):
     body: bytes
 
 
-class FaviconHttpUnavailable(BaseModel):
+class FaviconHttpUnavailable(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     status: Literal["unavailable"] = "unavailable"

@@ -1,11 +1,12 @@
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.rest.authentication.authorization import JwtClaims
 
 
-class UserProfile(BaseModel):
+class UserProfile(Model):
     model_config = ConfigDict(frozen=True)
 
     name: str
@@ -13,7 +14,7 @@ class UserProfile(BaseModel):
     picture: str
 
 
-class UserProfileInput(BaseModel):
+class UserProfileInput(Model):
     access_claims: JwtClaims
     token: str
     header_present: bool

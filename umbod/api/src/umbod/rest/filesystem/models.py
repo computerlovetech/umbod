@@ -3,8 +3,9 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
+from umbod.proxies import Model
 from umbod.core.filesystem import NodeMetadata
 from umbod.core.filesystem.access import CallerNodeSummary
 
@@ -26,15 +27,15 @@ class FilesystemNodeMetadata(NodeMetadata):
         return NodeMetadata(content_type=self.content_type, attributes=self.attributes)
 
 
-class DownloadQuery(BaseModel):
+class DownloadQuery(Model):
     delivery: Literal["auto", "stream"]
 
 
-class BrowseNodeQuery(BaseModel):
+class BrowseNodeQuery(Model):
     node_id: UUID
 
 
-class CreateNodeRequest(BaseModel):
+class CreateNodeRequest(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     name: str
@@ -59,19 +60,19 @@ class BeginUploadRequest(CreateNodeRequest):
         return metadata
 
 
-class SameOriginAuthorization(BaseModel):
+class SameOriginAuthorization(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     type: Literal["same_origin"] = "same_origin"
 
 
-class NoAuthorization(BaseModel):
+class NoAuthorization(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     type: Literal["none"] = "none"
 
 
-class SingleUploadTransfer(BaseModel):
+class SingleUploadTransfer(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     type: Literal["single"] = "single"
@@ -90,14 +91,14 @@ class SingleUploadTransfer(BaseModel):
         return headers
 
 
-class UnavailableUploadTransfer(BaseModel):
+class UnavailableUploadTransfer(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     type: Literal["unavailable"] = "unavailable"
     reason: Literal["expired", "completed"]
 
 
-class UploadResponse(BaseModel):
+class UploadResponse(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: UUID
@@ -107,7 +108,7 @@ class UploadResponse(BaseModel):
     complete_url: str
 
 
-class ChildrenResponse(BaseModel):
+class ChildrenResponse(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     nodes: list[CallerNodeSummary]

@@ -4,8 +4,9 @@ from datetime import datetime
 from typing import Optional, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     AllFields, Database, DatabaseSession, Equals, Field, GreaterThan, KeyCodec, NoFilter,
     OrderBy, Predicate, PydanticJsonCodec,
@@ -19,7 +20,7 @@ from .namespace import SessionNamespace
 from .session import storage_session
 
 
-class UploadKey(BaseModel):
+class UploadKey(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     upload_id: str

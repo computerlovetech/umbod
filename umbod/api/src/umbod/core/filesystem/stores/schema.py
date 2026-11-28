@@ -1,8 +1,9 @@
 from datetime import timezone
 from typing import Self, cast
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     Field,
     Fields,
@@ -18,7 +19,7 @@ from ..models import AccessGrant, EmptyContent, Node, NodeKind, Ownership, RootP
 from ..namespace import ROOT_ID, valid_name
 
 
-class NodeKey(BaseModel):
+class NodeKey(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: str

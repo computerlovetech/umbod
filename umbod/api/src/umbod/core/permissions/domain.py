@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import BaseModel
-
+from umbod.proxies import Model
 from umbod.core.capabilities.domain import CapabilityKind
 
 
@@ -64,7 +63,7 @@ class AssignablePermissionTargets:
         )
 
 
-class GroupPermissionSummary(BaseModel):
+class GroupPermissionSummary(Model):
     group_id: str
 
 

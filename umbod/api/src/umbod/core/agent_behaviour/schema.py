@@ -1,7 +1,6 @@
 from typing import cast
 
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.persistence import BooleanCodec, Field, IntegerCodec, KeyCodec, PydanticJsonCodec, RowCodec, Table, TableIdentity, TextCodec
 
 from .legacy import StoredConfigurationCodec, StoredReportCodec
@@ -82,4 +81,4 @@ DEDUPE_EXPIRY = Field[DedupeRow, int](DEDUPE_IDENTITY, "expires_at", IntegerCode
 DEDUPE_DELETED = Field[DedupeRow, bool](DEDUPE_IDENTITY, "deleted", BooleanCodec())
 DEDUPE_FIELDS = cast(tuple[Field[DedupeRow, object], ...], (DEDUPE_KEY, DEDUPE_REQUEST, DEDUPE_REPORT, DEDUPE_RECEIVED, DEDUPE_EXPIRY, DEDUPE_DELETED))
 DEDUPE_TABLE = Table(DEDUPE_IDENTITY, RowCodec(DedupeRow, DEDUPE_FIELDS), KeyCodec(DedupeKey, cast(tuple[Field[DedupeRow, object], ...], (DEDUPE_KEY,))))
-AGENT_BEHAVIOUR_TABLES = cast(tuple[Table[BaseModel, BaseModel], ...], (CONFIGURATION_TABLE, REPORT_TABLE, REPORT_LIST_TABLE, DEDUPE_TABLE))
+AGENT_BEHAVIOUR_TABLES = cast(tuple[Table[PydanticModel, PydanticModel], ...], (CONFIGURATION_TABLE, REPORT_TABLE, REPORT_LIST_TABLE, DEDUPE_TABLE))

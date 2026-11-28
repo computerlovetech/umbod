@@ -1,6 +1,8 @@
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, Field, field_validator
+from pydantic import BeforeValidator, Field, field_validator
+
+from umbod.proxies import Model
 
 
 def _null_to_empty_text(value: object) -> object:
@@ -14,12 +16,12 @@ def _null_to_empty_object(value: object) -> object:
 OptionalWireText = Annotated[str, BeforeValidator(_null_to_empty_text)]
 
 
-class RegistryHeader(BaseModel):
+class RegistryHeader(Model):
     name: str
     required: bool = Field(default=False, alias="isRequired")
 
 
-class RegistryRemote(BaseModel):
+class RegistryRemote(Model):
     type: str
     url: OptionalWireText = ""
     headers: tuple[RegistryHeader, ...] = ()
@@ -30,7 +32,7 @@ class RegistryRemote(BaseModel):
         return () if value is None else value
 
 
-class RegistryServerRecord(BaseModel):
+class RegistryServerRecord(Model):
     name: str
     title: OptionalWireText = ""
     description: str
@@ -49,7 +51,7 @@ class RegistryServerRecord(BaseModel):
         return () if value is None else value
 
 
-class RegistryOfficialMetadata(BaseModel):
+class RegistryOfficialMetadata(Model):
     status: str = "unknown"
 
     @field_validator("status", mode="before")
@@ -58,7 +60,7 @@ class RegistryOfficialMetadata(BaseModel):
         return "unknown" if value is None else value
 
 
-class RegistryListingMetadata(BaseModel):
+class RegistryListingMetadata(Model):
     official: Annotated[
         RegistryOfficialMetadata, BeforeValidator(_null_to_empty_object)
     ] = Field(
@@ -67,17 +69,17 @@ class RegistryListingMetadata(BaseModel):
     )
 
 
-class RegistryListing(BaseModel):
+class RegistryListing(Model):
     server: RegistryServerRecord
     metadata: Annotated[
         RegistryListingMetadata, BeforeValidator(_null_to_empty_object)
     ] = Field(default_factory=RegistryListingMetadata, alias="_meta")
 
 
-class RegistryPageMetadata(BaseModel):
+class RegistryPageMetadata(Model):
     next_cursor: OptionalWireText = Field(default="", alias="nextCursor")
 
 
-class RegistrySearchResponse(BaseModel):
+class RegistrySearchResponse(Model):
     servers: tuple[RegistryListing, ...]
     metadata: RegistryPageMetadata

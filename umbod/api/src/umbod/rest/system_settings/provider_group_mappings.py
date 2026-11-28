@@ -1,8 +1,9 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.system_settings.provider_group_mappings import (
     EffectiveProviderGroupMappings,
     ProviderGroupMappings,
@@ -20,14 +21,14 @@ MappingsAccess = Annotated[
 ]
 
 
-class SetProviderGroupMappings(BaseModel):
+class SetProviderGroupMappings(Model):
     model_config = ConfigDict(extra="forbid")
 
     operation: Literal["set"]
     mappings: ProviderGroupMappings
 
 
-class ResetProviderGroupMappings(BaseModel):
+class ResetProviderGroupMappings(Model):
     model_config = ConfigDict(extra="forbid")
 
     operation: Literal["reset"]

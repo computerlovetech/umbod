@@ -9,8 +9,9 @@ from fastapi import (
     Request,
     Response,
 )
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.identity_directory.models import (
     DirectoryScope,
     GroupPage,
@@ -41,7 +42,7 @@ async def observe_identity(
     return Response(status_code=204)
 
 
-class DirectoryQuery(BaseModel):
+class DirectoryQuery(Model):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(default="", max_length=1000)

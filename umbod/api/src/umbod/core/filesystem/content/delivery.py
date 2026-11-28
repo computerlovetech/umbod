@@ -1,12 +1,14 @@
 from typing import Protocol, runtime_checkable
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
+
+from umbod.proxies import Model
 
 from ..models import ContentRef, NodeMetadata
 
 
-class ExternalDownloadRequest(BaseModel):
+class ExternalDownloadRequest(Model):
     model_config = ConfigDict(strict=True, frozen=True)
 
     content: ContentRef
@@ -14,7 +16,7 @@ class ExternalDownloadRequest(BaseModel):
     metadata: NodeMetadata
 
 
-class ExternalDownloadInstructions(BaseModel):
+class ExternalDownloadInstructions(Model):
     model_config = ConfigDict(strict=True, frozen=True)
 
     url: str = Field(min_length=1, repr=False)

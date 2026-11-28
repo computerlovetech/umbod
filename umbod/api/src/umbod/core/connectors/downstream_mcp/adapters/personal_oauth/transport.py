@@ -1,21 +1,23 @@
 from typing import Annotated, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import ConfigDict, Field, SecretStr
+
+from umbod.proxies import Model
 
 from .validation import validated_url
 
 
-class OAuthDestination(BaseModel):
+class OAuthDestination(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
     url: str
 
 
-class NoOAuthHttpAuthentication(BaseModel):
+class NoOAuthHttpAuthentication(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
     kind: Literal["none"] = "none"
 
 
-class BasicOAuthHttpAuthentication(BaseModel):
+class BasicOAuthHttpAuthentication(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
     kind: Literal["basic"] = "basic"
     client_id: SecretStr
@@ -27,7 +29,7 @@ OAuthHttpAuthentication = Annotated[
 ]
 
 
-class OAuthHttpRequest(BaseModel):
+class OAuthHttpRequest(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
     method: Literal["GET", "POST"]
     url: str
@@ -36,7 +38,7 @@ class OAuthHttpRequest(BaseModel):
     authentication: OAuthHttpAuthentication = Field(default_factory=NoOAuthHttpAuthentication)
 
 
-class OAuthHttpResponse(BaseModel):
+class OAuthHttpResponse(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
     status: int
     body: bytes = Field(repr=False)

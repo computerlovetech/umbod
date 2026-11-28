@@ -2,8 +2,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Optional, cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     AllFields, AllOf, Database, DatabaseSession, Equals, Field, InsertCommand, KeyCodec,
     PydanticJsonCodec, Query, RowCodec, Table, TableIdentity, TextCodec, TransactionMode, Unordered,
@@ -16,7 +17,7 @@ from .namespace import SessionNamespace
 from .session import storage_session
 
 
-class HomeKey(BaseModel):
+class HomeKey(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     issuer: str

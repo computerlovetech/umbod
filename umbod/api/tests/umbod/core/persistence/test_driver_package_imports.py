@@ -273,7 +273,7 @@ def test_core_has_no_thin_backend_named_store_aliases() -> None:
                     violations.append(f'{path}:{node.lineno}:{node.name}')
     assert violations == []
 
-def test_connector_publishing_core_package_only_imports_core_modules() -> None:
+def test_connector_publishing_core_package_only_imports_core_modules_and_shared_model() -> None:
     publishing_root = Path(__file__).parents[4] / 'src' / 'umbod' / 'core' / 'publishing'
     violations: list[str] = []
     for path in publishing_root.rglob('*.py'):
@@ -281,6 +281,8 @@ def test_connector_publishing_core_package_only_imports_core_modules() -> None:
         for node in ast.walk(tree):
             imported_modules: list[str] = []
             if isinstance(node, ast.ImportFrom):
+                if node.module == 'umbod.proxies' and [alias.name for alias in node.names] == ['Model']:
+                    continue
                 imported_modules.append(node.module or '')
             elif isinstance(node, ast.Import):
                 imported_modules.extend((alias.name for alias in node.names))

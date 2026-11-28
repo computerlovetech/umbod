@@ -6,8 +6,7 @@ from types import TracebackType
 from typing import Literal, Protocol, Self
 
 from mcp.client.auth import AuthorizationCodeResult
-from pydantic import BaseModel
-
+from umbod.proxies import Model
 from umbod.core.connectors.downstream_mcp.models import EndpointUrl
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import (
     ConnectorOAuthStorage,
@@ -41,14 +40,14 @@ RedirectHandler = Callable[[str], Awaitable[None]]
 CallbackHandler = Callable[[], Awaitable[AuthorizationCodeResult]]
 
 
-class AuthorizationBeginOptions(BaseModel):
+class AuthorizationBeginOptions(Model):
     endpoint: EndpointUrl
     requested_scopes: str
     metadata_mode: Literal["hosted_metadata", "registration"]
     redirect_uri: str
 
 
-class OAuthDiscoveryPreview(BaseModel):
+class OAuthDiscoveryPreview(Model):
     canonical_endpoint: EndpointUrl
     endpoint_differs: bool
     issuer: str

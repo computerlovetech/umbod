@@ -1,8 +1,9 @@
 from typing import Protocol, Union
 
 from messaging.ports import EventStream
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.invocation.events import connector_invocation_policy_changed_event
 from umbod.core.activation.events import connector_capability_activation_changed_event
 from umbod.core.invocation.policy import (
@@ -35,14 +36,14 @@ class SuppressActivationEvents:
         return False
 
 
-class SetConnectorToolActivation(BaseModel):
+class SetConnectorToolActivation(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     operation_name: str = Field(min_length=1)
     activation_status: ActivationStatus
 
 
-class SetConnectorToolInvocationPolicy(BaseModel):
+class SetConnectorToolInvocationPolicy(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     operation_name: str = Field(min_length=1)
@@ -50,7 +51,7 @@ class SetConnectorToolInvocationPolicy(BaseModel):
     expected_policy_revision: int = Field(ge=0)
 
 
-class SetConnectorToolActivationAndInvocationPolicy(BaseModel):
+class SetConnectorToolActivationAndInvocationPolicy(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     operation_name: str = Field(min_length=1)
@@ -66,7 +67,7 @@ SetConnectorToolConfigurationItem = Union[
 ]
 
 
-class SetConnectorToolConfigurationCommand(BaseModel):
+class SetConnectorToolConfigurationCommand(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_kind: ConnectorKind

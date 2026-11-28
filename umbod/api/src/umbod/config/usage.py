@@ -1,9 +1,11 @@
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from pydantic import ConfigDict, Field, FiniteFloat, model_validator
+
+from umbod.proxies import Model
 
 
-class PersonalUsageConfig(BaseModel):
+class PersonalUsageConfig(Model):
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True

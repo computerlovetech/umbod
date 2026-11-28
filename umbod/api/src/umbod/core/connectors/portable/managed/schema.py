@@ -1,11 +1,12 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict, Field as ModelField, RootModel
+from pydantic import ConfigDict, Field as ModelField, RootModel
 
+from umbod.proxies import Model
 from umbod.core.persistence import Field, Fields, KeyCodec, PydanticJsonCodec, RowCodec, Table, TableIdentity, TextCodec
 
 
-class ManagedConnectorKey(BaseModel):
+class ManagedConnectorKey(Model):
     draft_id: str = ModelField(repr=False)
 
 
@@ -42,7 +43,7 @@ MANAGED_CONNECTOR_TABLE = Table(
 )
 
 
-class ManagedCatalogRow(BaseModel):
+class ManagedCatalogRow(Model):
     connector_id: str
     status: str
     display_name: str
@@ -60,7 +61,7 @@ MANAGED_CATALOG_DETAIL_PROJECTION = Fields(
 )
 
 
-class ManagedConfigurationKey(BaseModel):
+class ManagedConfigurationKey(Model):
     connector_id: str
 
 

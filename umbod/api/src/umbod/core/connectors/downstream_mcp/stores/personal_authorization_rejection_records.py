@@ -1,7 +1,8 @@
 import hashlib
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.configuration.persistence import TextCipher
 from umbod.core.persistence import AllOf, DatabaseSession, DeleteQuery, Equals
 
@@ -10,7 +11,7 @@ from .personal_authorization_health_schema import PERSONAL_AUTHORIZATION_REJECTI
 from .queries import query_all
 
 
-class AuthorizationRejection(BaseModel):
+class AuthorizationRejection(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     key: PersonalConnectionKey

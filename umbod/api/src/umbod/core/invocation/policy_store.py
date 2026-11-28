@@ -1,7 +1,8 @@
 from typing import Annotated, cast
 
-from pydantic import BaseModel, ConfigDict, Field as PydanticField
+from pydantic import ConfigDict, Field as PydanticField
 
+from umbod.proxies import Model
 from umbod.core.invocation.policy import (
     ConnectorInvocationPolicyKey,
     ConnectorInvocationPolicyConflict,
@@ -33,7 +34,7 @@ from umbod.core.persistence import (
 )
 
 
-class ConnectorInvocationPolicyRow(BaseModel):
+class ConnectorInvocationPolicyRow(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_kind: str
@@ -43,7 +44,7 @@ class ConnectorInvocationPolicyRow(BaseModel):
     revision: Annotated[int, PydanticField(ge=0)]
 
 
-class ConnectorInvocationPolicyRowKey(BaseModel):
+class ConnectorInvocationPolicyRowKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_kind: str

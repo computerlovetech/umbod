@@ -4,8 +4,7 @@ from uuid import UUID
 
 from fastmcp.tools.base import ToolResult
 from mcp.types import ResourceLink, TextContent
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.config.app import validate_site_origin
 from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.browsing import NodeSummary
@@ -55,7 +54,7 @@ def file_links(nodes: Sequence[NodeSummary], max_read_bytes: int) -> list[Resour
     return links
 
 
-def file_link_result(result: BaseModel, nodes: Sequence[NodeSummary], rendered: str, max_read_bytes: int) -> ToolResult:
+def file_link_result(result: PydanticModel, nodes: Sequence[NodeSummary], rendered: str, max_read_bytes: int) -> ToolResult:
     return ToolResult(
         content=[TextContent(type="text", text=rendered), *file_links(nodes, max_read_bytes)],
         structured_content=result.model_dump(mode="json"),

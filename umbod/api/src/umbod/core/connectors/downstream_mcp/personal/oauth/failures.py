@@ -1,7 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.invocation.diagnostics import DownstreamResponseEvidence, NoDownstreamResponse
 
 
@@ -14,7 +15,7 @@ OAuthFailureReason = Literal[
 ]
 
 
-class OAuthFailureEvidence(BaseModel):
+class OAuthFailureEvidence(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     stage: OAuthFailureStage

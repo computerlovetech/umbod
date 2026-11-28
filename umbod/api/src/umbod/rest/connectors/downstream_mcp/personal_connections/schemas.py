@@ -1,11 +1,12 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, StrictBool
+from pydantic import ConfigDict, StrictBool
 
+from umbod.proxies import Model
 from umbod.core.connectors.downstream_mcp.personal.connections import PersonalConnectorSelection
 
 
-class PersonalEnablementRequest(BaseModel):
+class PersonalEnablementRequest(Model):
     model_config = ConfigDict(extra="forbid")
 
     enabled: StrictBool
@@ -16,7 +17,7 @@ class PersonalConnectorResponse(PersonalConnectorSelection):
     runtime_unavailable_reason: Literal["", "personal_oauth_not_supported"]
 
 
-class PersonalConnectorListResponse(BaseModel):
+class PersonalConnectorListResponse(Model):
     model_config = ConfigDict(extra="forbid")
 
     connectors: tuple[PersonalConnectorResponse, ...]

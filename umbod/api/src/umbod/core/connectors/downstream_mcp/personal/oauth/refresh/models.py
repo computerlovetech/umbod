@@ -1,13 +1,15 @@
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, ConfigDict, Field
+
+from umbod.proxies import Model
 
 from ..configuration import PersonalOAuthPolicy
 from ..grants import PersonalOAuthGrant
 from ...connections import Authorized, PersonalConnectionKey
 
 
-class RefreshModel(BaseModel):
+class RefreshModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

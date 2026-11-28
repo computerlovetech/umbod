@@ -1,15 +1,17 @@
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 
-class NoDownstreamResponse(BaseModel):
+class NoDownstreamResponse(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["no_response"] = "no_response"
 
 
-class DownstreamHttpResponse(BaseModel):
+class DownstreamHttpResponse(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["http_response"] = "http_response"
@@ -19,11 +21,11 @@ class DownstreamHttpResponse(BaseModel):
 DownstreamResponseEvidence = Annotated[NoDownstreamResponse | DownstreamHttpResponse, Field(discriminator="kind")]
 
 
-class NoInvocationFailureDiagnostic(BaseModel):
+class NoInvocationFailureDiagnostic(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class InvocationFailureDiagnostic(BaseModel):
+class InvocationFailureDiagnostic(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     execution_mode: Literal["shared", "personal"]

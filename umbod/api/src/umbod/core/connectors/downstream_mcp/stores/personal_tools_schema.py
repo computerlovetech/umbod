@@ -1,18 +1,19 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import Field, KeyCodec, RowCodec, Table, TableIdentity, TextCodec
 
 
-class PersonalToolPolicyRecord(BaseModel):
+class PersonalToolPolicyRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
     document: str
 
 
-class PersonalToolPolicyKey(BaseModel):
+class PersonalToolPolicyKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -36,7 +37,7 @@ PERSONAL_TOOL_POLICY_TABLE = Table(
 )
 
 
-class PersonalToolObservationRecord(BaseModel):
+class PersonalToolObservationRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     namespace: str
@@ -45,7 +46,7 @@ class PersonalToolObservationRecord(BaseModel):
     document: str
 
 
-class PersonalToolObservationRecordKey(BaseModel):
+class PersonalToolObservationRecordKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     namespace: str

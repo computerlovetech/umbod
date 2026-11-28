@@ -1,7 +1,8 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     Field,
     KeyCodec,
@@ -12,7 +13,7 @@ from umbod.core.persistence import (
 )
 
 
-class PersonalOAuthAttemptRecord(BaseModel):
+class PersonalOAuthAttemptRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     attempt_id: str
@@ -22,7 +23,7 @@ class PersonalOAuthAttemptRecord(BaseModel):
     document: str
 
 
-class PersonalOAuthAttemptKey(BaseModel):
+class PersonalOAuthAttemptKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     attempt_id: str

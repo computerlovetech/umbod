@@ -11,8 +11,9 @@ from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.server.middleware.authorization import _requested_version
 from fastmcp.tools import Tool, ToolResult
 from mcp.types import CallToolRequestParams, ListToolsRequest
-from pydantic import BaseModel, PrivateAttr
+from pydantic import PrivateAttr
 
+from umbod.proxies import PydanticModel
 from umbod.core.callers import AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity, UnavailableIssuer
 from umbod.core.connectors.portable.draft_validation import DraftValidationUnavailable, PortableDraftValidation
 from umbod.core.connectors.portable.drafts import (
@@ -198,7 +199,7 @@ def _rejected(code: str, message: str, retry: RetryAdvice) -> BuiltinToolRejecte
     return BuiltinToolRejected(message, details=ToolErrorDetails(code=code, message=message, issues=()), retry=retry)
 
 
-class PortableDraftTool[Command: BaseModel](Tool):
+class PortableDraftTool[Command: PydanticModel](Tool):
     _access: PortableDraftAccess = PrivateAttr()
     _command: type[Command] = PrivateAttr()
     _execute: Callable[[CallerContext, Command], Awaitable[ToolResult]] = PrivateAttr()

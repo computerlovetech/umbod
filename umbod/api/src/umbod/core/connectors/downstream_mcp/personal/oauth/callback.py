@@ -3,7 +3,9 @@ import re
 from typing import Annotated, Literal
 from urllib.parse import unquote
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, ConfigDict, Field
+
+from umbod.proxies import Model
 
 from .configuration import validate_configured_issuer
 
@@ -20,7 +22,7 @@ def validate_callback_uri(value: str) -> str:
     return value
 
 
-class CallbackModel(BaseModel):
+class CallbackModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

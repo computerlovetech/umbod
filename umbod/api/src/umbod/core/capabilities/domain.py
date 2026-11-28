@@ -1,15 +1,16 @@
 from typing import Annotated, Literal, TypeAlias, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 from pydantic.types import JsonValue
 
+from umbod.proxies import Model
 from umbod.core.invocation import ConnectorKind
 
 JsonObject: TypeAlias = dict[str, JsonValue]
 CapabilityKind = Literal["tool", "prompt", "resource", "resource_template"]
 
 
-class CapabilityModel(BaseModel):
+class CapabilityModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True, serialize_by_alias=True)
 
 

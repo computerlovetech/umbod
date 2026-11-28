@@ -1,8 +1,9 @@
 from collections.abc import Callable
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.callers import CallerContext, CallerSnapshot
 
 from .models import DeleteFileCommand
@@ -16,7 +17,7 @@ class FileDeletionApprovalUnavailable(FileDeletionApprovalDenied):
     pass
 
 
-class FileDeletionApprovalState(BaseModel):
+class FileDeletionApprovalState(Model):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
     purpose: Literal["filesystem_delete_file:v1"]

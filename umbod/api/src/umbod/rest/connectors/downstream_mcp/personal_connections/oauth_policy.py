@@ -1,12 +1,14 @@
 from typing import Annotated
 
 from fastapi import Depends
-from pydantic import BaseModel, ConfigDict, StrictBool
+from pydantic import ConfigDict, StrictBool
+
+from umbod.proxies import Model
 
 from .dependencies import Factories
 
 
-class PersonalOAuthPolicy(BaseModel):
+class PersonalOAuthPolicy(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     enabled: StrictBool

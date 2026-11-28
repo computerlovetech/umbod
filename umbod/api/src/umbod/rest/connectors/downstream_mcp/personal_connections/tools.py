@@ -1,8 +1,9 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
 from umbod.core.connectors.downstream_mcp.personal.connections import (
@@ -24,7 +25,7 @@ from .dependencies import get_personal_caller
 from .oauth_policy import OAuthPolicy
 
 
-class DiscoverPersonalToolsRequest(BaseModel):
+class DiscoverPersonalToolsRequest(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

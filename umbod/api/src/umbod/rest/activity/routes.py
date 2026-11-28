@@ -1,8 +1,9 @@
 from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.activity.cursor import InvalidSessionCursor
 from umbod.core.activity.models import (
     CursorToken,
@@ -36,7 +37,7 @@ class ActivitySessionsQuery(ActivityWindowQuery):
         return CursorToken(value=self.cursor)
 
 
-class ActivitySessionDetailQuery(BaseModel):
+class ActivitySessionDetailQuery(Model):
     model_config = ConfigDict(extra="forbid")
 
 

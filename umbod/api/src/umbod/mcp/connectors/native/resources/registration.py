@@ -2,7 +2,7 @@ from collections.abc import Mapping, Sequence
 from typing import cast
 
 from fastmcp import FastMCP
-from pydantic import BaseModel, ConfigDict, SkipValidation
+from pydantic import ConfigDict, SkipValidation
 
 from umbod.mcp.proxies import Model
 from umbod.core.activation import ActivationStore
@@ -13,6 +13,7 @@ from umbod.core.publishing import (
 )
 from umbod.core.connectors.native.runtime import ConnectorResourceMapping
 from umbod.proxies import Model as ConnectorConfigurationModel
+from umbod.proxies import is_pydantic_model_class
 
 from umbod.mcp.connectors.native.resources.registry import RuntimeConnectorResourceRegistry
 
@@ -81,8 +82,7 @@ def _valid_configuration_schemas(
         configuration_schema = registration.get("configuration_schema")
         if (
             isinstance(connector_id, str)
-            and isinstance(configuration_schema, type)
-            and issubclass(configuration_schema, BaseModel)
+            and is_pydantic_model_class(configuration_schema)
         ):
             schemas[connector_id] = configuration_schema
     return schemas

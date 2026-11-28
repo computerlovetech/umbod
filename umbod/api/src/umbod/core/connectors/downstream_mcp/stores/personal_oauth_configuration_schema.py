@@ -1,11 +1,12 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import Field, KeyCodec, RowCodec, Table, TableIdentity, TextCodec
 
 
-class PersonalOAuthConfigurationRecord(BaseModel):
+class PersonalOAuthConfigurationRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -13,7 +14,7 @@ class PersonalOAuthConfigurationRecord(BaseModel):
     document: str
 
 
-class PersonalOAuthConfigurationKey(BaseModel):
+class PersonalOAuthConfigurationKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str

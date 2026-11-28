@@ -9,8 +9,9 @@ from umbod.core.groups.stores.schema import (
 )
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence.query import (
     Field,
     Fields,
@@ -22,30 +23,21 @@ from umbod.core.persistence.query import (
 )
 
 
-class GroupConnectorPermissionRecord(BaseModel):
+class GroupConnectorPermissionRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     group_id: str
     connector_id: str
 
 
-class GroupConnectorPermissionKey(BaseModel):
+class GroupConnectorPermissionKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     group_id: str
     connector_id: str
 
 
-class GroupCapabilityPermissionRecord(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    group_id: str
-    connector_id: str
-    capability_kind: str
-    capability_key: str
-
-
-class GroupCapabilityPermissionKey(BaseModel):
+class GroupCapabilityPermissionRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     group_id: str
@@ -54,13 +46,22 @@ class GroupCapabilityPermissionKey(BaseModel):
     capability_key: str
 
 
-class ConnectorIdResult(BaseModel):
+class GroupCapabilityPermissionKey(Model):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    group_id: str
+    connector_id: str
+    capability_kind: str
+    capability_key: str
+
+
+class ConnectorIdResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
 
 
-class ConnectorCapabilityResult(BaseModel):
+class ConnectorCapabilityResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str

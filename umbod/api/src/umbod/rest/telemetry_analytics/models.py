@@ -1,7 +1,8 @@
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from umbod.proxies import Model
 from umbod.core.telemetry.analytics import (
     DimensionFilter,
     FixedTimeBuckets,
@@ -15,7 +16,7 @@ from umbod.core.telemetry.analytics import (
 )
 
 
-class LogCountRequest(BaseModel):
+class LogCountRequest(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     time_range: TimeRange

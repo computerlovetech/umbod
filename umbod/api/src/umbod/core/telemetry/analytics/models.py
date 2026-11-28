@@ -5,7 +5,6 @@ from typing import Annotated, Literal, Self
 from pydantic import (
     AfterValidator,
     AwareDatetime,
-    BaseModel,
     ConfigDict,
     Field,
     StrictInt,
@@ -13,6 +12,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+from umbod.proxies import Model
 
 
 def _utc(value: datetime) -> datetime:
@@ -29,7 +30,7 @@ UtcDatetime = Annotated[AwareDatetime, AfterValidator(_utc)]
 NonblankString = Annotated[StrictStr, AfterValidator(_nonblank)]
 
 
-class AnalyticsModel(BaseModel):
+class AnalyticsModel(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 

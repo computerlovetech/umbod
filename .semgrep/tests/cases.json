@@ -140,6 +140,64 @@
     "expected": {"python.function-argument-none-type": {"7": 1, "11": 1, "15": 4}}
   },
   {
+    "name": "pydantic-model-proxy-existing-nullable-contract",
+    "path": "api/src/umbod/core/connectors/native/models.py",
+    "source": "from umbod.proxies import Model\n\nclass ConnectorExtension(Model):\n    package: str | None = None\n    channel: str | None = None\n\nclass PackageMetadata(Model):\n    package: str | None = None\n",
+    "expected": {"python.pydantic.none-type-field.legacy-boundaries": {"5": 1, "8": 1}}
+  },
+  {
+    "name": "pydantic-model-proxy-legacy-contract-is-path-scoped",
+    "path": "api/src/umbod/core/connectors/another/models.py",
+    "source": "from umbod.proxies import Model\n\nclass ConnectorExtension(Model):\n    package: str | None = None\n",
+    "expected": {"python.pydantic.none-type-field": {"4": 1}}
+  },
+  {
+    "name": "pydantic-model-proxy-reexport-none-fields",
+    "path": "api/src/umbod/core/models.py",
+    "source": "from umbod.mcp.proxies import Model as MCPModel\nfrom umbod.rest.proxies import Model as RESTModel\n\nclass NativeResponse(MCPModel):\n    result: str | None\n\nclass ApiResponse(RESTModel):\n    result: str | None\n",
+    "expected": {"python.pydantic.none-type-field": {"5": 1, "8": 1}}
+  },
+  {
+    "name": "pydantic-model-proxy-qualified-access-and-base-alias",
+    "path": "api/src/umbod/rest/models.py",
+    "source": "import pydantic as p\nfrom umbod.proxies import PydanticModel\n\nclass QualifiedModel(p.BaseModel):\n    pass\n\nclass DirectAliasModel(PydanticModel):\n    pass\n",
+    "expected": {"python.pydantic.use-model-proxy": {"4": 1, "7": 1}}
+  },
+  {
+    "name": "pydantic-model-proxy-definition",
+    "path": "api/src/umbod/proxies.py",
+    "source": "from pydantic import BaseModel\n\nclass Model(BaseModel):\n    pass\n",
+    "expected": {}
+  },
+  {
+    "name": "pydantic-model-proxy-imports",
+    "path": "api/src/umbod/rest/models.py",
+    "source": "from pydantic import (\n    Field,\n    BaseModel as PydanticModel,\n)\nfrom pydantic.main import BaseModel\nfrom pydantic.v1 import BaseModel\nfrom pydantic.v1.main import BaseModel as LegacyModel\nfrom pydantic import Field\nfrom umbod.proxies import Model\n",
+    "expected": {"python.pydantic.use-model-proxy": {"1": 1, "5": 1, "6": 1, "7": 1}}
+  },
+  {
+    "name": "pydantic-proxy-none-fields-outside-oauth-boundaries",
+    "source": "from typing import Optional, Union\nfrom umbod.proxies import Model\nfrom umbod.proxies import Model as UmbodModel\n\nclass AuthorizationDocument(Model):\n    expires_at: float | None = None\n    required: str\n\nclass BeginRequest(UmbodModel):\n    scopes: Optional[str]\n\nclass OAuthDetails(UmbodModel):\n    issuer: Union[None, str]\n",
+    "expected": {"python.pydantic.none-type-field": {"6": 1, "10": 1, "13": 1}}
+  },
+  {
+    "name": "unrelated-model-none-fields",
+    "source": "from other.models import Model\n\nclass Unrelated(Model):\n    optional: str | None\n",
+    "expected": {}
+  },
+  {
+    "name": "pydantic-proxy-oauth-storage-exceptions",
+    "path": "api/src/umbod/core/connectors/downstream_mcp/adapters/fastmcp/oauth_storage.py",
+    "source": "from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToken\nfrom pydantic import Field\nfrom umbod.proxies import Model\n\nclass AuthorizationDocument(Model):\n    client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)\n    tokens: OAuthToken | None = Field(default=None, repr=False)\n    expires_at: float | None = None\n    metadata: OAuthMetadata | None = None\n    authorization_server: str | None = None\n    unapproved: str | None\n\nclass DomainAuthorization(Model):\n    authorization_server: str | None\n",
+    "expected": {"python.pydantic.none-type-field.oauth-storage": {"11": 1, "14": 1}}
+  },
+  {
+    "name": "pydantic-proxy-oauth-api-exceptions",
+    "path": "api/src/umbod/rest/connectors/downstream_mcp/oauth.py",
+    "source": "from pydantic import Field\nfrom umbod.proxies import Model as UmbodModel\n\nclass BeginRequest(UmbodModel):\n    scopes: str | None = Field(default=None, max_length=8192)\n    unapproved: str | None\n\nclass OAuthDetails(UmbodModel):\n    error: str | None\n    granted_scopes: str | None\n    canonical_endpoint: str | None = None\n    endpoint_differs: bool | None\n    issuer: str | None\n    unapproved: str | None\n\nclass DomainOAuth(UmbodModel):\n    error: str | None\n    scopes: str | None\n",
+    "expected": {"python.pydantic.none-type-field.oauth-api": {"6": 1, "14": 1, "17": 1, "18": 1}}
+  },
+  {
     "name": "pydantic-auth-boundaries",
     "path": "api/src/umbod/core/connectors/downstream_mcp/adapters/fastmcp/oauth_storage.py",
     "source": "from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToken\nfrom pydantic import BaseModel, Field\n\nclass AuthorizationDocument(BaseModel):\n    client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)\n    tokens: OAuthToken | None = Field(default=None, repr=False)\n    expires_at: float | None = None\n    metadata: OAuthMetadata | None = None\n    authorization_server: str | None = None\n    unapproved: str | None\n\nclass DomainAuthorization(BaseModel):\n    client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)\n    tokens: OAuthToken | None = Field(default=None, repr=False)\n    expires_at: float | None = None\n    metadata: OAuthMetadata | None = None\n    authorization_server: str | None = None\n",
@@ -151,7 +209,8 @@
         "15": 1,
         "16": 1,
         "17": 1
-      }
+      },
+      "python.pydantic.use-model-proxy": {"2": 1}
     }
   },
   {
@@ -225,7 +284,8 @@
         "21": 1,
         "22": 1,
         "23": 1
-      }
+      },
+      "python.pydantic.use-model-proxy": {"1": 1}
     }
   },
   {
@@ -240,7 +300,8 @@
         "15": 1,
         "16": 1,
         "17": 1
-      }
+      },
+      "python.pydantic.use-model-proxy": {"2": 1}
     }
   },
   {
@@ -276,7 +337,8 @@
         "21": 1,
         "22": 1,
         "23": 1
-      }
+      },
+      "python.pydantic.use-model-proxy": {"1": 1}
     }
   },
   {

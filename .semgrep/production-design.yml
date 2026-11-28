@@ -264,6 +264,34 @@ rules:
           - pattern: "$FIELD: None | $TYPE"
           - pattern: "$FIELD: $TYPE = None"
 
+  - id: python.pydantic.use-model-proxy
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Direct Pydantic BaseModel imports belong only in umbod/proxies.py.
+      Define Umbod models using `from umbod.proxies import Model`.
+      For compatibility with external Pydantic models, use `is_pydantic_model_class` from umbod.proxies.
+    paths:
+      include:
+        - '**/api/src/umbod/**'
+      exclude:
+        - '**/api/src/umbod/proxies.py'
+    pattern-either:
+      - pattern: from pydantic import BaseModel
+      - pattern: from pydantic.main import BaseModel
+      - pattern: from pydantic.v1 import BaseModel
+      - pattern: from pydantic.v1.main import BaseModel
+      - patterns:
+          - pattern-either:
+              - pattern: pydantic.BaseModel
+              - pattern: pydantic.main.BaseModel
+              - pattern: pydantic.v1.BaseModel
+              - pattern: pydantic.v1.main.BaseModel
+          - pattern-regex: '\b(?:[A-Za-z_]\w*\.)+BaseModel\b'
+      - pattern: |
+          class $CLASS(..., umbod.proxies.PydanticModel, ...):
+            ...
+
   - id: python.pydantic.none-type-field
     metadata:
       boundary_model_exceptions:
@@ -294,40 +322,149 @@ rules:
         - '**/conftest.py'
         - '**/api/src/umbod/core/connectors/downstream_mcp/adapters/fastmcp/oauth_storage.py'
         - '**/api/src/umbod/rest/connectors/downstream_mcp/oauth.py'
-    patterns:
+        - '**/api/src/umbod/core/connectors/native/models.py'
+        - '**/api/src/umbod/core/connectors/openapi/execution/service.py'
+        - '**/api/src/umbod/core/connectors/openapi/management/models.py'
+        - '**/api/src/umbod/rest/connectors/native/schemas.py'
+        - '**/api/src/umbod/rest/connectors/openapi/schemas.py'
+        - '**/api/src/umbod/rest/connectors/schemas.py'
+        - '**/api/src/umbod/mcp/connectors/native/prompts/registration.py'
+        - '**/api/src/umbod/mcp/connectors/native/resources/registration.py'
+        - '**/api/src/umbod/mcp/connectors/native/tools/registration.py'
+        - '**/api/src/umbod/mcp/connectors/native/runtime_state.py'
+        - '**/api/src/umbod/rest/mcp_permissions/schemas.py'
+        - '**/api/src/umbod/rest/system/schemas.py'
+        - '**/api/src/umbod/rest/users/responses.py'
+    patterns: &pydantic_none_field_patterns
       - pattern-either:
-          - patterns:
-              - pattern-inside: |
-                  class $CLASS(BaseModel):
-                    ...
-              - pattern-either:
-                  - pattern: "$FIELD: Optional[$TYPE]"
-                  - pattern: "$FIELD: Union[$TYPE, None]"
-                  - pattern: "$FIELD: Union[None, $TYPE]"
-                  - pattern: "$FIELD: $TYPE | None"
-                  - pattern: "$FIELD: None | $TYPE"
-                  - pattern: "$FIELD: $TYPE = None"
-                  - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
-                  - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
-                  - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
-                  - pattern: "$FIELD: $TYPE | None = $VALUE"
-                  - pattern: "$FIELD: None | $TYPE = $VALUE"
-          - patterns:
-              - pattern-inside: |
-                  class $CLASS(pydantic.BaseModel):
-                    ...
-              - pattern-either:
-                  - pattern: "$FIELD: Optional[$TYPE]"
-                  - pattern: "$FIELD: Union[$TYPE, None]"
-                  - pattern: "$FIELD: Union[None, $TYPE]"
-                  - pattern: "$FIELD: $TYPE | None"
-                  - pattern: "$FIELD: None | $TYPE"
-                  - pattern: "$FIELD: $TYPE = None"
-                  - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
-                  - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
-                  - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
-                  - pattern: "$FIELD: $TYPE | None = $VALUE"
-                  - pattern: "$FIELD: None | $TYPE = $VALUE"
+          - pattern-inside: |
+              class $CLASS(BaseModel):
+                ...
+          - pattern-inside: |
+              class $CLASS(pydantic.BaseModel):
+                ...
+          - pattern-inside: |
+              class $CLASS(umbod.proxies.Model):
+                ...
+          - pattern-inside: |
+              class $CLASS(umbod.rest.proxies.Model):
+                ...
+          - pattern-inside: |
+              class $CLASS(umbod.mcp.proxies.Model):
+                ...
+      - pattern-either:
+          - pattern: "$FIELD: Optional[$TYPE]"
+          - pattern: "$FIELD: Union[$TYPE, None]"
+          - pattern: "$FIELD: Union[None, $TYPE]"
+          - pattern: "$FIELD: $TYPE | None"
+          - pattern: "$FIELD: None | $TYPE"
+          - pattern: "$FIELD: $TYPE = None"
+          - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
+          - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
+          - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
+          - pattern: "$FIELD: $TYPE | None = $VALUE"
+          - pattern: "$FIELD: None | $TYPE = $VALUE"
+
+  - id: python.pydantic.none-type-field.legacy-boundaries
+    metadata:
+      boundary_model_exceptions:
+        - model: umbod.core.connectors.native.models.ConnectorExtension
+          fields: [package]
+          reason: Built-in registrations may have no installable package name.
+        - model: umbod.core.connectors.native.models.ConnectorMetadata
+          fields: [icon_data_url]
+          reason: Connector registrations need not provide an icon; absent icons are omitted from output.
+        - model: umbod.core.connectors.native.models.ConnectorConfigurationCheckResult
+          fields: [message]
+          reason: The existing connector check contract permits no diagnostic message.
+        - model: umbod.core.connectors.openapi.execution.service.OpenApiCapabilityExecutionResult
+          fields: [code, http_status, content_type]
+          reason: An execution result can lack error details or an upstream HTTP response.
+        - model: umbod.core.connectors.openapi.management.models.ImportOpenApiCatalog
+          fields: [selected_server_url]
+          reason: Import callers can defer server selection to the specification.
+        - model: umbod.rest.connectors.native.schemas.ConnectorListItemResponse
+          fields: [icon_data_url]
+          reason: The response omits the icon when the connector provides none.
+        - model: umbod.rest.connectors.native.schemas.ConnectorConfigurationPageResponse
+          fields: [configuration]
+          reason: Null represents a connector with no saved configuration.
+        - model: umbod.rest.connectors.openapi.schemas.OpenApiConfigurationResponse
+          fields: [masked_token]
+          reason: Null represents a connector with no configured bearer token.
+        - model: umbod.rest.connectors.schemas.ToolActivationBatchRequestItem
+          fields: [activation_status, invocation_mode, expected_policy_revision]
+          reason: Partial updates accept omitted policy changes or revision checks.
+        - model: umbod.mcp.connectors.native.prompts.registration.ConnectorPromptRegistrationOptions
+          fields: [connector_registrations]
+          reason: Deployments without connector registrations skip prompt registration.
+        - model: umbod.mcp.connectors.native.resources.registration.ConnectorResourceRegistrationOptions
+          fields: [connector_registrations]
+          reason: Deployments without connector registrations skip resource registration.
+        - model: umbod.mcp.connectors.native.tools.registration.ConnectorToolRegistrationOptions
+          fields: [connector_registrations, error_formatter]
+          reason: Tool registration permits no connector registrations or no configured error formatter.
+        - model: umbod.mcp.connectors.native.runtime_state.ConnectorRuntimeState
+          fields: [display_name, configuration]
+          reason: Runtime snapshots permit unavailable connector metadata and configuration.
+        - model: umbod.rest.mcp_permissions.schemas.PermissionChangeResponse
+          fields: [group_id, message]
+          reason: The existing response permits an absent group identifier or diagnostic message.
+        - model: umbod.rest.system.schemas.ConnectorRuntimeStateResponse
+          fields: [display_name, configuration]
+          reason: The runtime response preserves missing metadata and configuration.
+        - model: umbod.rest.system.schemas.EventListQuery
+          fields: [event_type]
+          reason: Omitting event types requests events without a type filter.
+        - model: umbod.rest.users.responses.CurrentUserResponse
+          fields: [email, picture]
+          reason: Identity providers need not supply an email address or picture.
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Design warning: Pydantic field '$FIELD' allows None. Prefer validating missing or optional user input
+      at the API/request boundary and converting it into a required internal DTO before core logic sees it.
+      If None means the model is in another state, split the model into explicit DTOs or domain types. Many
+      None-able fields in one Pydantic model usually indicate the model has too many responsibilities.
+    paths:
+      include:
+        - '**/api/src/umbod/core/connectors/native/models.py'
+        - '**/api/src/umbod/core/connectors/openapi/execution/service.py'
+        - '**/api/src/umbod/core/connectors/openapi/management/models.py'
+        - '**/api/src/umbod/rest/connectors/native/schemas.py'
+        - '**/api/src/umbod/rest/connectors/openapi/schemas.py'
+        - '**/api/src/umbod/rest/connectors/schemas.py'
+        - '**/api/src/umbod/mcp/connectors/native/prompts/registration.py'
+        - '**/api/src/umbod/mcp/connectors/native/resources/registration.py'
+        - '**/api/src/umbod/mcp/connectors/native/tools/registration.py'
+        - '**/api/src/umbod/mcp/connectors/native/runtime_state.py'
+        - '**/api/src/umbod/rest/mcp_permissions/schemas.py'
+        - '**/api/src/umbod/rest/system/schemas.py'
+        - '**/api/src/umbod/rest/users/responses.py'
+    patterns:
+      - patterns: *pydantic_none_field_patterns
+      - metavariable-comparison:
+          metavariable: $CLASS
+          comparison: >-
+            not (
+              (str($CLASS) == "ConnectorExtension" and str($FIELD) == "package") or
+              (str($CLASS) == "ConnectorMetadata" and str($FIELD) == "icon_data_url") or
+              (str($CLASS) == "ConnectorConfigurationCheckResult" and str($FIELD) == "message") or
+              (str($CLASS) == "OpenApiCapabilityExecutionResult" and str($FIELD) in ["code", "http_status", "content_type"]) or
+              (str($CLASS) == "ImportOpenApiCatalog" and str($FIELD) == "selected_server_url") or
+              (str($CLASS) == "ConnectorListItemResponse" and str($FIELD) == "icon_data_url") or
+              (str($CLASS) == "ConnectorConfigurationPageResponse" and str($FIELD) == "configuration") or
+              (str($CLASS) == "OpenApiConfigurationResponse" and str($FIELD) == "masked_token") or
+              (str($CLASS) == "ToolActivationBatchRequestItem" and str($FIELD) in ["activation_status", "invocation_mode", "expected_policy_revision"]) or
+              (str($CLASS) == "ConnectorPromptRegistrationOptions" and str($FIELD) == "connector_registrations") or
+              (str($CLASS) == "ConnectorResourceRegistrationOptions" and str($FIELD) == "connector_registrations") or
+              (str($CLASS) == "ConnectorToolRegistrationOptions" and str($FIELD) in ["connector_registrations", "error_formatter"]) or
+              (str($CLASS) == "ConnectorRuntimeState" and str($FIELD) in ["display_name", "configuration"]) or
+              (str($CLASS) == "PermissionChangeResponse" and str($FIELD) in ["group_id", "message"]) or
+              (str($CLASS) == "ConnectorRuntimeStateResponse" and str($FIELD) in ["display_name", "configuration"]) or
+              (str($CLASS) == "EventListQuery" and str($FIELD) == "event_type") or
+              (str($CLASS) == "CurrentUserResponse" and str($FIELD) in ["email", "picture"])
+            )
 
   - id: python.pydantic.none-type-field.oauth-storage
     languages: [python]
@@ -341,40 +478,7 @@ rules:
       include:
         - '**/api/src/umbod/core/connectors/downstream_mcp/adapters/fastmcp/oauth_storage.py'
     patterns:
-      - patterns:
-          - pattern-either:
-              - patterns:
-                  - pattern-inside: |
-                      class $CLASS(BaseModel):
-                        ...
-                  - pattern-either:
-                      - pattern: "$FIELD: Optional[$TYPE]"
-                      - pattern: "$FIELD: Union[$TYPE, None]"
-                      - pattern: "$FIELD: Union[None, $TYPE]"
-                      - pattern: "$FIELD: $TYPE | None"
-                      - pattern: "$FIELD: None | $TYPE"
-                      - pattern: "$FIELD: $TYPE = None"
-                      - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
-                      - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
-                      - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
-                      - pattern: "$FIELD: $TYPE | None = $VALUE"
-                      - pattern: "$FIELD: None | $TYPE = $VALUE"
-              - patterns:
-                  - pattern-inside: |
-                      class $CLASS(pydantic.BaseModel):
-                        ...
-                  - pattern-either:
-                      - pattern: "$FIELD: Optional[$TYPE]"
-                      - pattern: "$FIELD: Union[$TYPE, None]"
-                      - pattern: "$FIELD: Union[None, $TYPE]"
-                      - pattern: "$FIELD: $TYPE | None"
-                      - pattern: "$FIELD: None | $TYPE"
-                      - pattern: "$FIELD: $TYPE = None"
-                      - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
-                      - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
-                      - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
-                      - pattern: "$FIELD: $TYPE | None = $VALUE"
-                      - pattern: "$FIELD: None | $TYPE = $VALUE"
+      - patterns: *pydantic_none_field_patterns
       - pattern-either:
           - patterns:
               - pattern-either:
@@ -383,13 +487,20 @@ rules:
               - pattern-not-inside: |
                   class AuthorizationDocument(pydantic.BaseModel):
                     ...
+              - pattern-not-inside: |
+                  class AuthorizationDocument(umbod.proxies.Model):
+                    ...
           - patterns:
               - pattern-either:
                   - pattern: "$FIELD: $ANNOTATION"
                   - pattern: "$FIELD: $ANNOTATION = $VALUE"
-              - pattern-inside: |
-                  class AuthorizationDocument(pydantic.BaseModel):
-                    ...
+              - pattern-either:
+                  - pattern-inside: |
+                      class AuthorizationDocument(pydantic.BaseModel):
+                        ...
+                  - pattern-inside: |
+                      class AuthorizationDocument(umbod.proxies.Model):
+                        ...
               - metavariable-regex:
                   metavariable: $FIELD
                   regex: '^(?!(client_info|tokens|expires_at|metadata|authorization_server)$).*'
@@ -406,40 +517,7 @@ rules:
       include:
         - '**/api/src/umbod/rest/connectors/downstream_mcp/oauth.py'
     patterns:
-      - patterns:
-          - pattern-either:
-              - patterns:
-                  - pattern-inside: |
-                      class $CLASS(BaseModel):
-                        ...
-                  - pattern-either:
-                      - pattern: "$FIELD: Optional[$TYPE]"
-                      - pattern: "$FIELD: Union[$TYPE, None]"
-                      - pattern: "$FIELD: Union[None, $TYPE]"
-                      - pattern: "$FIELD: $TYPE | None"
-                      - pattern: "$FIELD: None | $TYPE"
-                      - pattern: "$FIELD: $TYPE = None"
-                      - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
-                      - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
-                      - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
-                      - pattern: "$FIELD: $TYPE | None = $VALUE"
-                      - pattern: "$FIELD: None | $TYPE = $VALUE"
-              - patterns:
-                  - pattern-inside: |
-                      class $CLASS(pydantic.BaseModel):
-                        ...
-                  - pattern-either:
-                      - pattern: "$FIELD: Optional[$TYPE]"
-                      - pattern: "$FIELD: Union[$TYPE, None]"
-                      - pattern: "$FIELD: Union[None, $TYPE]"
-                      - pattern: "$FIELD: $TYPE | None"
-                      - pattern: "$FIELD: None | $TYPE"
-                      - pattern: "$FIELD: $TYPE = None"
-                      - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
-                      - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
-                      - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
-                      - pattern: "$FIELD: $TYPE | None = $VALUE"
-                      - pattern: "$FIELD: None | $TYPE = $VALUE"
+      - patterns: *pydantic_none_field_patterns
       - pattern-either:
           - patterns:
               - pattern-either:
@@ -449,15 +527,25 @@ rules:
                   class BeginRequest(pydantic.BaseModel):
                     ...
               - pattern-not-inside: |
+                  class BeginRequest(umbod.proxies.Model):
+                    ...
+              - pattern-not-inside: |
                   class OAuthDetails(pydantic.BaseModel):
+                    ...
+              - pattern-not-inside: |
+                  class OAuthDetails(umbod.proxies.Model):
                     ...
           - patterns:
               - pattern-either:
                   - pattern: "$FIELD: $ANNOTATION"
                   - pattern: "$FIELD: $ANNOTATION = $VALUE"
-              - pattern-inside: |
-                  class BeginRequest(pydantic.BaseModel):
-                    ...
+              - pattern-either:
+                  - pattern-inside: |
+                      class BeginRequest(pydantic.BaseModel):
+                        ...
+                  - pattern-inside: |
+                      class BeginRequest(umbod.proxies.Model):
+                        ...
               - metavariable-regex:
                   metavariable: $FIELD
                   regex: '^(?!(scopes)$).*'
@@ -465,9 +553,13 @@ rules:
               - pattern-either:
                   - pattern: "$FIELD: $ANNOTATION"
                   - pattern: "$FIELD: $ANNOTATION = $VALUE"
-              - pattern-inside: |
-                  class OAuthDetails(pydantic.BaseModel):
-                    ...
+              - pattern-either:
+                  - pattern-inside: |
+                      class OAuthDetails(pydantic.BaseModel):
+                        ...
+                  - pattern-inside: |
+                      class OAuthDetails(umbod.proxies.Model):
+                        ...
               - metavariable-regex:
                   metavariable: $FIELD
                   regex: '^(?!(error|granted_scopes|canonical_endpoint|endpoint_differs|issuer)$).*'

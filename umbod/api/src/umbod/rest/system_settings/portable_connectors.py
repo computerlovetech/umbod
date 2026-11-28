@@ -1,6 +1,7 @@
 from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict, StrictBool
+from pydantic import ConfigDict, StrictBool
 
+from umbod.proxies import Model
 from umbod.core.system_settings import UpdatePortableConnectorSettings
 
 from .dependencies import SystemSettingsAccess
@@ -9,13 +10,13 @@ from .route_policy import SystemSettingsRoute
 router = APIRouter(prefix="/portable-connectors", route_class=SystemSettingsRoute)
 
 
-class PortableConnectorsSettingsPatch(BaseModel):
+class PortableConnectorsSettingsPatch(Model):
     model_config = ConfigDict(extra="forbid")
 
     enabled: StrictBool
 
 
-class PortableConnectorsSettingsResponse(BaseModel):
+class PortableConnectorsSettingsResponse(Model):
     enabled: bool
 
 

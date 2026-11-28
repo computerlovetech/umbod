@@ -1,13 +1,14 @@
 from typing import Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.callers import AuthenticationProvenance, CallerContext, GroupMembership
 
 from .models import CanonicalPrincipal, MissingCanonicalPrincipal
 
 
-class PersonalCaller(BaseModel):
+class PersonalCaller(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     caller: CallerContext
@@ -15,7 +16,7 @@ class PersonalCaller(BaseModel):
     groups: GroupMembership
 
 
-class UnavailablePersonalCaller(BaseModel):
+class UnavailablePersonalCaller(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["unavailable"]

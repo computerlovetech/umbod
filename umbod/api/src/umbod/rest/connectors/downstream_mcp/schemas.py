@@ -1,9 +1,10 @@
 from datetime import datetime
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic.types import JsonValue
 
+from umbod.proxies import Model
 from umbod.core.capabilities.descriptions import CapabilityDescription
 from umbod.core.connectors.downstream_mcp.models import (
     EndpointUrl,
@@ -37,7 +38,7 @@ from umbod.rest.connectors.schemas import (
 )
 
 
-class ApiModel(BaseModel):
+class ApiModel(Model):
     model_config = ConfigDict(extra="forbid")
 
 

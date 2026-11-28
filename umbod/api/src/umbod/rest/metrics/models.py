@@ -1,9 +1,11 @@
 from typing import Literal, Mapping
 
-from pydantic import BaseModel, ConfigDict, Field, PositiveFloat
+from pydantic import ConfigDict, Field, PositiveFloat
+
+from umbod.proxies import Model
 
 
-class RestMetricSample(BaseModel):
+class RestMetricSample(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str
@@ -11,7 +13,7 @@ class RestMetricSample(BaseModel):
     value: float
 
 
-class CompletedRestRequest(BaseModel):
+class CompletedRestRequest(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     method: str = Field(min_length=1, pattern=r"^[A-Z]+$")

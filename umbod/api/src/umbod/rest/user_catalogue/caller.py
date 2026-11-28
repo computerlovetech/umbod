@@ -1,8 +1,9 @@
 from typing import Annotated
 
 from fastapi import Depends
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSnapshot, GroupMembership, LegacyGroupClaimPolicy
 from umbod.core.callers.groups import resolve_legacy_group_membership
 from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
@@ -22,7 +23,7 @@ from umbod.rest.factories import ConnectorApiDependencyFactories
 from .identity import catalogue_identity_key
 
 
-class CatalogueCaller(BaseModel):
+class CatalogueCaller(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     caller: CallerContext

@@ -1,6 +1,8 @@
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import ConfigDict, Field, JsonValue
+
+from umbod.proxies import Model
 
 
 class TelemetrySignal(str, Enum):
@@ -9,7 +11,7 @@ class TelemetrySignal(str, Enum):
     TRACES = "traces"
 
 
-class TelemetryExport(BaseModel):
+class TelemetryExport(Model):
     model_config = ConfigDict(frozen=True)
 
     signal: TelemetrySignal

@@ -1,9 +1,11 @@
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, TypeAdapter, field_validator
+from pydantic import ConfigDict, Field, HttpUrl, TypeAdapter, field_validator
+
+from umbod.proxies import Model
 
 
-class Favicon(BaseModel):
+class Favicon(Model):
     model_config = ConfigDict(frozen=True)
 
     url: str
@@ -20,7 +22,7 @@ class Favicon(BaseModel):
         return value
 
 
-class FaviconDiscoveryRequest(BaseModel):
+class FaviconDiscoveryRequest(Model):
     model_config = ConfigDict(frozen=True)
 
     endpoint_url: HttpUrl
@@ -34,7 +36,7 @@ class FaviconDiscoveryRequest(BaseModel):
         return value
 
 
-class FaviconFound(BaseModel):
+class FaviconFound(Model):
     model_config = ConfigDict(frozen=True)
 
     status: Literal["found"] = "found"
@@ -42,13 +44,13 @@ class FaviconFound(BaseModel):
     strategy: str
 
 
-class FaviconNotFound(BaseModel):
+class FaviconNotFound(Model):
     model_config = ConfigDict(frozen=True)
 
     status: Literal["not_found"] = "not_found"
 
 
-class FaviconDiscoveryTimedOut(BaseModel):
+class FaviconDiscoveryTimedOut(Model):
     model_config = ConfigDict(frozen=True)
 
     status: Literal["timed_out"] = "timed_out"

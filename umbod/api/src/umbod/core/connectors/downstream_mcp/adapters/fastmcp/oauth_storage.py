@@ -1,10 +1,12 @@
 from typing import Protocol
 
 from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToken
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import Field, SecretStr
+
+from umbod.proxies import Model
 
 
-class AuthorizationDocument(BaseModel):
+class AuthorizationDocument(Model):
     endpoint_url: str
     client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)
     tokens: OAuthToken | None = Field(default=None, repr=False)

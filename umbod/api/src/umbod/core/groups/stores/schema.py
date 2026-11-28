@@ -1,7 +1,8 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.groups.models import Group, GroupInstance, GroupInstanceId
 
 from umbod.core.persistence.query import (
@@ -28,13 +29,13 @@ class PermissionGroupRecord(Group):
         )
 
 
-class PermissionGroupKey(BaseModel):
+class PermissionGroupKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     group_id: str
 
 
-class GroupIdResult(BaseModel):
+class GroupIdResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     group_id: str
@@ -70,7 +71,7 @@ GROUP_INSTANCE_PROJECTION = Fields(
     cast(tuple[Field[PermissionGroupRecord, object], ...], (GROUP_ID, GROUP_INSTANCE_ID)),
 )
 
-class GroupInstanceReservation(BaseModel):
+class GroupInstanceReservation(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     instance_id: GroupInstanceId

@@ -1,12 +1,14 @@
 from typing import Annotated, Literal, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 from ..browsing import NodeSummary
 
 
-class CallerPermissions(BaseModel):
+class CallerPermissions(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     can_discover: bool
@@ -16,7 +18,7 @@ class CallerPermissions(BaseModel):
     can_share: bool
 
 
-class NamespaceVisibility(BaseModel):
+class NamespaceVisibility(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     type: Literal["namespace"]
@@ -25,7 +27,7 @@ class NamespaceVisibility(BaseModel):
     name: str
 
 
-class RestrictedVisibility(BaseModel):
+class RestrictedVisibility(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     type: Literal["restricted"]

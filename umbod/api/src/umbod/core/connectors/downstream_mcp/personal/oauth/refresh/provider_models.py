@@ -1,11 +1,13 @@
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, ConfigDict, Field
+
+from umbod.proxies import Model
 
 from ..configuration import PersonalOAuthPolicy
 from ..grants import PersonalOAuthGrant
 from ..failures import OAuthEvidenceError, OAuthFailureReason, OAuthFailureStage
 
 
-class RefreshPersonalOAuth(BaseModel):
+class RefreshPersonalOAuth(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     grant: PersonalOAuthGrant

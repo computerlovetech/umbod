@@ -2,14 +2,15 @@ from typing import Literal, TypedDict, Unpack
 
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, PERSONAL_RUNTIME_FAILURE
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import AwareDatetime, ConfigDict, Field, SecretStr, field_validator
 
+from umbod.proxies import Model
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool, ValidatedJsonObject
 
 from ..connections import PersonalConnectionKey
 
 
-class PersonalRuntimeModel(BaseModel):
+class PersonalRuntimeModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

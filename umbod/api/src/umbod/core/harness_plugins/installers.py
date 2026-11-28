@@ -4,8 +4,9 @@ import re
 import shlex
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import ConfigDict, field_validator
 
+from umbod.proxies import Model
 from umbod.core.harness_plugins.ports import InstallerSourceReader, ScriptKind
 from umbod.core.harness_plugins.rendering import Harness, normalize_endpoint
 
@@ -29,7 +30,7 @@ def normalize_public_origin(value: str) -> str:
     return value.rstrip("/")
 
 
-class InstallerConfiguration(BaseModel):
+class InstallerConfiguration(Model):
     model_config = ConfigDict(frozen=True)
 
     api_origin: str

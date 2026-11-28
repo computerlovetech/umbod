@@ -2,8 +2,9 @@ from datetime import datetime
 from typing import Literal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
+from umbod.proxies import Model
 from umbod.core.permissions.domain import (
     CapabilityPermissionUpdate,
     ConnectorPermissionUpdate,
@@ -13,7 +14,7 @@ from umbod.core.publishing import PublishState
 from .connector_configuration.models import ConnectorReference
 
 
-class AdministratorModel(BaseModel):
+class AdministratorModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

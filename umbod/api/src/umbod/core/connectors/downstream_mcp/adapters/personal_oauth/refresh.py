@@ -10,7 +10,7 @@ from typing import Literal
 from urllib.parse import urlencode
 
 import anyio
-from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic import ConfigDict, SecretStr
 
 from ...personal.oauth.grants import (
     ExpiringPersonalToken,
@@ -19,6 +19,7 @@ from ...personal.oauth.grants import (
     authorize_personal_grant,
 )
 from ...personal.connections import Authorized
+from umbod.proxies import Model
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, NoDownstreamResponse
 from .failure import OAuthOperationProgress, oauth_failure_boundary, rejected_response, request_with_progress
 from ...personal.oauth.refresh import (
@@ -39,7 +40,7 @@ from .transport import (
 from .validation import TokenResponse, parse_json, validated_url
 
 
-class _TokenEndpointError(BaseModel):
+class _TokenEndpointError(Model):
     model_config = ConfigDict(strict=True)
 
     error: Literal["invalid_grant", "invalid_client"]

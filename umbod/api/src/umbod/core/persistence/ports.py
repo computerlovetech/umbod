@@ -3,8 +3,7 @@ from contextlib import AbstractAsyncContextManager
 from enum import Enum
 from typing import Protocol, TypeVar
 
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.persistence.query import (
     DeleteQuery,
     GeneratedIntegerKeyInsertCommand,
@@ -14,9 +13,9 @@ from umbod.core.persistence.query import (
     UpsertCommand,
 )
 
-RowT = TypeVar("RowT", bound=BaseModel)
-KeyT = TypeVar("KeyT", bound=BaseModel)
-ResultT = TypeVar("ResultT", bound=BaseModel)
+RowT = TypeVar("RowT", bound=PydanticModel)
+KeyT = TypeVar("KeyT", bound=PydanticModel)
+ResultT = TypeVar("ResultT", bound=PydanticModel)
 
 
 class TransactionMode(str, Enum):
@@ -54,7 +53,7 @@ class DatabaseSession(ReadSession, Protocol):
 
 
 class DatabaseSchema(Protocol):
-    async def ensure_schema(self, tables: Sequence[Table[BaseModel, BaseModel]]) -> None: ...
+    async def ensure_schema(self, tables: Sequence[Table[PydanticModel, PydanticModel]]) -> None: ...
 
 
 class Database(DatabaseSchema, Protocol):

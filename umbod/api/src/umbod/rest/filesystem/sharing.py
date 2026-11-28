@@ -3,8 +3,9 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
+from pydantic import ConfigDict, TypeAdapter, ValidationError
 
+from umbod.proxies import Model
 from umbod.core.callers import CallerSnapshot
 from umbod.core.identity_directory.user_models import SearchText
 from umbod.core.filesystem.sharing import (
@@ -35,7 +36,7 @@ class NodePolicyWriteView(NodePolicyView):
     visible_to: Visibility
 
 
-class ReplaceNodeAccessRequest(BaseModel):
+class ReplaceNodeAccessRequest(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     grants: tuple[ShareNodePolicy, ...]

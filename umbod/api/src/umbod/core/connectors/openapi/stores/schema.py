@@ -1,7 +1,8 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.connectors.openapi.models import OpenApiEndpointCapability, OpenApiMetadata
 from umbod.core.persistence.query import (
     Field,
@@ -17,26 +18,26 @@ from umbod.core.persistence.query import (
 )
 
 
-class ConnectorRecord(BaseModel):
+class ConnectorRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
     document: str
 
 
-class ConnectorKey(BaseModel):
+class ConnectorKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
 
 
-class ConnectorDocumentResult(BaseModel):
+class ConnectorDocumentResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     document: str
 
 
-class ConnectorListResult(BaseModel):
+class ConnectorListResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -65,7 +66,7 @@ CONNECTOR_LIST_PROJECTION = Fields(
 CONNECTORS = CONNECTOR_TABLE
 
 
-class CurrentCatalogHeaderRecord(BaseModel):
+class CurrentCatalogHeaderRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -78,13 +79,13 @@ class CurrentCatalogHeaderRecord(BaseModel):
     imported_at: str
 
 
-class CurrentCatalogHeaderKey(BaseModel):
+class CurrentCatalogHeaderKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
 
 
-class CurrentCatalogConnectorIdResult(BaseModel):
+class CurrentCatalogConnectorIdResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -149,7 +150,7 @@ CURRENT_CATALOG_HEADER_ID_PROJECTION = Fields(
 CURRENT_CATALOG_HEADERS = CURRENT_CATALOG_HEADER_TABLE
 
 
-class CatalogSourceRecord(BaseModel):
+class CatalogSourceRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -157,14 +158,14 @@ class CatalogSourceRecord(BaseModel):
     document: dict[str, object]
 
 
-class CatalogSourceKey(BaseModel):
+class CatalogSourceKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
     catalog_id: str
 
 
-class CatalogSourceDocumentResult(BaseModel):
+class CatalogSourceDocumentResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     document: dict[str, object]
@@ -202,7 +203,7 @@ CATALOG_SOURCE_DOCUMENT_PROJECTION = Fields(
 CATALOG_SOURCES = CATALOG_SOURCE_TABLE
 
 
-class CatalogOperationRecord(BaseModel):
+class CatalogOperationRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -216,7 +217,7 @@ class CatalogOperationRecord(BaseModel):
     capability: OpenApiEndpointCapability
 
 
-class CatalogOperationKey(BaseModel):
+class CatalogOperationKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -224,7 +225,7 @@ class CatalogOperationKey(BaseModel):
     operation_id: str
 
 
-class CatalogOperationSummaryResult(BaseModel):
+class CatalogOperationSummaryResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -237,7 +238,7 @@ class CatalogOperationSummaryResult(BaseModel):
     tags: tuple[str, ...]
 
 
-class CatalogOperationCapabilityResult(BaseModel):
+class CatalogOperationCapabilityResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     capability: OpenApiEndpointCapability

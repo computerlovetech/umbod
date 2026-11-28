@@ -1,7 +1,8 @@
 from typing import Annotated, Literal, Protocol, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import ConfigDict, Field, StringConstraints
 
+from umbod.proxies import Model
 from umbod.core.capabilities.descriptions.domain import CapabilityDescription
 
 ConnectorKind = Literal["native", "downstream_mcp", "openapi"]
@@ -24,7 +25,7 @@ class CapabilityDescriptionOverrideCorruptionError(RuntimeError):
     pass
 
 
-class DomainModel(BaseModel):
+class DomainModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

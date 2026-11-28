@@ -1,9 +1,9 @@
 from typing import Literal, Union
 
-from pydantic import BaseModel
+from umbod.proxies import Model
 
 
-class InstanceConfigurationEntryResponse(BaseModel):
+class InstanceConfigurationEntryResponse(Model):
     variable: str
     label: str
     description: str
@@ -11,11 +11,11 @@ class InstanceConfigurationEntryResponse(BaseModel):
     value: Union[str, int, float, bool, list[str]]
 
 
-class InstanceConfigurationGroupResponse(BaseModel):
+class InstanceConfigurationGroupResponse(Model):
     id: str
     label: str
     entries: list[InstanceConfigurationEntryResponse]
 
 
-class InstanceConfigurationResponse(BaseModel):
+class InstanceConfigurationResponse(Model):
     groups: list[InstanceConfigurationGroupResponse]

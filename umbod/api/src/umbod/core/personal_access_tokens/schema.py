@@ -1,7 +1,6 @@
 from typing import cast
 
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.persistence import (
     Field,
     KeyCodec,
@@ -61,5 +60,5 @@ TOKEN_TABLE = Table(
     ),
 )
 PERSONAL_ACCESS_TOKEN_TABLES = cast(
-    tuple[Table[BaseModel, BaseModel], ...], (TOKEN_TABLE,)
+    tuple[Table[PydanticModel, PydanticModel], ...], (TOKEN_TABLE,)
 )

@@ -1,20 +1,21 @@
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.models import NodeMetadata
 from umbod.core.filesystem.sharing import SharingGrantSummary
 
 
-class AuthorizedSharingMetadata(BaseModel):
+class AuthorizedSharingMetadata(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     can_share: Literal[True]
     grants: tuple[SharingGrantSummary, ...]
 
 
-class RestrictedSharingMetadata(BaseModel):
+class RestrictedSharingMetadata(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     can_share: Literal[False]
@@ -43,7 +44,7 @@ class FilesystemNodeMetadata(NodeMetadata):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class FilesystemChildren(BaseModel):
+class FilesystemChildren(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     nodes: list[FilesystemNodeSummary]

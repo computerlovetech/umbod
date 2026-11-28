@@ -1,7 +1,8 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     Field,
     IntegerCodec,
@@ -14,25 +15,25 @@ from umbod.core.persistence import (
 )
 
 
-class MessagingEventRecord(BaseModel):
+class MessagingEventRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
     sequence: int
     event_type: str
     document: str
 
 
-class MessagingEventKey(BaseModel):
+class MessagingEventKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
     sequence: int
 
 
-class MessagingCheckpointRecord(BaseModel):
+class MessagingCheckpointRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
     consumer_id: str
     sequence: int
 
 
-class MessagingCheckpointKey(BaseModel):
+class MessagingCheckpointKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
     consumer_id: str
 

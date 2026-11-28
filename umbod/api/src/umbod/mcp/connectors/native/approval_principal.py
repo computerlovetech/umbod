@@ -1,12 +1,13 @@
 from typing import Protocol, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from umbod.proxies import Model
 from umbod.core.invocation import ConnectorInvocationDenied
 from umbod.mcp.signals import current_mcp_invocation_context
 
 
-class ApprovalActorIdentity(BaseModel):
+class ApprovalActorIdentity(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     agent_client_id: str
@@ -19,13 +20,13 @@ class ApprovalActorIdentity(BaseModel):
         return self
 
 
-class ApprovalSessionIdentity(BaseModel):
+class ApprovalSessionIdentity(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     session_id: str = Field(min_length=1)
 
 
-class ApprovalCallerBinding(BaseModel):
+class ApprovalCallerBinding(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     identity: ApprovalActorIdentity | ApprovalSessionIdentity

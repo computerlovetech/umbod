@@ -1,11 +1,13 @@
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, ConfigDict, Field
+
+from umbod.proxies import Model
 
 from .models import PersonalConnectionKey
 
 
-class AuthorizationHealthModel(BaseModel):
+class AuthorizationHealthModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

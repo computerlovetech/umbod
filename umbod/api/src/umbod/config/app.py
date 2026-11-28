@@ -5,13 +5,14 @@ from typing import Annotated, Literal, Self, Union
 from unicodedata import category
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from umbod.proxies import Model
 from umbod.config import defaults
 from umbod.config.usage import PersonalUsageConfig
 
 
-class ConfigModel(BaseModel):
+class ConfigModel(Model):
     model_config = ConfigDict(extra="ignore")
 
 

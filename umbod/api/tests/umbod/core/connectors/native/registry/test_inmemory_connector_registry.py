@@ -1,3 +1,5 @@
+import pytest
+from pydantic import BaseModel
 from umbod_sdk.connectors.proxies import Model
 
 from umbod.core.connectors.native.registry.domain import (
@@ -46,7 +48,14 @@ def test_registry_exposes_only_explicitly_available_connectors() -> None:
     )
 
 
-def test_registry_accepts_explicit_registered_availability() -> None:
+class PlainConfiguration(BaseModel):
+    endpoint: str
+
+
+@pytest.mark.parametrize("configuration_schema", [EmptyConfiguration, PlainConfiguration])
+def test_registry_accepts_explicit_registered_availability(
+    configuration_schema: type[BaseModel],
+) -> None:
     registry: ConnectorRegistry = InMemoryConnectorRegistry(
         [
             {
@@ -55,7 +64,7 @@ def test_registry_accepts_explicit_registered_availability() -> None:
                 "capability_description": "Access connector capabilities.",
                 "description": "Registered connector",
                 "extension": {"source": "built-in"},
-                "configuration_schema": EmptyConfiguration,
+                "configuration_schema": configuration_schema,
             }
         ],
         [],

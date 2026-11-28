@@ -1,7 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.invocation.diagnostics import DownstreamResponseEvidence
 
 from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import (
@@ -10,7 +11,7 @@ from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import (
 )
 
 
-class SetupModel(BaseModel):
+class SetupModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

@@ -3,7 +3,6 @@ from typing import Annotated, Self
 
 from pydantic import (
     AfterValidator,
-    BaseModel,
     ConfigDict,
     Field,
     SecretStr,
@@ -11,6 +10,7 @@ from pydantic import (
     model_validator,
 )
 
+from umbod.proxies import Model
 from umbod.core.credential_expiry import CredentialExpiry, UtcDatetime, is_expired
 
 
@@ -47,7 +47,7 @@ Scopes = Annotated[tuple[Scope, ...], AfterValidator(unique_scopes)]
 TokenId = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{32}$")]
 
 
-class TokenModel(BaseModel):
+class TokenModel(Model):
     model_config = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
 

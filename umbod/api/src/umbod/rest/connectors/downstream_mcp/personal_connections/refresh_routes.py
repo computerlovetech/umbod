@@ -2,8 +2,9 @@ import json
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.connectors.downstream_mcp.personal.connections import (
     MissingCanonicalPrincipal,
     PersonalConnectorUnavailable,
@@ -23,7 +24,7 @@ from .refresh_dependencies import get_personal_refresh_service
 router = APIRouter(prefix="/connectors/mcp", dependencies=[Depends(require_personal_oauth)])
 
 
-class PersonalRefreshResponse(BaseModel):
+class PersonalRefreshResponse(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     status: Literal["refreshed"] = "refreshed"

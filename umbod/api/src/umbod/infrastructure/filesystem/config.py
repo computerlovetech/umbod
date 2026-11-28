@@ -5,10 +5,12 @@ from typing import Annotated, Literal, Union
 from unicodedata import category
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
+
+from umbod.proxies import Model
 
 
-class AdapterConfig(BaseModel):
+class AdapterConfig(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 

@@ -1,12 +1,14 @@
 from datetime import datetime
 from typing import Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 from ..models import NodeId, NodeKind, NodeMetadata, RootParent
 
 
-class BreadcrumbItem(BaseModel):
+class BreadcrumbItem(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     id: NodeId
@@ -14,14 +16,14 @@ class BreadcrumbItem(BaseModel):
     kind: NodeKind
 
 
-class Breadcrumbs(BaseModel):
+class Breadcrumbs(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     items: list[BreadcrumbItem] = Field(min_length=1)
     complete: bool
 
 
-class NodeSummary(BaseModel):
+class NodeSummary(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     id: NodeId

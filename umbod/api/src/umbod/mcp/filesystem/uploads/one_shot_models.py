@@ -3,8 +3,9 @@ import binascii
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
+from umbod.proxies import Model
 from umbod.core.filesystem.content.errors import UploadTooLarge
 
 from umbod.core.filesystem.models import InputName
@@ -15,7 +16,7 @@ MAX_UPLOAD_BYTES = 10_485_760
 MAX_BASE64_CHARACTERS = 4 * ((MAX_UPLOAD_BYTES + 2) // 3)
 
 
-class Utf8Content(BaseModel):
+class Utf8Content(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     encoding: Literal["utf-8"]
@@ -35,7 +36,7 @@ class Utf8Content(BaseModel):
         return self.text.encode("utf-8", errors="strict")
 
 
-class Base64Content(BaseModel):
+class Base64Content(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     encoding: Literal["base64"]
@@ -61,7 +62,7 @@ class Base64Content(BaseModel):
         return decoded
 
 
-class UploadCommand(BaseModel):
+class UploadCommand(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     parent_id: UUID

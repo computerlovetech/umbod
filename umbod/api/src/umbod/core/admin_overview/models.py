@@ -1,32 +1,34 @@
 from typing import Annotated, Generic, Literal, TypeVar, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 Count = Annotated[int, Field(ge=0)]
 ValueT = TypeVar("ValueT")
 
 
-class Available(BaseModel, Generic[ValueT]):
+class Available(Model, Generic[ValueT]):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     status: Literal["available"]
     value: ValueT
 
 
-class Unavailable(BaseModel):
+class Unavailable(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     status: Literal["unavailable"]
 
 
-class ToolCounts(BaseModel):
+class ToolCounts(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     enabled: Count
     known: Count
 
 
-class AttentionCounts(BaseModel):
+class AttentionCounts(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     unconfigured: Count
@@ -40,7 +42,7 @@ class ConnectorCounts(AttentionCounts):
     published: Count
 
 
-class OverviewBreakdown(BaseModel):
+class OverviewBreakdown(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["catalog", "openapi", "mcp"]
@@ -48,7 +50,7 @@ class OverviewBreakdown(BaseModel):
     tools: Union[Available[ToolCounts], Unavailable]
 
 
-class OverviewSnapshot(BaseModel):
+class OverviewSnapshot(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     breakdown: tuple[OverviewBreakdown, OverviewBreakdown, OverviewBreakdown]

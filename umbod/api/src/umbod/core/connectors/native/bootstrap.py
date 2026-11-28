@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from pydantic import BaseModel
 from typing import Literal, Protocol
 
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
@@ -16,7 +15,7 @@ from umbod.core.connectors.native.deployment import (
 from umbod.core.connectors.native.plugin import ConnectorPlugin
 from umbod.core.publishing import ConnectorPublishingStore
 from umbod.core.connectors.native.runtime import ConnectorRuntime, assemble_connector_runtime
-from umbod.proxies import Model
+from umbod.proxies import Model, is_pydantic_model_class
 
 
 class ConnectorSecuritySettingsPort(Protocol):
@@ -97,13 +96,9 @@ def _configuration_schemas_from_plugins(
         registration = plugin.registration()
         connector_id = registration.get("id")
         configuration_schema = registration.get("configuration_schema")
-        if isinstance(connector_id, str) and _is_configuration_schema(configuration_schema):
+        if isinstance(connector_id, str) and is_pydantic_model_class(configuration_schema):
             schemas[connector_id] = configuration_schema
     return schemas
-
-
-def _is_configuration_schema(value: object) -> bool:
-    return isinstance(value, type) and issubclass(value, BaseModel)
 
 
 __all__ = [

@@ -4,8 +4,7 @@ from contextlib import asynccontextmanager
 from copy import deepcopy
 from typing import cast
 
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.persistence.ports import DatabaseSession, PersistenceBusyError, ReadSession, TransactionMode
 from umbod.core.persistence.query import (
     AllOf,
@@ -142,7 +141,7 @@ class InMemoryDatabase:
         self._non_reusing_integer_keys: dict[object, str] = {}
         self._transaction_lock = asyncio.Lock()
 
-    async def ensure_schema(self, tables: Sequence[Table[BaseModel, BaseModel]]) -> None:
+    async def ensure_schema(self, tables: Sequence[Table[PydanticModel, PydanticModel]]) -> None:
         async with self._transaction_lock:
             existing_tables = set(self._tables)
             non_reusing_integer_keys = dict(self._non_reusing_integer_keys)

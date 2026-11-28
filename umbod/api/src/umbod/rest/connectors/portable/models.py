@@ -1,7 +1,8 @@
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
+from pydantic import ConfigDict, Field, WithJsonSchema
 
+from umbod.proxies import Model
 from umbod.core.connectors.portable.managed.catalog_models import (
     ManagedConfigurationField,
     ManagedConnectorConfiguration,
@@ -13,11 +14,11 @@ from umbod.core.connectors.portable.managed.configuration_schema import (
 )
 
 
-class ConnectorList(BaseModel):
+class ConnectorList(Model):
     connectors: tuple[ManagedConnectorSummary, ...]
 
 
-class _ConnectorWithFields(BaseModel):
+class _ConnectorWithFields(Model):
     connector: ManagedConnectorSummary
     fields: tuple[ManagedConfigurationField, ...]
 
@@ -50,7 +51,7 @@ def configuration_response(
     )
 
 
-class ConfigurationInput(BaseModel):
+class ConfigurationInput(Model):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     configuration: Annotated[

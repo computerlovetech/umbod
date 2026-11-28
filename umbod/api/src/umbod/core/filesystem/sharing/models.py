@@ -1,7 +1,8 @@
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
+from pydantic import ConfigDict, Field, field_serializer, model_validator
 
+from umbod.proxies import Model
 from umbod.core.groups.models import GroupDescription, RegisterGroup
 from umbod.core.identity_directory.user_models import SearchText, UserIdentifier
 
@@ -12,7 +13,7 @@ class GroupSharingTarget(RegisterGroup):
     type: Literal["group"]
 
 
-class UserSharingTarget(BaseModel):
+class UserSharingTarget(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     type: Literal["user"]
@@ -28,7 +29,7 @@ def default_recursive_scope() -> bool:
     return True
 
 
-class ShareNodePolicy(BaseModel):
+class ShareNodePolicy(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     recursive: bool = Field(default_factory=default_recursive_scope, strict=True, description="Directory grants apply to descendants when true. Omission preserves existing scope, defaults true for new directories; files always normalize false.")
@@ -59,7 +60,7 @@ SharingRecipient = Annotated[
 ]
 
 
-class SharingGrantSummary(BaseModel):
+class SharingGrantSummary(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     recursive: bool
@@ -71,7 +72,7 @@ class SharingGrantSummary(BaseModel):
         return sorted(permission.value for permission in permissions)
 
 
-class ShareableNodeSharingSummary(BaseModel):
+class ShareableNodeSharingSummary(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: NodeId
@@ -79,7 +80,7 @@ class ShareableNodeSharingSummary(BaseModel):
     grants: tuple[SharingGrantSummary, ...]
 
 
-class RestrictedNodeSharingSummary(BaseModel):
+class RestrictedNodeSharingSummary(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: NodeId
@@ -92,7 +93,7 @@ NodeSharingSummary = Annotated[
 ]
 
 
-class NodeSharingSummaries(BaseModel):
+class NodeSharingSummaries(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     nodes: tuple[NodeSharingSummary, ...]
@@ -103,7 +104,7 @@ class EligibleSharingGroup(RegisterGroup):
     description: GroupDescription
 
 
-class EligibleSharingGroups(BaseModel):
+class EligibleSharingGroups(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     groups: tuple[EligibleSharingGroup, ...]
@@ -112,27 +113,27 @@ class EligibleSharingGroups(BaseModel):
 SharingRecipientType = Literal["group", "user"]
 
 
-class SharingScope(BaseModel):
+class SharingScope(Model):
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
 
     recipient_types: frozenset[SharingRecipientType] = Field(min_length=1)
 
 
-class SharingRecipientSearchQuery(BaseModel):
+class SharingRecipientSearchQuery(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     query: SearchText
     scope: SharingScope
 
 
-class SharingRecipientSearchResult(BaseModel):
+class SharingRecipientSearchResult(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     recipients: tuple[SharingRecipient, ...]
     has_more: bool
 
 
-class ReplaceNodePolicy(BaseModel):
+class ReplaceNodePolicy(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     recipient_type: SharingRecipientType
@@ -153,7 +154,7 @@ class ReplaceNodePolicy(BaseModel):
         return self
 
 
-class NodePolicyView(BaseModel):
+class NodePolicyView(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: NodeId
@@ -162,7 +163,7 @@ class NodePolicyView(BaseModel):
     blocked_recipients: tuple[SharingTarget, ...]
 
 
-class NodePolicyState(BaseModel):
+class NodePolicyState(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node: Node

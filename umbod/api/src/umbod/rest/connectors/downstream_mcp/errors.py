@@ -1,8 +1,9 @@
 from typing import Literal
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.identity import ConnectorIdentityConflictError
 from umbod.core.connectors.downstream_mcp.personal.oauth.setup import PersonalOAuthSetupRequired
 from umbod.core.capabilities.tools.names import PublicToolNameConflictError
@@ -50,7 +51,7 @@ DownstreamMcpErrorCode = Literal[
 ]
 
 
-class DownstreamMcpErrorDetail(BaseModel):
+class DownstreamMcpErrorDetail(Model):
     model_config = ConfigDict(frozen=True)
 
     code: DownstreamMcpErrorCode

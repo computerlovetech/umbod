@@ -1,7 +1,9 @@
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, model_validator
+
+from umbod.proxies import Model
 
 
 _MachineCode = Annotated[
@@ -30,7 +32,7 @@ class RetryAdvice(StrEnum):
     INSPECT_BEFORE_RETRY = "inspect_before_retry"
 
 
-class ToolArgumentIssue(BaseModel):
+class ToolArgumentIssue(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     field: _ApprovedFieldPath
@@ -38,7 +40,7 @@ class ToolArgumentIssue(BaseModel):
     correction: Annotated[str, StringConstraints(min_length=1, max_length=256)]
 
 
-class ToolErrorDetails(BaseModel):
+class ToolErrorDetails(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     code: _MachineCode
@@ -49,36 +51,36 @@ class ToolErrorDetails(BaseModel):
 Instruction = Annotated[str, StringConstraints(min_length=1, max_length=512)]
 
 
-class ToolNotice(BaseModel):
+class ToolNotice(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     code: _MachineCode
     message: Annotated[str, StringConstraints(min_length=1, max_length=512)]
 
 
-class AgentGuidanceExtensions(BaseModel):
+class AgentGuidanceExtensions(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class ClientMetadataExtensions(BaseModel):
+class ClientMetadataExtensions(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class ToolSuccessRecovery(BaseModel):
+class ToolSuccessRecovery(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     retry: Literal["not_needed"]
     instructions: tuple[()]
 
 
-class ToolFailureRecovery(BaseModel):
+class ToolFailureRecovery(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     retry: RetryAdvice
     instructions: Annotated[tuple[Instruction, ...], Field(min_length=1, max_length=8)]
 
 
-class ToolSuccessGuidance(BaseModel):
+class ToolSuccessGuidance(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     outcome: Literal["success"]
@@ -89,7 +91,7 @@ class ToolSuccessGuidance(BaseModel):
     extensions: AgentGuidanceExtensions
 
 
-class ToolFailureGuidance(BaseModel):
+class ToolFailureGuidance(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     outcome: Literal["failure"]
@@ -120,7 +122,7 @@ ToolResponseGuidance = Annotated[
 ]
 
 
-class _CommonMetadata(BaseModel):
+class _CommonMetadata(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     schema_version: Literal[1]

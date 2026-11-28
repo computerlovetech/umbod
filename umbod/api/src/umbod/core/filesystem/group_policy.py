@@ -1,11 +1,13 @@
 from collections.abc import Sequence
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
+
+from umbod.proxies import Model
 
 from .models import AccessGrant, Permission
 
 
-class GroupPolicy(BaseModel):
+class GroupPolicy(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     group_id: str

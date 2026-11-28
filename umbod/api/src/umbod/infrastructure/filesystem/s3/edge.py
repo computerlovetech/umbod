@@ -1,7 +1,9 @@
 from contextlib import AbstractAsyncContextManager
 from typing import Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 from ..config import S3ContentConfig
 
@@ -27,17 +29,17 @@ class ClientProvider(Protocol):
     def __call__(self) -> AbstractAsyncContextManager[S3Client]: ...
 
 
-class UploadCreated(BaseModel):
+class UploadCreated(Model):
     model_config = ConfigDict(strict=True)
     UploadId: str = Field(min_length=1)
 
 
-class ObjectWritten(BaseModel):
+class ObjectWritten(Model):
     model_config = ConfigDict(strict=True)
     ETag: str = Field(min_length=1)
 
 
-class ObjectMetadata(BaseModel):
+class ObjectMetadata(Model):
     model_config = ConfigDict(strict=True)
     ContentLength: int = Field(ge=0)
 

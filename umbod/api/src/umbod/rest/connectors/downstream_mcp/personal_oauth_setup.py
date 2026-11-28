@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.factory import configured_personal_oauth_setup_provider
 from umbod.core.connectors.downstream_mcp.personal.oauth.diagnostics import PersonalOAuthFailureObserver
@@ -26,7 +27,7 @@ from .personal_connections.oauth_dependencies import get_personal_callback_polic
 from .personal_connections.oauth_diagnostics import get_setup_failure_observer
 
 
-class SetupRequest(BaseModel):
+class SetupRequest(Model):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     expected_revision: str = Field(min_length=1, max_length=128)

@@ -1,11 +1,13 @@
 from typing import Annotated, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import ConfigDict, StringConstraints
+
+from umbod.proxies import Model
 
 ResourceText = Annotated[str, StringConstraints(min_length=1, max_length=262144, pattern=r"\S")]
 
 
-class PackageResources(BaseModel):
+class PackageResources(Model):
     model_config = ConfigDict(frozen=True)
 
     run_diagnostics_skill: ResourceText
@@ -19,7 +21,7 @@ class PackageResourceReader(Protocol):
 ScriptKind = Literal["sh", "ps1"]
 
 
-class InstallerSource(BaseModel):
+class InstallerSource(Model):
     model_config = ConfigDict(frozen=True)
 
     text: ResourceText

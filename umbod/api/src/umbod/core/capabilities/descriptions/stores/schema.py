@@ -1,7 +1,8 @@
 from typing import ClassVar, cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     ColumnCodec,
     ColumnType,
@@ -31,7 +32,7 @@ class CapabilityDescriptionStorageCodec(ColumnCodec[str]):
         return value
 
 
-class CapabilityDescriptionOverrideRecord(BaseModel):
+class CapabilityDescriptionOverrideRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -41,7 +42,7 @@ class CapabilityDescriptionOverrideRecord(BaseModel):
     revision: int
 
 
-class CapabilityDescriptionOverrideKey(BaseModel):
+class CapabilityDescriptionOverrideKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str

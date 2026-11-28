@@ -1,10 +1,11 @@
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 
+from umbod.proxies import Model
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 
 
-class SharedRuntimeConnection(BaseModel):
+class SharedRuntimeConnection(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     command: DiscoverDownstreamTools

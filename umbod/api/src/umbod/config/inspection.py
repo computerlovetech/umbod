@@ -2,8 +2,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol, Union
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.config.app import AppConfig
 
 ConfigurationValue = Union[str, int, float, bool, list[str]]
@@ -12,7 +13,7 @@ ConfigurationValueType = Literal[
 ]
 
 
-class ConfigurationEntry(BaseModel):
+class ConfigurationEntry(Model):
     model_config = ConfigDict(frozen=True)
 
     variable: str
@@ -22,7 +23,7 @@ class ConfigurationEntry(BaseModel):
     value: ConfigurationValue
 
 
-class ConfigurationGroup(BaseModel):
+class ConfigurationGroup(Model):
     model_config = ConfigDict(frozen=True)
 
     id: str
@@ -30,7 +31,7 @@ class ConfigurationGroup(BaseModel):
     entries: list[ConfigurationEntry]
 
 
-class InstanceConfiguration(BaseModel):
+class InstanceConfiguration(Model):
     model_config = ConfigDict(frozen=True)
 
     groups: list[ConfigurationGroup]

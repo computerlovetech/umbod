@@ -1,7 +1,8 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     Field,
     Fields,
@@ -13,7 +14,7 @@ from umbod.core.persistence import (
 )
 
 
-class CapabilityActivationStateRecord(BaseModel):
+class CapabilityActivationStateRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_kind: str
@@ -24,7 +25,7 @@ class CapabilityActivationStateRecord(BaseModel):
     updated_at: str
 
 
-class CapabilityActivationStateKey(BaseModel):
+class CapabilityActivationStateKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_kind: str
@@ -33,7 +34,7 @@ class CapabilityActivationStateKey(BaseModel):
     capability_key: str
 
 
-class CapabilityActivationStatusResult(BaseModel):
+class CapabilityActivationStatusResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     status: str

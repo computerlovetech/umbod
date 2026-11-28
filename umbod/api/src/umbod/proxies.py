@@ -1,7 +1,7 @@
 from collections.abc import Mapping
-from typing import Any, ClassVar, Protocol, Self
+from typing import Any, ClassVar, Protocol, Self, TypeIs
 
-from pydantic import BaseModel
+from pydantic import BaseModel as PydanticModel
 from pydantic.fields import FieldInfo
 
 
@@ -19,8 +19,18 @@ class ModelSchemaProtocol(Protocol):
     def model_json_schema(cls, **kwargs: Any) -> dict[str, Any]: ...
 
 
-class Model(BaseModel):
+class Model(PydanticModel):
     pass
 
 
-__all__ = ["Model", "ModelDumpProtocol", "ModelSchemaProtocol"]
+def is_pydantic_model_class(value: object) -> TypeIs[type[PydanticModel]]:
+    return isinstance(value, type) and issubclass(value, PydanticModel)
+
+
+__all__ = [
+    "Model",
+    "ModelDumpProtocol",
+    "ModelSchemaProtocol",
+    "PydanticModel",
+    "is_pydantic_model_class",
+]

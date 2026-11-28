@@ -1,7 +1,9 @@
 import re
 from typing import Annotated, Protocol
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, TypeAdapter
+from pydantic import ConfigDict, StringConstraints, TypeAdapter
+
+from umbod.proxies import Model
 
 
 PublicToolName = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_]+$")]
@@ -10,7 +12,7 @@ _PUBLIC_TOOL_NAME_ADAPTER = TypeAdapter(PublicToolName)
 _TOOL_NAME_PREFIX_ADAPTER = TypeAdapter(ToolNamePrefix)
 
 
-class PublicToolIdentity(BaseModel):
+class PublicToolIdentity(Model):
     model_config = ConfigDict(frozen=True)
 
     connector_id: str

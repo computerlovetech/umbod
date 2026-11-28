@@ -1,30 +1,32 @@
 from typing import Annotated, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import ConfigDict, Field, SecretStr
+
+from umbod.proxies import Model
 
 
-class CanonicalPrincipal(BaseModel):
+class CanonicalPrincipal(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     namespace: str = Field(min_length=1, pattern=r"\S")
     subject: str = Field(min_length=1, pattern=r"\S")
 
 
-class PersonalConnectionKey(BaseModel):
+class PersonalConnectionKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     principal: CanonicalPrincipal
     connector_id: str = Field(min_length=1)
 
 
-class Unauthorized(BaseModel):
+class Unauthorized(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["unauthorized"] = "unauthorized"
 
 
-class Authorized(BaseModel):
+class Authorized(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["authorized"] = "authorized"
@@ -34,7 +36,7 @@ class Authorized(BaseModel):
 Authorization = Annotated[Authorized | Unauthorized, Field(discriminator="kind")]
 
 
-class MissingPersonalConnection(BaseModel):
+class MissingPersonalConnection(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     key: PersonalConnectionKey
@@ -42,7 +44,7 @@ class MissingPersonalConnection(BaseModel):
     authorization: Unauthorized = Unauthorized()
 
 
-class PersonalConnection(BaseModel):
+class PersonalConnection(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     key: PersonalConnectionKey
@@ -54,14 +56,14 @@ class PersonalConnection(BaseModel):
 PersonalConnectionState = PersonalConnection | MissingPersonalConnection
 
 
-class SetPersonalConnectionEnabled(BaseModel):
+class SetPersonalConnectionEnabled(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     key: PersonalConnectionKey
     enabled: bool
 
 
-class ReplacePersonalAuthorization(BaseModel):
+class ReplacePersonalAuthorization(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     key: PersonalConnectionKey

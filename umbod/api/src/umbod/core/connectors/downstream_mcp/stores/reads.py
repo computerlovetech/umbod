@@ -1,7 +1,8 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence.plan import ManyRead, ReadPlanOperations
 from umbod.core.persistence.query import AllFields, Field, Fields, NoFilter, OneOf, Query, Unordered
 
@@ -19,7 +20,7 @@ from .schema import (
 )
 
 
-class OverviewDefinitionRecord(BaseModel):
+class OverviewDefinitionRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str

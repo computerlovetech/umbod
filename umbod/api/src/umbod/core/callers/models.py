@@ -1,7 +1,9 @@
 from enum import StrEnum
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
+
+from umbod.proxies import Model
 
 
 class AuthenticationProvenance(StrEnum):
@@ -14,38 +16,38 @@ class AuthenticationProvenance(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
-class DeclaredIssuer(BaseModel):
+class DeclaredIssuer(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     value: str
 
 
-class UnavailableIssuer(BaseModel):
+class UnavailableIssuer(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["unavailable"]
 
 
-class SubjectIdentity(BaseModel):
+class SubjectIdentity(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     issuer: DeclaredIssuer | UnavailableIssuer
     subject: str
 
 
-class UnavailableSubject(BaseModel):
+class UnavailableSubject(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     kind: Literal["unavailable"]
 
 
-class GroupMembership(BaseModel):
+class GroupMembership(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     group_ids: tuple[str, ...]
 
 
-class CallerContext(BaseModel):
+class CallerContext(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     authentication: AuthenticationProvenance
@@ -61,7 +63,7 @@ class CallerContext(BaseModel):
         return self
 
 
-class CallerSnapshot(BaseModel):
+class CallerSnapshot(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     caller: CallerContext

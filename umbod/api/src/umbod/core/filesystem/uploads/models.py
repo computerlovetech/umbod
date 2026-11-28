@@ -2,20 +2,22 @@ from datetime import datetime
 from typing import Annotated, Literal, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 from ..authorization.models import ResolvedIdentity
 from ..browsing import NodeSummary
 from ..models import ContentRef, NodeId, NodeMetadata, Principal
 
 
-class UnavailableReceipt(BaseModel):
+class UnavailableReceipt(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["unavailable"] = "unavailable"
 
 
-class VerifiedReceipt(BaseModel):
+class VerifiedReceipt(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["verified"] = "verified"
@@ -26,13 +28,13 @@ class VerifiedReceipt(BaseModel):
 UploadReceipt = Annotated[Union[UnavailableReceipt, VerifiedReceipt], Field(discriminator="kind")]
 
 
-class NoExpectedChecksum(BaseModel):
+class NoExpectedChecksum(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["unchecked"] = "unchecked"
 
 
-class ExpectedChecksum(BaseModel):
+class ExpectedChecksum(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["sha256"] = "sha256"
@@ -42,32 +44,32 @@ class ExpectedChecksum(BaseModel):
 ChecksumExpectation = Annotated[Union[NoExpectedChecksum, ExpectedChecksum], Field(discriminator="kind")]
 
 
-class NoDelegatedTransfer(BaseModel):
+class NoDelegatedTransfer(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["none"] = "none"
 
 
-class AvailableTransfer(BaseModel):
+class AvailableTransfer(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     status: Literal["available"] = "available"
 
 
-class ClaimedTransfer(BaseModel):
+class ClaimedTransfer(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     status: Literal["claimed"] = "claimed"
     claim_id: UUID
 
 
-class ConsumedTransfer(BaseModel):
+class ConsumedTransfer(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     status: Literal["consumed"] = "consumed"
 
 
-class DelegatedTransfer(BaseModel):
+class DelegatedTransfer(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["delegated"] = "delegated"
@@ -77,7 +79,7 @@ class DelegatedTransfer(BaseModel):
     state: Annotated[Union[AvailableTransfer, ClaimedTransfer, ConsumedTransfer], Field(discriminator="status")]
 
 
-class ExternalTransfer(BaseModel):
+class ExternalTransfer(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal["external"] = "external"
@@ -85,7 +87,7 @@ class ExternalTransfer(BaseModel):
     expires_at: datetime
 
 
-class ExternalTransferRequest(BaseModel):
+class ExternalTransferRequest(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     transfer: ExternalTransfer
@@ -93,14 +95,14 @@ class ExternalTransferRequest(BaseModel):
     content_type: str
 
 
-class ExternalTransferInstructions(BaseModel):
+class ExternalTransferInstructions(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     url: str = Field(repr=False)
     headers: dict[str, str] = Field(repr=False)
 
 
-class UnavailableExternalTransfer(BaseModel):
+class UnavailableExternalTransfer(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     reason: Literal["expired", "completed"]
@@ -109,13 +111,13 @@ class UnavailableExternalTransfer(BaseModel):
 TransferGrant = Annotated[Union[NoDelegatedTransfer, DelegatedTransfer, ExternalTransfer], Field(discriminator="kind")]
 
 
-class PendingUpload(BaseModel):
+class PendingUpload(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     status: Literal["pending"] = "pending"
 
 
-class UploadedContent(BaseModel):
+class UploadedContent(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     status: Literal["uploaded"] = "uploaded"
@@ -123,7 +125,7 @@ class UploadedContent(BaseModel):
     receipt: UploadReceipt = Field(default_factory=UnavailableReceipt)
 
 
-class CompletedUpload(BaseModel):
+class CompletedUpload(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     status: Literal["completed"] = "completed"
@@ -131,7 +133,7 @@ class CompletedUpload(BaseModel):
     receipt: UploadReceipt = Field(default_factory=UnavailableReceipt)
 
 
-class UploadSession(BaseModel):
+class UploadSession(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     id: UUID
@@ -146,7 +148,7 @@ class UploadSession(BaseModel):
     progress: Annotated[Union[PendingUpload, UploadedContent, CompletedUpload], Field(discriminator="status")]
 
 
-class UploadCompletion(BaseModel):
+class UploadCompletion(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node: NodeSummary
@@ -154,7 +156,7 @@ class UploadCompletion(BaseModel):
     receipt: UploadReceipt = Field(default_factory=UnavailableReceipt)
 
 
-class DelegatedUpload(BaseModel):
+class DelegatedUpload(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     session: UploadSession

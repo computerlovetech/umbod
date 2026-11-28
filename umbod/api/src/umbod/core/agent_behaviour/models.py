@@ -1,8 +1,9 @@
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictBool, StringConstraints, model_validator
+from pydantic import AwareDatetime, ConfigDict, Field, StrictBool, StringConstraints, model_validator
 
+from umbod.proxies import Model
 from umbod.core.callers import CallerContext
 
 Identifier = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9-]{0,63}$")]
@@ -10,7 +11,7 @@ Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max
 AssessmentStatus = Literal["observed", "not_observed", "not_assessed"]
 
 
-class BehaviourModel(BaseModel):
+class BehaviourModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

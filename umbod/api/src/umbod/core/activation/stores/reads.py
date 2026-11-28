@@ -1,7 +1,8 @@
 from typing import cast, get_args
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.activation.domain import ActivationStatus, CapabilityRef
 from umbod.core.activation.stores.schema import (
     CAPABILITY_ACTIVATION_STATE_CAPABILITY_KEY,
@@ -41,14 +42,14 @@ def plan_activation_reads(
     )
 
 
-class EnabledToolReadScope(BaseModel):
+class EnabledToolReadScope(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_kind: ConnectorKind
     connector_ids: tuple[str, ...]
 
 
-class EnabledToolIdentity(BaseModel):
+class EnabledToolIdentity(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_kind: ConnectorKind

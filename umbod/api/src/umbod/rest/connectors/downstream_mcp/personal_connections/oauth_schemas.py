@@ -1,9 +1,10 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.connectors.downstream_mcp.personal.oauth.authorization import PersonalOAuthAttemptView
 
 
-class PersonalOAuthStartRequest(BaseModel):
+class PersonalOAuthStartRequest(Model):
     model_config = ConfigDict(extra="forbid", strict=True)
 
 

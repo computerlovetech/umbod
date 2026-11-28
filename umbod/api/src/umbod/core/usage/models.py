@@ -5,14 +5,16 @@ from enum import StrEnum
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from pydantic import AwareDatetime, ConfigDict, Field, FiniteFloat, model_validator
+
+from umbod.proxies import Model
 
 
 OwnerId = Annotated[str, Field(pattern=r'^[0-9a-f]{64}$')]
 UsageWindowDays = Literal[7, 30]
 
 
-class UsageModel(BaseModel):
+class UsageModel(Model):
     model_config = ConfigDict(frozen=True, extra='forbid')
 
 

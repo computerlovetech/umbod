@@ -6,8 +6,7 @@ from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from typing import cast
 
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.persistence.ports import DatabaseSession, PersistenceBusyError, ReadSession, TransactionMode
 from umbod.core.persistence.query import (
     AllFields,
@@ -123,7 +122,7 @@ class SQLiteDatabase:
     def __init__(self, connections: ConnectionProvider[aiosqlite.Connection]) -> None:
         self._connections = connections
 
-    async def ensure_schema(self, tables: Sequence[Table[BaseModel, BaseModel]]) -> None:
+    async def ensure_schema(self, tables: Sequence[Table[PydanticModel, PydanticModel]]) -> None:
         compiler = SQLiteCompiler(SQLiteValueMapper())
         async with self._connections.get_connection() as connection:
             async with interruptible_transaction(connection):

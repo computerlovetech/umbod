@@ -8,7 +8,6 @@ from urllib.parse import SplitResult, unquote, urlsplit
 
 from pydantic import (
     AfterValidator,
-    BaseModel,
     ConfigDict,
     Field,
     SecretStr,
@@ -17,6 +16,7 @@ from pydantic import (
 )
 from pydantic.types import JsonValue
 
+from umbod.proxies import Model
 from umbod.core.capabilities.descriptions.domain import CapabilityDescription
 from umbod.core.capabilities.tools.names import ToolNamePrefix, normalize_tool_name_prefix
 from umbod.core.connectors.downstream_mcp.personal.oauth.configuration import (
@@ -117,7 +117,7 @@ def default_tool_name_prefix(display_name: str) -> str:
 PublicPath = Annotated[NonEmptyString, AfterValidator(_validate_public_path)]
 
 
-class DomainModel(BaseModel):
+class DomainModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

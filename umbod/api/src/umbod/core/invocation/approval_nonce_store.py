@@ -1,7 +1,8 @@
 from typing import Protocol, cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     Database,
     Field,
@@ -16,14 +17,14 @@ from umbod.core.persistence import (
 )
 
 
-class ApprovalNonceConsumption(BaseModel):
+class ApprovalNonceConsumption(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     nonce: str
     expires_at: int
 
 
-class ApprovalNonceConsumptionKey(BaseModel):
+class ApprovalNonceConsumptionKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     nonce: str

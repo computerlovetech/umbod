@@ -2,7 +2,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 
 class ApplicationFailureKind(Enum):
@@ -66,7 +68,7 @@ FailureAttribute: TypeAlias = Literal[
 ]
 
 
-class ApplicationFailure(BaseModel):
+class ApplicationFailure(Model):
     model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
 
     kind: ApplicationFailureKind

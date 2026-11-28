@@ -1,12 +1,14 @@
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import AwareDatetime, ConfigDict, Field, SecretStr, field_validator
+
+from umbod.proxies import Model
 
 from ..configuration import OAuthClientId, OAuthIssuer, OAuthScopes
 from ..callback import OAuthCallbackURI
 
 
-class ApplicationModel(BaseModel):
+class ApplicationModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

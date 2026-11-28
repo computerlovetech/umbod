@@ -1,7 +1,8 @@
 from umbod.core.capabilities.descriptions.events import connector_capability_description_override_changed_event
 from umbod.core.messaging.stores.event_stream import append_event_in_session
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.capabilities.descriptions.overrides import (
     CapabilityDescriptionOverrideCorruptionError,
     CapabilityDescriptionOverrideState,
@@ -34,7 +35,7 @@ from umbod.core.persistence import (
 )
 
 
-class _OverrideMutation(BaseModel):
+class _OverrideMutation(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     key: ConnectorCapabilityDescriptionKey

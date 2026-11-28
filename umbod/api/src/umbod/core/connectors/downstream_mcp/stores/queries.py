@@ -1,11 +1,10 @@
 from typing import TypeVar
 
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.persistence import AllFields, Predicate, Query, Unordered
 
 
-RowT = TypeVar("RowT", bound=BaseModel)
+RowT = TypeVar("RowT", bound=PydanticModel)
 
 
 def query_all(predicate: Predicate[RowT]) -> Query[RowT, RowT]:

@@ -1,6 +1,8 @@
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import AwareDatetime, ConfigDict, Field, SecretStr, model_validator
+
+from umbod.proxies import Model
 
 from ..configuration import PersonalOAuthPolicy, legacy_personal_oauth_policy
 
@@ -9,7 +11,7 @@ from ...connections import Authorized, PersonalConnectionKey
 from ..callback import CallbackBinding, CallbackIssuer, CallbackRoute, LegacyGenericBinding
 
 
-class PersonalOAuthModel(BaseModel):
+class PersonalOAuthModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

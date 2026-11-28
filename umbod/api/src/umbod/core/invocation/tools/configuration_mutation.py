@@ -1,7 +1,8 @@
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.invocation.policy import (
     ConnectorKind,
     InvocationPolicyMode,
@@ -9,14 +10,14 @@ from umbod.core.invocation.policy import (
 from umbod.core.activation import ActivationStatus
 
 
-class ConnectorToolActivationChange(BaseModel):
+class ConnectorToolActivationChange(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     operation_name: str
     status: ActivationStatus
 
 
-class ConnectorToolInvocationPolicyChange(BaseModel):
+class ConnectorToolInvocationPolicyChange(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     operation_name: str
@@ -24,7 +25,7 @@ class ConnectorToolInvocationPolicyChange(BaseModel):
     expected_revision: int = Field(ge=0)
 
 
-class ConnectorToolConfigurationMutation(BaseModel):
+class ConnectorToolConfigurationMutation(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_kind: ConnectorKind
@@ -45,7 +46,7 @@ class ConnectorToolConfigurationMutation(BaseModel):
         )
 
 
-class ConnectorToolInvocationPolicyMutationResult(BaseModel):
+class ConnectorToolInvocationPolicyMutationResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     operation_name: str
@@ -54,7 +55,7 @@ class ConnectorToolInvocationPolicyMutationResult(BaseModel):
     changed: bool
 
 
-class ConnectorToolConfigurationSnapshot(BaseModel):
+class ConnectorToolConfigurationSnapshot(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     operation_name: str
@@ -63,7 +64,7 @@ class ConnectorToolConfigurationSnapshot(BaseModel):
     policy_revision: int = Field(ge=0)
 
 
-class ConnectorToolConfigurationMutationResult(BaseModel):
+class ConnectorToolConfigurationMutationResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     events_persisted: bool = False

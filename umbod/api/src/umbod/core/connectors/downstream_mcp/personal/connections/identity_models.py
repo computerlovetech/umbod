@@ -1,12 +1,14 @@
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, StrictBool
+from pydantic import ConfigDict, StrictBool
+
+from umbod.proxies import Model
 
 from .models import CanonicalPrincipal
 
 
-class _PersonalIdentityModel(BaseModel):
+class _PersonalIdentityModel(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 

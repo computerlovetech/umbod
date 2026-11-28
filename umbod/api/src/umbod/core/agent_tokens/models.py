@@ -3,7 +3,6 @@ from typing import Annotated, Literal, Self
 
 from pydantic import (
     AfterValidator,
-    BaseModel,
     ConfigDict,
     Field,
     SecretStr,
@@ -11,6 +10,7 @@ from pydantic import (
     model_validator,
 )
 
+from umbod.proxies import Model
 from umbod.core.credential_expiry import CredentialExpiry
 from umbod.core.groups.models import GroupInstanceId
 
@@ -30,7 +30,7 @@ UuidHex = Annotated[
 ]
 
 
-class AgentTokenModel(BaseModel):
+class AgentTokenModel(Model):
     model_config = ConfigDict(frozen=True, extra="forbid", hide_input_in_errors=True)
 
 

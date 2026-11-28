@@ -1,7 +1,8 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.administrator import ConnectorInventoryEntry, ObservedUserMatches
 from umbod.core.administrator.connector_configuration import ConnectorConfigurableState
 from umbod.core.filesystem.namespaces import SharedNamespaceView
@@ -12,14 +13,14 @@ from umbod.core.permissions.domain import (
 )
 
 
-class OperationResult[Operation: str, Payload](BaseModel):
+class OperationResult[Operation: str, Payload](Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     operation: Operation
     result: Payload
 
 
-class AppliedGroupPermissions(BaseModel):
+class AppliedGroupPermissions(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     group_id: str

@@ -1,8 +1,7 @@
 import re
 
 import aiosqlite
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.persistence.query import NonReusingIntegerKeyCodec, Table
 from umbod.infrastructure.persistence.sqlite.identifiers import validate_sqlite_identifier
 
@@ -15,7 +14,7 @@ _SQL_TOKENS = re.compile(
 
 
 async def validate_non_reusing_key_schema(
-    connection: aiosqlite.Connection, table: Table[BaseModel, BaseModel]
+    connection: aiosqlite.Connection, table: Table[PydanticModel, PydanticModel]
 ) -> None:
     if not isinstance(table.key_codec, NonReusingIntegerKeyCodec):
         return

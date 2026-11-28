@@ -1,8 +1,9 @@
 from collections.abc import AsyncIterator
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.filesystem import StorageKey
 
 
@@ -10,18 +11,18 @@ class MigrationStream(AsyncIterator[bytes], Protocol):
     async def aclose(self) -> None: ...
 
 
-class MigrationKeys(BaseModel):
+class MigrationKeys(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
     keys: tuple[StorageKey, ...]
 
 
-class Fingerprint(BaseModel):
+class Fingerprint(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
     size: int = Field(ge=0)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class MigrationSummary(BaseModel):
+class MigrationSummary(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
     copied: int = Field(ge=0)
     skipped: int = Field(ge=0)

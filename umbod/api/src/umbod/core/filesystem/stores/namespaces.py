@@ -2,9 +2,10 @@ from datetime import datetime, timezone
 from typing import cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
 from typing import Self
 
+from umbod.proxies import Model
 from umbod.core.groups.stores.schema import GROUP_ID, GROUP_TABLE
 from umbod.core.persistence import AllFields, Database, DatabaseSession, DeleteQuery, Equals, Field, KeyCodec, NoFilter, PersistenceDecodingError, PydanticJsonCodec, Query, ReadSession, RowCodec, Table, TableIdentity, TextCodec, TransactionMode, Unordered, UpsertCommand
 
@@ -25,7 +26,7 @@ from .session import storage_session
 from .uploads import SessionUploads
 
 
-class NamespaceKey(BaseModel):
+class NamespaceKey(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
     namespace_id: str
 

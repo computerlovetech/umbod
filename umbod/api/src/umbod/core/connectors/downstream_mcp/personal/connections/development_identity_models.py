@@ -1,7 +1,9 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
+
+from umbod.proxies import Model
 
 
-class SimulatedUserIdentity(BaseModel):
+class SimulatedUserIdentity(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     user_id: str

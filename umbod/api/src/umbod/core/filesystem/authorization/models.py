@@ -1,11 +1,13 @@
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import ConfigDict, model_validator
+
+from umbod.proxies import Model
 
 from ..models import NodeId, Permission, Principal, PrincipalType
 
 
-class ResolvedIdentity(BaseModel):
+class ResolvedIdentity(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     user: Principal
@@ -24,11 +26,11 @@ class ResolvedIdentity(BaseModel):
         return self.groups | {self.user}
 
 
-class UnresolvedIdentity(BaseModel):
+class UnresolvedIdentity(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-class AuthorizationDecision(BaseModel):
+class AuthorizationDecision(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node_id: NodeId

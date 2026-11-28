@@ -1,7 +1,6 @@
 from typing import cast
 
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.persistence import (
     Field,
     KeyCodec,
@@ -64,5 +63,5 @@ GROUP_TABLE = Table(
     KeyCodec(DirectoryKey, cast(tuple[Field[GroupRecord, object], ...], (GROUP_KEY,))),
 )
 DIRECTORY_TABLES = cast(
-    tuple[Table[BaseModel, BaseModel], ...], (USER_TABLE, GROUP_TABLE)
+    tuple[Table[PydanticModel, PydanticModel], ...], (USER_TABLE, GROUP_TABLE)
 )

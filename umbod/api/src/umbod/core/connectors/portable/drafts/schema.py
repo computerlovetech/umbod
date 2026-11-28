@@ -1,11 +1,12 @@
 from typing import cast
 
-from pydantic import BaseModel, Field as ModelField
+from pydantic import Field as ModelField
 
+from umbod.proxies import Model, PydanticModel
 from umbod.core.persistence import Field, KeyCodec, RowCodec, Table, TableIdentity, TextCodec
 
 
-class DraftKey(BaseModel):
+class DraftKey(Model):
     draft_id: str
 
 
@@ -15,7 +16,7 @@ class DraftRow(DraftKey):
     head_revision_id: str
 
 
-class RevisionKey(BaseModel):
+class RevisionKey(Model):
     draft_id: str
     revision_id: str
 
@@ -47,4 +48,4 @@ REVISION_TABLE = Table(
     KeyCodec(RevisionKey, cast(tuple[Field[RevisionRow, object], ...], (REVISION_DRAFT_ID, REVISION_ID))),
 )
 
-PORTABLE_CONNECTOR_DRAFT_TABLES = cast(tuple[Table[BaseModel, BaseModel], ...], (DRAFT_TABLE, REVISION_TABLE))
+PORTABLE_CONNECTOR_DRAFT_TABLES = cast(tuple[Table[PydanticModel, PydanticModel], ...], (DRAFT_TABLE, REVISION_TABLE))

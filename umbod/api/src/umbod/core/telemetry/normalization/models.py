@@ -2,7 +2,9 @@ from decimal import Decimal, InvalidOperation
 from re import fullmatch
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
+
+from umbod.proxies import Model
 
 
 def is_approved_schema_url(value: str) -> bool:
@@ -21,7 +23,7 @@ def decimal_value(value: str) -> Decimal:
     return number
 
 
-class NormalizationModel(BaseModel):
+class NormalizationModel(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 

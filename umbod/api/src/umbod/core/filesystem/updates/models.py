@@ -1,6 +1,8 @@
 from typing import Annotated, Union
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
+
+from umbod.proxies import Model
 from pydantic.json_schema import SkipJsonSchema
 from uuid import UUID
 
@@ -11,7 +13,7 @@ class Unchanged:
     pass
 
 
-class NodePatch(BaseModel):
+class NodePatch(Model):
     model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
     name: Union[str, Unchanged]
@@ -19,7 +21,7 @@ class NodePatch(BaseModel):
     metadata: Union[MetadataPatch, Unchanged]
 
 
-class MetadataChanges(BaseModel):
+class MetadataChanges(Model):
     model_config = ConfigDict(
         extra="forbid", frozen=True, strict=True,
         json_schema_extra={
@@ -54,7 +56,7 @@ class MetadataChanges(BaseModel):
         )
 
 
-class NodeChanges(BaseModel):
+class NodeChanges(Model):
     model_config = ConfigDict(
         extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True,
         json_schema_extra={

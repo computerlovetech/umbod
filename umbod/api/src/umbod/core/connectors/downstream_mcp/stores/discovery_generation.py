@@ -1,18 +1,19 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import AllFields, DatabaseSession, Equals, Field, IntegerCodec, KeyCodec, Query, RowCodec, Table, TableIdentity, TextCodec, Unordered, UpsertCommand
 
 
-class DiscoveryGenerationRecord(BaseModel):
+class DiscoveryGenerationRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
     revision: int
 
 
-class DiscoveryGenerationKey(BaseModel):
+class DiscoveryGenerationKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str

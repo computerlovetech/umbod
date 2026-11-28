@@ -1,13 +1,14 @@
 from typing import Annotated
 
 from pydantic import (
-    BaseModel,
     ConfigDict,
     Field,
     AfterValidator,
     StringConstraints,
     field_validator,
 )
+
+from umbod.proxies import Model
 
 
 def require_nonblank_label(value: str) -> str:
@@ -29,7 +30,7 @@ GroupInstanceId = Annotated[
 ]
 
 
-class GroupIdentifier(BaseModel):
+class GroupIdentifier(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     group_id: str
@@ -59,7 +60,7 @@ class RegisterGroupMetadata(RegisterGroup):
     description: GroupDescription
 
 
-class UpdateGroupMetadata(BaseModel):
+class UpdateGroupMetadata(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     label: GroupLabel

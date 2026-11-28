@@ -1,7 +1,8 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     Field,
     KeyCodec,
@@ -13,7 +14,7 @@ from umbod.core.persistence import (
 )
 
 
-class ConnectorConfigurationRecord(BaseModel):
+class ConnectorConfigurationRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -21,20 +22,20 @@ class ConnectorConfigurationRecord(BaseModel):
     updated_at: str
 
 
-class ConnectorConfigurationKey(BaseModel):
+class ConnectorConfigurationKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
 
 
-class EncryptedConnectorConfigurationResult(BaseModel):
+class EncryptedConnectorConfigurationResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
     ciphertext: str
 
 
-class ConnectorConfigurationIdResult(BaseModel):
+class ConnectorConfigurationIdResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str

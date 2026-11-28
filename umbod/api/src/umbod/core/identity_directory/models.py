@@ -4,19 +4,20 @@ from typing import Annotated, Literal
 
 from pydantic import (
     AwareDatetime,
-    BaseModel,
     ConfigDict,
     Field,
     StringConstraints,
     model_validator,
 )
+
+from umbod.proxies import Model
 from typing_extensions import Self
 
 Nonblank = Annotated[str, StringConstraints(strict=True, pattern=r"\S")]
 EmailVerification = Literal["unknown", "verified", "unverified"]
 
 
-class DirectoryModel(BaseModel):
+class DirectoryModel(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 

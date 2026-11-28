@@ -1,13 +1,14 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from umbod.proxies import Model
 from umbod.config import defaults
 from umbod.config.app import OtlpReceiverConfig, RuntimeConfig, TelemetryAnalyticsConfig
 
 
-class TelemetryAppConfig(BaseModel):
+class TelemetryAppConfig(Model):
     model_config = ConfigDict(hide_input_in_errors=True)
 
     runtime: RuntimeConfig

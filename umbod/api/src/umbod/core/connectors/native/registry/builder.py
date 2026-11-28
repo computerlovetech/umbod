@@ -3,8 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Protocol, cast, runtime_checkable
 
-from pydantic import BaseModel, ValidationError
-from umbod.proxies import Model
+from pydantic import ValidationError
 from pydantic_core import PydanticUndefined
 
 from umbod.core.connectors.native.models import (
@@ -20,6 +19,7 @@ from umbod.core.connectors.native.registry.domain import (
     ConnectorResourceCatalogDescription,
 )
 from umbod.core.connectors.native.tools.descriptions import connector_tool_descriptions_from_registration
+from umbod.proxies import Model, is_pydantic_model_class
 
 
 def default_configuration_check(configuration: Model) -> ConnectorConfigurationCheckResult:
@@ -92,9 +92,7 @@ class ConnectorDefinitionBuilder:
         connector_id: str,
     ) -> type[Model]:
         configuration_schema = registration.get("configuration_schema")
-        if not (
-            isinstance(configuration_schema, type) and issubclass(configuration_schema, BaseModel)
-        ):
+        if not is_pydantic_model_class(configuration_schema):
             raise ValueError(f"connector {connector_id} needs to have a configuration schema")
         schema = cast(type[Model], configuration_schema)
         defaulted_fields = [

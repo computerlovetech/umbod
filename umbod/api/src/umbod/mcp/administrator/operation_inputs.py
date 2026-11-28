@@ -1,8 +1,9 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, WithJsonSchema
+from pydantic import ConfigDict, Field, StringConstraints, WithJsonSchema
 
+from umbod.proxies import Model
 from umbod.core.administrator import PatchGroupPermissions, SearchObservedUsers
 from umbod.core.administrator.connector_configuration import (
     ConnectorDesiredState,
@@ -36,7 +37,7 @@ __all__ = [
 ]
 
 
-class _OperationInput(BaseModel):
+class _OperationInput(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

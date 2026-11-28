@@ -1,10 +1,11 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
+from umbod.proxies import Model
 from umbod.core.activity.models import ActivityOverview, SessionPage, SessionReport
 from umbod.core.usage import UsageOwner
 
 
-class ActivityWindowQuery(BaseModel):
+class ActivityWindowQuery(Model):
     model_config = ConfigDict(extra="forbid")
 
     days: int = Field(default=7, ge=7, le=30)
@@ -17,7 +18,7 @@ class ActivityWindowQuery(BaseModel):
         return value
 
 
-class ActivityIdentity(BaseModel):
+class ActivityIdentity(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     owner: UsageOwner

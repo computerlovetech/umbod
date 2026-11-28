@@ -1,6 +1,8 @@
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
+
+from umbod.proxies import Model
 
 from ...namespaces.models import NamespacePolicy
 from ...models import Node, NodeId, Ownership
@@ -8,7 +10,7 @@ from ...authorization.discovery import AuthorizationGrant
 from ..models import Breadcrumbs, NodeSummary
 
 
-class ExplorationModel(BaseModel):
+class ExplorationModel(Model):
     model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
 
 

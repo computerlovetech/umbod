@@ -1,8 +1,9 @@
 import re
 from typing import Any, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from umbod.proxies import Model
 from umbod.core.capabilities.descriptions import CapabilityDescription
 
 
@@ -10,7 +11,7 @@ _IDENTIFIER_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
 _NON_ALPHANUMERIC = re.compile(r"[^a-z0-9]+")
 
 
-class ConnectorToolSearchCandidate(BaseModel):
+class ConnectorToolSearchCandidate(Model):
     model_config = ConfigDict(frozen=True)
 
     tool_name: str
@@ -32,7 +33,7 @@ class ConnectorToolSearchCandidate(BaseModel):
         return data
 
 
-class ConnectorToolSearchInput(BaseModel):
+class ConnectorToolSearchInput(Model):
     model_config = ConfigDict(frozen=True)
 
     query: str = Field(min_length=1)
@@ -45,7 +46,7 @@ class ConnectorToolSearchMatch(ConnectorToolSearchCandidate):
     relevance_score: float
 
 
-class ConnectorToolSearchOutput(BaseModel):
+class ConnectorToolSearchOutput(Model):
     matches: list[ConnectorToolSearchMatch]
 
 

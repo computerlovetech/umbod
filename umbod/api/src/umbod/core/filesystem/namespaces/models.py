@@ -1,14 +1,16 @@
 from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_serializer, field_validator, model_validator
+
+from umbod.proxies import Model
 
 from ..models import NodeId, Permission, Principal, PrincipalType
 from ..namespace import ROOT_ID
 from ..namespace import valid_name
 
 
-class NamespaceModel(BaseModel):
+class NamespaceModel(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 

@@ -2,14 +2,15 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.filesystem.models import InputName
 
 from ..nodes.models import FilesystemNodeMetadata, FilesystemNodeSummary
 
 
-class BeginUploadCommand(BaseModel):
+class BeginUploadCommand(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     parent_id: UUID
@@ -25,13 +26,13 @@ class BeginUploadCommand(BaseModel):
     )
 
 
-class CompleteUploadCommand(BaseModel):
+class CompleteUploadCommand(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     upload_id: UUID
 
 
-class CapabilityTransfer(BaseModel):
+class CapabilityTransfer(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     type: Literal["single"] = "single"
@@ -41,7 +42,7 @@ class CapabilityTransfer(BaseModel):
     instructions: str = "Treat the whole URL as sensitive. Send exactly the declared bytes with these required headers; host clients must send the exact Content-Length and browsers set it from the file. Do not follow redirects. Do not send MCP bearer credentials or cookies."
 
 
-class BeginUploadResult(BaseModel):
+class BeginUploadResult(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     upload_id: UUID
@@ -50,7 +51,7 @@ class BeginUploadResult(BaseModel):
     complete_tool: Literal["filesystem_complete_upload"] = "filesystem_complete_upload"
 
 
-class CompleteUploadResult(BaseModel):
+class CompleteUploadResult(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     node: FilesystemNodeSummary

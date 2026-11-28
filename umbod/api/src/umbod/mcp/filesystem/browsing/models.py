@@ -1,7 +1,8 @@
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import ConfigDict, Field, TypeAdapter
 
+from umbod.proxies import Model
 from umbod.core.filesystem.browsing.exploration import (
     BrowseTarget,
     DirectoryListing,
@@ -33,19 +34,19 @@ class FilesystemDirectoryTree(DirectoryTree):
     entries: list[FilesystemTreeEntry]
 
 
-class ResolveHome(BaseModel):
+class ResolveHome(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     operation: Literal["home"] = Field(description="Resolve the caller home directory; no target is accepted.")
 
 
-class ListNamespaces(BaseModel):
+class ListNamespaces(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     operation: Literal["namespaces"] = Field(description="List your personal namespace and accessible shared namespaces; no target is accepted.")
 
 
-class BrowseCommand(BaseModel):
+class BrowseCommand(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     target: BrowseTarget = Field(description="Select your personal root, an absolute path within personal files, or a node UUID from a namespace listing.")
@@ -73,41 +74,41 @@ FilesystemBrowseCommand = Annotated[
 ]
 
 
-class DirectoryListingResponse(BaseModel):
+class DirectoryListingResponse(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     operation: Literal["ls"]
     result: FilesystemDirectoryListing
 
 
-class DirectoryTreeResponse(BaseModel):
+class DirectoryTreeResponse(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     operation: Literal["tree"]
     result: FilesystemDirectoryTree
 
 
-class NodeInspectionResponse(BaseModel):
+class NodeInspectionResponse(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     operation: Literal["stat"]
     result: FilesystemNodeInspection
 
 
-class HomeResponse(BaseModel):
+class HomeResponse(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     operation: Literal["home"]
     result: FilesystemNodeInspection
 
 
-class NamespaceListing(BaseModel):
+class NamespaceListing(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     namespaces: list[NamespaceSummary]
 
 
-class NamespaceListingResponse(BaseModel):
+class NamespaceListingResponse(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     operation: Literal["namespaces"]

@@ -1,7 +1,6 @@
 from typing import cast
 
-from pydantic import BaseModel
-
+from umbod.proxies import Model
 from umbod.core.persistence import (
     Field,
     IntegerCodec,
@@ -16,7 +15,7 @@ from umbod.core.persistence import (
 from .models import SystemSettings
 
 
-class SystemSettingsKey(BaseModel):
+class SystemSettingsKey(Model):
     singleton: int
 
 

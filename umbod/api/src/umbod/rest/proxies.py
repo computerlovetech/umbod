@@ -1,8 +1,4 @@
-from pydantic import BaseModel
-
-
-class Model(BaseModel):
-    pass
+from umbod.proxies import Model
 
 
 __all__ = ["Model"]

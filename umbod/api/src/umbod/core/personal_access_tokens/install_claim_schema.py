@@ -1,8 +1,7 @@
 from datetime import datetime, timezone
 from typing import ClassVar, cast
 
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.persistence import ColumnCodec, ColumnType, Field, KeyCodec, PydanticJsonCodec, RowCodec, Table, TableIdentity, TextCodec
 
 from .install_claim_ports import InstallClaim, InstallClaimKey
@@ -33,4 +32,4 @@ CLAIM_TABLE = Table(
     ),
     KeyCodec(InstallClaimKey, cast(tuple[Field[InstallClaim, object], ...], (CLAIM_DIGEST,))),
 )
-INSTALL_CLAIM_TABLES = cast(tuple[Table[BaseModel, BaseModel], ...], (CLAIM_TABLE,))
+INSTALL_CLAIM_TABLES = cast(tuple[Table[PydanticModel, PydanticModel], ...], (CLAIM_TABLE,))

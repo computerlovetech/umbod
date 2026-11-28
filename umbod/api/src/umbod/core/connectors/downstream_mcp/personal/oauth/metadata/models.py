@@ -1,6 +1,8 @@
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 from ..configuration import (
     DynamicConfidentialOAuthClient,
@@ -10,7 +12,7 @@ from ..configuration import (
 )
 
 
-class MetadataModel(BaseModel):
+class MetadataModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 

@@ -6,8 +6,9 @@ from inspect import Parameter, Signature
 from typing import Any, Literal
 
 from fastmcp.experimental.transforms.code_mode import MontySandboxProvider
-from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter
+from pydantic import ConfigDict, JsonValue, TypeAdapter
 
+from umbod.proxies import Model
 from umbod.mcp.connectors.native.tools.infrastructure.authorization import (
     ConnectorToolAuthorizationScope,
 )
@@ -15,14 +16,14 @@ from umbod.mcp.connectors.native.tools.runtime.registry import RuntimeConnectorT
 from umbod.mcp.connectors.native.tools.invocation.errors import ConnectorToolFailureResult, ConnectorToolRecoveryResult
 
 
-class SuccessfulNestedConnectorCall(BaseModel):
+class SuccessfulNestedConnectorCall(Model):
     tool_name: str
     arguments: Mapping[str, Any]
     outcome: Literal["success"] = "success"
     result: Any
 
 
-class FailedNestedConnectorCall(BaseModel):
+class FailedNestedConnectorCall(Model):
     tool_name: str
     arguments: Mapping[str, Any]
     outcome: Literal["failure"] = "failure"
@@ -32,12 +33,12 @@ class FailedNestedConnectorCall(BaseModel):
 NestedConnectorCall = SuccessfulNestedConnectorCall | FailedNestedConnectorCall
 
 
-class OpenApiNestedCallArguments(BaseModel):
+class OpenApiNestedCallArguments(Model):
     connector_id: str
     operation_id: str
 
 
-class OpenApiCodeModeInvocation(BaseModel):
+class OpenApiCodeModeInvocation(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -48,21 +49,21 @@ class OpenApiCodeModeInvocation(BaseModel):
     body: JsonValue
 
 
-class SuccessfulCodeExecution(BaseModel):
+class SuccessfulCodeExecution(Model):
     outcome: Literal["success"] = "success"
     final_value: Any
     printed_output: str
     nested_calls: list[NestedConnectorCall]
 
 
-class FailedCodeExecution(BaseModel):
+class FailedCodeExecution(Model):
     outcome: Literal["failure"] = "failure"
     printed_output: str
     error: str
     nested_calls: list[NestedConnectorCall]
 
 
-class TimedOutCodeExecution(BaseModel):
+class TimedOutCodeExecution(Model):
     outcome: Literal["timeout"] = "timeout"
     printed_output: str
     error: str

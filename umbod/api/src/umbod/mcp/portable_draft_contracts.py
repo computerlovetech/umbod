@@ -3,8 +3,9 @@ from uuid import UUID
 
 from fastmcp.tools import ToolResult
 from mcp.types import TextContent
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import ConfigDict, Field, TypeAdapter
 
+from umbod.proxies import Model
 from umbod.core.connectors.portable.draft_validation import DraftDiagnostic, DraftValidationReport, ValidationChecks
 from umbod.core.connectors.portable.draft_validation.models import DiagnosticStage, ValidationStatus
 from umbod.core.connectors.portable.drafts import MAX_DRAFT_SOURCE_BYTES, DraftReceipt
@@ -13,7 +14,7 @@ from umbod.core.connectors.portable.managed import ManagedConnectorReceipt
 SOURCE_GUIDANCE = "Provide complete, nonblank Python source as text (maximum 64 KiB in UTF-8). Do not include secrets."
 
 
-class CreateDraftInput(BaseModel):
+class CreateDraftInput(Model):
     model_config = ConfigDict(extra="forbid")
 
     source: Annotated[str, Field(min_length=1, max_length=MAX_DRAFT_SOURCE_BYTES, description=SOURCE_GUIDANCE)]
@@ -24,14 +25,14 @@ class SaveRevisionInput(CreateDraftInput):
     expected_revision_id: Annotated[UUID, Field(description="Current head revision UUID from the most recent successful write; stale revisions cannot be overwritten.")]
 
 
-class ValidateRevisionInput(BaseModel):
+class ValidateRevisionInput(Model):
     model_config = ConfigDict(extra="forbid")
 
     draft_id: Annotated[UUID, Field(description="Draft UUID returned by portable_connector_create_draft.")]
     revision_id: Annotated[UUID, Field(description="Exact saved revision UUID to check, even if the head has moved.")]
 
 
-class SubmitRevisionInput(BaseModel):
+class SubmitRevisionInput(Model):
     model_config = ConfigDict(extra="forbid")
 
     draft_id: Annotated[UUID, Field(description="Private draft UUID you own, returned by portable_connector_create_draft.")]

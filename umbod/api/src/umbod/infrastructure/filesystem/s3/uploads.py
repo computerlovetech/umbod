@@ -2,8 +2,9 @@ import hashlib
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlsplit
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.filesystem import ContentRef, StorageFailure
 from umbod.core.filesystem.uploads.errors import UploadConflict, UploadLengthMismatch, UploadMediaTypeMismatch
 from umbod.core.filesystem.uploads.models import (
@@ -15,7 +16,7 @@ from .edge import ClientProvider, ResponseBody
 from .lifecycle import client_scope, finish, settle
 
 
-class TransferMetadata(BaseModel):
+class TransferMetadata(Model):
     model_config = ConfigDict(strict=True)
 
     ContentLength: int

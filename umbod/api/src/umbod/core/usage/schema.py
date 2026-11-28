@@ -1,7 +1,8 @@
 from typing import Annotated, cast
 
-from pydantic import BaseModel, Field as ModelField
+from pydantic import Field as ModelField
 
+from umbod.proxies import PydanticModel
 from umbod.core.persistence import Field, IntegerCodec, KeyCodec, RowCodec, Table, TableIdentity, TextCodec
 from .models import OwnerId, ToolId, ToolLabel, UsageModel
 
@@ -86,4 +87,4 @@ TOOL_DAILY_TABLE = Table(
     ))),
     KeyCodec(UsageToolDailyKey, TOOL_DAILY_KEY_FIELDS),
 )
-USAGE_TABLES = cast(tuple[Table[BaseModel, BaseModel], ...], (EVENT_TABLE, ROLLUP_TABLE, TOOL_DAILY_TABLE))
+USAGE_TABLES = cast(tuple[Table[PydanticModel, PydanticModel], ...], (EVENT_TABLE, ROLLUP_TABLE, TOOL_DAILY_TABLE))

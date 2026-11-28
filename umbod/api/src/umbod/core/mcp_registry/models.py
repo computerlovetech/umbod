@@ -1,7 +1,8 @@
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AfterValidator, ConfigDict, Field, StringConstraints
 
+from umbod.proxies import Model
 from umbod.core.connectors.downstream_mcp.personal.oauth.metadata import MetadataEndpoint
 
 
@@ -20,7 +21,7 @@ RegistryEndpointUrl = Annotated[
 NonBlankText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
-class RegistrySearch(BaseModel):
+class RegistrySearch(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     term: Annotated[
@@ -30,14 +31,14 @@ class RegistrySearch(BaseModel):
     cursor: Annotated[str, StringConstraints(max_length=2048)] = ""
 
 
-class RegistryEndpoint(BaseModel):
+class RegistryEndpoint(Model):
     model_config = ConfigDict(frozen=True)
 
     url: RegistryEndpointUrl
     required_headers: tuple[NonBlankText, ...]
 
 
-class RegistryServer(BaseModel):
+class RegistryServer(Model):
     model_config = ConfigDict(frozen=True)
 
     name: NonBlankText
@@ -48,7 +49,7 @@ class RegistryServer(BaseModel):
     endpoints: Annotated[tuple[RegistryEndpoint, ...], Field(min_length=1)]
 
 
-class RegistryPage(BaseModel):
+class RegistryPage(Model):
     model_config = ConfigDict(frozen=True)
 
     servers: tuple[RegistryServer, ...]

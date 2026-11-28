@@ -1,7 +1,8 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     BooleanCodec,
     Field,
@@ -15,7 +16,7 @@ from umbod.core.persistence import (
 )
 
 
-class PublicationStateRecord(BaseModel):
+class PublicationStateRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -25,13 +26,13 @@ class PublicationStateRecord(BaseModel):
     updated_at: str
 
 
-class PublicationStateKey(BaseModel):
+class PublicationStateKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
 
 
-class PublicationStateResult(BaseModel):
+class PublicationStateResult(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     published: bool
@@ -40,7 +41,7 @@ class PublicationStateResult(BaseModel):
     updated_at: str
 
 
-class PublicationStateWrite(BaseModel):
+class PublicationStateWrite(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     published: bool

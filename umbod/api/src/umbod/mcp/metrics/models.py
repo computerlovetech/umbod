@@ -1,6 +1,8 @@
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, PositiveFloat
+from pydantic import ConfigDict, PositiveFloat
+
+from umbod.proxies import Model
 
 
 class InvocationOutcome(StrEnum):
@@ -13,7 +15,7 @@ class InvocationScope(StrEnum):
     REQUEST = "request"
 
 
-class ToolInvocationMetricIdentity(BaseModel):
+class ToolInvocationMetricIdentity(Model):
     model_config = ConfigDict(frozen=True)
 
     scope: InvocationScope
@@ -21,7 +23,7 @@ class ToolInvocationMetricIdentity(BaseModel):
     tool_name: str
 
 
-class CompletedToolInvocation(BaseModel):
+class CompletedToolInvocation(Model):
     model_config = ConfigDict(frozen=True)
 
     scope: InvocationScope

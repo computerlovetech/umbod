@@ -1,14 +1,13 @@
 from dataclasses import dataclass
 from typing import Generic, Literal, Optional, Protocol, TypeVar, cast, overload
 
-from pydantic import BaseModel
-
+from umbod.proxies import PydanticModel
 from umbod.core.persistence.ports import ReadSession
 from umbod.core.persistence.query import Query, Table, validate_query
 
-RowT = TypeVar("RowT", bound=BaseModel)
-KeyT = TypeVar("KeyT", bound=BaseModel)
-ResultT = TypeVar("ResultT", bound=BaseModel)
+RowT = TypeVar("RowT", bound=PydanticModel)
+KeyT = TypeVar("KeyT", bound=PydanticModel)
+ResultT = TypeVar("ResultT", bound=PydanticModel)
 
 
 @dataclass(frozen=True, eq=False)
@@ -25,7 +24,7 @@ class ReadResults:
     def __init__(
         self,
         owner: object,
-        values: dict[ManyRead[BaseModel] | OneRead[BaseModel], object],
+        values: dict[ManyRead[PydanticModel] | OneRead[PydanticModel], object],
     ) -> None:
         self._owner = owner
         self._values = dict(values)
@@ -58,8 +57,8 @@ class ReadPlanOperations(Protocol):
 
 @dataclass(frozen=True)
 class _Read:
-    table: Table[BaseModel, BaseModel]
-    query: Query[BaseModel, BaseModel]
+    table: Table[PydanticModel, PydanticModel]
+    query: Query[PydanticModel, PydanticModel]
     cardinality: Literal["many", "one"]
 
     async def run(self, session: ReadSession) -> object:
@@ -98,7 +97,7 @@ class ReadPlan:
         self._owner = object()
         self._frozen = False
         self._reads: list[_Read] = []
-        self._handles: list[ManyRead[BaseModel] | OneRead[BaseModel]] = []
+        self._handles: list[ManyRead[PydanticModel] | OneRead[PydanticModel]] = []
 
     def find_many(
         self, table: Table[RowT, KeyT], query: Query[RowT, ResultT]
@@ -126,12 +125,12 @@ class ReadPlan:
         validate_query(table, query)
         self._reads.append(
             _Read(
-                cast(Table[BaseModel, BaseModel], table),
-                cast(Query[BaseModel, BaseModel], query),
+                cast(Table[PydanticModel, PydanticModel], table),
+                cast(Query[PydanticModel, PydanticModel], query),
                 cardinality,
             )
         )
-        self._handles.append(cast(ManyRead[BaseModel] | OneRead[BaseModel], handle))
+        self._handles.append(cast(ManyRead[PydanticModel] | OneRead[PydanticModel], handle))
 
     async def execute(self, session: ReadSession) -> ReadResults:
         self._frozen = True

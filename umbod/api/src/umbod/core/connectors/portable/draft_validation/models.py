@@ -2,7 +2,9 @@ from dataclasses import dataclass, field
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from umbod.proxies import Model
 
 
 type ValidationStatus = Literal["valid", "invalid", "inconclusive"]
@@ -42,7 +44,7 @@ class ValidationOutcome:
     diagnostics_truncated: bool
 
 
-class ValidatedManifestSnapshot(BaseModel):
+class ValidatedManifestSnapshot(Model):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     manifest_version: Literal[1, 2]

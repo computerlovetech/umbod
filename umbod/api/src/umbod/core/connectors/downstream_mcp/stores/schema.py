@@ -1,7 +1,8 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     Field,
     JsonValueCodec,
@@ -13,7 +14,7 @@ from umbod.core.persistence import (
 )
 
 
-class PersonalConnectionRecord(BaseModel):
+class PersonalConnectionRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     namespace: str
@@ -22,7 +23,7 @@ class PersonalConnectionRecord(BaseModel):
     document: str
 
 
-class PersonalConnectionRecordKey(BaseModel):
+class PersonalConnectionRecordKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     namespace: str
@@ -57,7 +58,7 @@ PERSONAL_CONNECTION_TABLE = Table(
 )
 
 
-class ConnectorDefinitionRecord(BaseModel):
+class ConnectorDefinitionRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
@@ -66,46 +67,46 @@ class ConnectorDefinitionRecord(BaseModel):
     capability_description: str
 
 
-class ConnectorDefinitionKey(BaseModel):
+class ConnectorDefinitionKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
 
 
-class ConnectorCredentialRecord(BaseModel):
+class ConnectorCredentialRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
     document: str
 
 
-class ConnectorCredentialKey(BaseModel):
+class ConnectorCredentialKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
 
 
-class ToolCatalogRecord(BaseModel):
+class ToolCatalogRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
     snapshot: dict[str, object]
 
 
-class ToolCatalogKey(BaseModel):
+class ToolCatalogKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
 
 
-class ConnectorHealthRecord(BaseModel):
+class ConnectorHealthRecord(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str
     document: dict[str, object]
 
 
-class ConnectorHealthKey(BaseModel):
+class ConnectorHealthKey(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     connector_id: str

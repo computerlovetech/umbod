@@ -1,12 +1,13 @@
 from collections.abc import Sequence
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from umbod.proxies import Model
 from umbod.core.capabilities.descriptions import CapabilityDescription
 from umbod.mcp.connectors.native.tools.discovery.search import ConnectorToolSearchCandidate
 
 
-class ConnectorCapabilityDomain(BaseModel):
+class ConnectorCapabilityDomain(Model):
     model_config = ConfigDict(frozen=True)
 
     connector_id: str = Field(min_length=1)
@@ -15,7 +16,7 @@ class ConnectorCapabilityDomain(BaseModel):
     operation_count: int = Field(ge=1)
 
 
-class ConnectorCapabilityManifest(BaseModel):
+class ConnectorCapabilityManifest(Model):
     model_config = ConfigDict(frozen=True)
 
     domains: tuple[ConnectorCapabilityDomain, ...]

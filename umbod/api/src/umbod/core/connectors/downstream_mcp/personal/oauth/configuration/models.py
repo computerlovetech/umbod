@@ -4,7 +4,6 @@ from urllib.parse import unquote, urlsplit
 
 from pydantic import (
     AfterValidator,
-    BaseModel,
     ConfigDict,
     Field,
     SecretStr,
@@ -12,8 +11,10 @@ from pydantic import (
     field_validator,
 )
 
+from umbod.proxies import Model
 
-class OAuthConfigurationModel(BaseModel):
+
+class OAuthConfigurationModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

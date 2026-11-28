@@ -5,7 +5,6 @@ from urllib.parse import urljoin, urlsplit
 import anyio
 import httpx
 from pydantic import (
-    BaseModel,
     ConfigDict,
     Field,
     FiniteFloat,
@@ -16,6 +15,7 @@ from pydantic import (
 )
 
 
+from umbod.proxies import Model
 from umbod.core.network.http import (
     AsyncHttpClient,
     ClientHttpTimeout,
@@ -33,7 +33,7 @@ class HttpRequestError(RuntimeError):
     pass
 
 
-class OutboundHttpClientOptions(BaseModel):
+class OutboundHttpClientOptions(Model):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     use_environment_settings: bool
@@ -113,7 +113,7 @@ class OutboundHttpClientFactory:
         return HttpxClientProxy(client)
 
 
-class JsonHttpLimits(BaseModel):
+class JsonHttpLimits(Model):
     model_config = ConfigDict(frozen=True)
 
     timeout_seconds: PositiveFloat = 10.0

@@ -1,7 +1,8 @@
 from typing import cast
 
-from pydantic import BaseModel, ConfigDict, RootModel
+from pydantic import ConfigDict, RootModel
 
+from umbod.proxies import Model
 from umbod.core.persistence import (
     Field,
     IntegerCodec,
@@ -19,7 +20,7 @@ class StoredProviderGroupMappings(RootModel[ProviderGroupMappings]):
     model_config = ConfigDict(frozen=True)
 
 
-class ProviderGroupMappingsKey(BaseModel):
+class ProviderGroupMappingsKey(Model):
     singleton: int
 
 

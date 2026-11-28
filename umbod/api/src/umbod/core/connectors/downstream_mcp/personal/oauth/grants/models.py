@@ -5,7 +5,6 @@ from typing import Annotated, Literal
 
 from pydantic import (
     AwareDatetime,
-    BaseModel,
     ConfigDict,
     Field,
     SecretStr,
@@ -13,13 +12,15 @@ from pydantic import (
     model_validator,
 )
 
+from umbod.proxies import Model
+
 from ..configuration import OAuthClientId, OAuthIssuer, OAuthScopes
 from ..applications import AbsentApplicationReference, ApplicationReference
 from ...connections import Authorized, PersonalConnectionKey
 from ..callback import OAuthCallbackURI
 
 
-class PersonalGrantModel(BaseModel):
+class PersonalGrantModel(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 

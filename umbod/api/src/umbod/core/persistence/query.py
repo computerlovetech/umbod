@@ -6,13 +6,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import ClassVar, Generic, Protocol, TypeAlias, TypeVar, cast
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
+
+from umbod.proxies import Model, PydanticModel
 
 
-RowT = TypeVar("RowT", bound=BaseModel)
-KeyT = TypeVar("KeyT", bound=BaseModel)
+RowT = TypeVar("RowT", bound=PydanticModel)
+KeyT = TypeVar("KeyT", bound=PydanticModel)
 ValueT = TypeVar("ValueT")
-ResultT = TypeVar("ResultT", bound=BaseModel)
+ResultT = TypeVar("ResultT", bound=PydanticModel)
 
 
 class PersistenceDecodingError(ValueError):
@@ -112,7 +114,7 @@ class JsonTupleCodec(ColumnCodec[tuple[ValueT, ...]], Generic[ValueT]):
         return tuple(cast(list[ValueT], decoded))
 
 
-ModelT = TypeVar("ModelT", bound=BaseModel)
+ModelT = TypeVar("ModelT", bound=PydanticModel)
 
 
 @dataclass(frozen=True)
@@ -331,7 +333,7 @@ class DeleteQuery(Generic[RowT]):
     filter: Predicate[RowT]
 
 
-class InsertCommand(BaseModel, Generic[RowT]):
+class InsertCommand(Model, Generic[RowT]):
     model_config = ConfigDict(frozen=True)
     row: RowT
 
@@ -342,7 +344,7 @@ class GeneratedIntegerKeyInsertCommand(Generic[RowT]):
     generated_field: Field[RowT, int]
 
 
-class UpsertCommand(BaseModel, Generic[RowT, KeyT]):
+class UpsertCommand(Model, Generic[RowT, KeyT]):
     model_config = ConfigDict(frozen=True)
     key: KeyT
     row: RowT
@@ -365,7 +367,7 @@ def validate_query(
 
 
 def _encode_model(
-    table: Table[RowT, KeyT], model: BaseModel, fields: tuple[Field[RowT, object], ...]
+    table: Table[RowT, KeyT], model: PydanticModel, fields: tuple[Field[RowT, object], ...]
 ) -> dict[str, object]:
     values: dict[str, object] = {}
     for field_descriptor in fields:
