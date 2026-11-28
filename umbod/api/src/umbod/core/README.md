@@ -19,6 +19,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [cleanup](./cleanup/README.md) — Explicit one-shot jobs, sequential time bounds and safe failure continuation.
 - [configuration](./configuration/) — Encrypted connector configuration.
 - [connectors](./connectors/README.md) — Native, OpenAPI and downstream MCP connectors.
+- [credential_expiry.py](./credential_expiry.py) — Shared finite and never-expiring credential lifetimes.
 - [diagnostics](./diagnostics/README.md) — Safe failure-event snapshots and signal publication contracts.
 - [filesystem](./filesystem/README.md) — Namespaces, content and access policy.
 - [groups](./groups/README.md) — Group catalogue.

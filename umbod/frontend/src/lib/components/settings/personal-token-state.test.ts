@@ -19,9 +19,8 @@ describe('token expiration', (): void => {
     let now = Date.parse('2030-03-01T12:30:00Z');
     const state = new PersonalTokenState(api, { writeText: async (): Promise<void> => {} }, (): number => now);
     const post = vi.spyOn(api, 'create');
-    expect(state.expirationDays).toBe(30);
-    expect(state.expirationOptions).toEqual([7, 30, 60, 90]);
-    state.setExpirationDays(days);
+    expect(state.expiration).toBe('30');
+    state.selectExpiration(String(days));
     state.setTokenName(' Logs ');
     state.setAgentLogs(true);
     await state.load();
@@ -34,8 +33,8 @@ describe('token expiration', (): void => {
     };
     expect(post).toHaveBeenCalledExactlyOnceWith(expected);
     expect(api.rows[0].expires_at).toBe(expected.expires_at);
-    state.setExpirationDays(0);
-    expect(state.expirationDays).toBe(days);
+    state.selectExpiration('0');
+    expect(state.expiration).toBe(String(days));
     expect(state.error).toContain('supported expiration');
   });
 });
@@ -50,7 +49,7 @@ describe('token creation dialog', (): void => {
     expect(state.createDialogOpen).toBe(true);
     state.setTokenName('My logs');
     state.setAgentLogs(true);
-    state.setExpirationDays(7);
+    state.selectExpiration('7');
     await state.create();
     expect(state.issuedToken).toBe('test-only-secret');
     state.closeCreate();
@@ -59,7 +58,7 @@ describe('token creation dialog', (): void => {
     state.openCreate();
     expect(state.tokenName).toBe('');
     expect(state.allowsAgentLogs).toBe(false);
-    expect(state.expirationDays).toBe(30);
+    expect(state.expiration).toBe('30');
     state.dispose();
     expect(state.createDialogOpen).toBe(false);
     state.openCreate();
@@ -301,6 +300,16 @@ describe('token management', (): void => {
     await pending;
     expect(state.tokens).toHaveLength(1);
     expect(state.issuedToken).toBe('');
+  });
+  it('retains the one-time display on refresh while a non-expiring token is active', async (): Promise<void> => {
+    const api = new InMemoryPersonalAccessTokens();
+    const state = configured(api);
+    state.selectExpiration('never');
+    await state.load();
+    await state.create();
+    await state.load();
+    expect(state.tokens[0]?.expires_at).toBeNull();
+    expect(state.issuedToken).toBe('test-only-secret');
   });
   it.each(['revoked', 'missing', 'expired'] as const)('clears the displayed secret after refresh finds its token %s', async (change): Promise<void> => {
     const api = new InMemoryPersonalAccessTokens();

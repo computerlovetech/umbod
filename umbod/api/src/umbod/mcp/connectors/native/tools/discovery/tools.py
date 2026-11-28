@@ -14,7 +14,7 @@ from umbod.mcp.connectors.native.tools.discovery.manifest import (
     ConnectorCapabilityManifestFormatter,
     ConnectorCapabilityManifestService,
 )
-from umbod.core.callers import GroupMembership
+from umbod.mcp.authorization import agent_platform_tool_auth
 from umbod.mcp.connectors.openapi.discovery_runtime import AuthorizedOpenApiDiscoveryCatalog
 from umbod.mcp.connectors.native.tools.discovery.openapi import (
     NormalizedOpenApiConnectorDiscovery,
@@ -29,10 +29,7 @@ from umbod.mcp.connectors.native.tools.infrastructure.dependencies import (
     get_connector_tool_registry,
     get_connector_tool_search,
 )
-from umbod.mcp.connectors.openapi import (
-    capture_openapi_groups,
-    get_group_permission_reader,
-)
+from umbod.mcp.connectors.openapi.deps import capture_openapi_permissions
 
 SearchQuery = Annotated[str, Field(description="Text used to find accessible connector tools.")]
 SearchLimit = Annotated[
@@ -58,16 +55,11 @@ async def search_tools(
     connector_ids: ConnectorIds,
 ) -> ConnectorToolSearchOutput:
     server = get_server()
-    groups = (
-        capture_openapi_groups(server)
-        if getattr(server, "include_openapi_in_connector_search", False)
-        else GroupMembership(group_ids=())
-    )
     search = get_connector_tool_search()
     registry = get_connector_tool_registry()
     allowed_tool_refs = get_allowed_connector_tool_refs()
     discovery = (
-        await _openapi_discovery(server, groups)
+        await _openapi_discovery(server)
         if getattr(server, "include_openapi_in_connector_search", False)
         else None
     )
@@ -84,11 +76,10 @@ async def search_tools(
     )
 
 
-async def _openapi_discovery(server: FastMCP, groups: GroupMembership) -> OpenApiConnectorDiscovery:
+async def _openapi_discovery(server: FastMCP) -> OpenApiConnectorDiscovery:
     capabilities = server.openapi_discovery_catalog.snapshot()
-    catalog = AuthorizedOpenApiDiscoveryCatalog(
-        capabilities, await get_group_permission_reader(server), groups.group_ids,
-    )
+    permissions = await capture_openapi_permissions(server)
+    catalog = AuthorizedOpenApiDiscoveryCatalog(capabilities, permissions.reader, permissions.groups)
     return NormalizedOpenApiConnectorDiscovery(catalog)
 
 
@@ -100,15 +91,10 @@ class ConnectorSearchManifestTransform(Transform):
 
     async def list_tools(self, tools: Sequence[Tool]) -> Sequence[Tool]:
         server = get_server()
-        groups = (
-            capture_openapi_groups(server)
-            if getattr(server, "include_openapi_in_connector_search", False)
-            else GroupMembership(group_ids=())
-        )
         registry = get_connector_tool_registry()
         authorization_scope = get_allowed_connector_tool_refs()
         discovery = (
-            await _openapi_discovery(server, groups)
+            await _openapi_discovery(server)
             if getattr(server, "include_openapi_in_connector_search", False)
             else None
         )
@@ -129,7 +115,7 @@ def register_connector_search_tool(mcp: FastMCP, description: str, registrar: Mc
     scoped_description = f"{description}{_SCOPE_DESCRIPTION}"
     registrar.register(
         search_tools,
-        auth=None,
+        auth=agent_platform_tool_auth(mcp),
         name="search_tools",
         description=scoped_description,
         tags={"connectors", "gateway"},

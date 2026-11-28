@@ -8,7 +8,7 @@ from umbod.core.connectors.openapi.execution import (
     OpenApiOperationInput,
 )
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
-from umbod.core.permissions.ports import GroupPermissionReader
+from umbod.core.permissions.ports import GroupPermissionLookup, GroupPermissionReader
 
 
 class OpenApiExecutionService(Protocol):
@@ -21,7 +21,7 @@ class OpenApiExecutionServiceFactory(Protocol):
     async def create(
         self,
         store: OpenApiConnectorStore,
-        permission_reader: GroupPermissionReader,
+        permission_reader: GroupPermissionLookup,
         client: AsyncStreamingHttpClient,
         execution_pipeline: ToolExecutionPipeline[OpenApiExecutionResponse],
     ) -> OpenApiExecutionService: ...

@@ -55,6 +55,7 @@ from umbod.rest.instance_configuration import router as instance_configuration_r
 from umbod.rest.instance_configuration.dependencies import get_app_config
 from umbod.rest.mcp_permissions import router as mcp_permission_router
 from umbod.rest.groups import router as groups_router
+from umbod.rest.agent_tokens import router as agent_tokens_router
 from umbod.rest.identity_directory.routes import admin_router as identity_directory_admin_router, personal_router as identity_directory_personal_router
 from umbod.rest.metrics import (
     AdminRestMetricsMiddleware,
@@ -189,6 +190,7 @@ def _mount_admin_app(
     admin_router.include_router(capability_description_router)
     admin_router.include_router(mcp_permission_router)
     admin_router.include_router(groups_router)
+    admin_router.include_router(agent_tokens_router)
     admin_router.include_router(identity_directory_admin_router)
     admin_router.include_router(admin_overview_router)
     admin_router.include_router(agent_behaviour_router)

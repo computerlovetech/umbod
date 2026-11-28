@@ -10,6 +10,7 @@ class AuthenticationProvenance(StrEnum):
     LOCAL_SIMULATION = "local_simulation"
     LOCAL_SEMANTIC = "local_semantic"
     LOCAL_TEST = "local_test"
+    AGENT_CREDENTIAL = "agent_credential"
     UNAVAILABLE = "unavailable"
 
 
@@ -52,8 +53,11 @@ class CallerContext(BaseModel):
 
     @model_validator(mode="after")
     def validate_authentication(self) -> Self:
-        if self.authentication == AuthenticationProvenance.UNAVAILABLE and isinstance(self.subject, SubjectIdentity):
-            raise ValueError("Unavailable authentication cannot establish a subject")
+        if self.authentication in {
+            AuthenticationProvenance.AGENT_CREDENTIAL,
+            AuthenticationProvenance.UNAVAILABLE,
+        } and isinstance(self.subject, SubjectIdentity):
+            raise ValueError("Authentication provenance cannot establish a human subject")
         return self
 
 

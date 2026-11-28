@@ -16,17 +16,17 @@ from umbod.core.callers import (
     UnavailableIssuer,
     UnavailableSubject,
 )
+from umbod.mcp.auth.agent_tokens import effective_oauth_provider, is_agent_access_token
 from umbod.mcp.auth.local_test_auth import SingleTestUserOAuthProvider
 
 
 def caller_context_from_access_token(
     token: object, authentication: AuthenticationProvenance,
 ) -> CallerContext:
-    if token is None or authentication == AuthenticationProvenance.UNAVAILABLE:
-        return CallerContext(
-            authentication=AuthenticationProvenance.UNAVAILABLE,
-            subject=UnavailableSubject(kind="unavailable"),
-        )
+    if token is None:
+        authentication = AuthenticationProvenance.UNAVAILABLE
+    if authentication in {AuthenticationProvenance.AGENT_CREDENTIAL, AuthenticationProvenance.UNAVAILABLE}:
+        return CallerContext(authentication=authentication, subject=UnavailableSubject(kind="unavailable"))
     observed_claims = getattr(token, "claims", {})
     claims = observed_claims if isinstance(observed_claims, Mapping) else {}
     subject = claims.get("sub")
@@ -52,11 +52,17 @@ def authentication_provenance(provider: object) -> AuthenticationProvenance:
     return AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED
 
 
+def authentication_provenance_for_token(provider: object, token: object) -> AuthenticationProvenance:
+    if token is None:
+        return AuthenticationProvenance.UNAVAILABLE
+    if is_agent_access_token(provider, token):
+        return AuthenticationProvenance.AGENT_CREDENTIAL
+    effective_provider = effective_oauth_provider(provider, token)
+    if effective_provider is None and provider is not None:
+        return AuthenticationProvenance.UNAVAILABLE
+    return authentication_provenance(effective_provider)
+
+
 def get_caller_context(server: Annotated[FastMCP, CurrentFastMCP()]) -> CallerContext:
-    provider = server.auth
-    authentication = (
-        authentication_provenance(provider)
-        if provider is not None
-        else AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED
-    )
-    return caller_context_from_access_token(get_access_token(), authentication)
+    token = get_access_token()
+    return caller_context_from_access_token(token, authentication_provenance_for_token(server.auth, token))

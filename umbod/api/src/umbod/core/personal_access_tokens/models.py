@@ -1,10 +1,8 @@
-from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Annotated, Self
 
 from pydantic import (
     AfterValidator,
-    AwareDatetime,
     BaseModel,
     ConfigDict,
     Field,
@@ -12,6 +10,8 @@ from pydantic import (
     StringConstraints,
     model_validator,
 )
+
+from umbod.core.credential_expiry import CredentialExpiry, UtcDatetime, is_expired
 
 
 def nonblank(value: str) -> str:
@@ -32,10 +32,6 @@ def unique_scopes(values: tuple[str, ...]) -> tuple[str, ...]:
     return values
 
 
-def utc(value: datetime) -> datetime:
-    return value.astimezone(timezone.utc)
-
-
 BoundedText = Annotated[
     str,
     StringConstraints(strict=True, min_length=1, max_length=256),
@@ -49,7 +45,6 @@ Scope = Annotated[
 ]
 Scopes = Annotated[tuple[Scope, ...], AfterValidator(unique_scopes)]
 TokenId = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{32}$")]
-UtcDatetime = Annotated[AwareDatetime, AfterValidator(utc)]
 
 
 class TokenModel(BaseModel):
@@ -77,7 +72,7 @@ class IssuePersonalAccessToken(TokenModel):
     name: BoundedText
     audience: BoundedText
     scopes: Scopes
-    expires_at: UtcDatetime
+    expires_at: CredentialExpiry
 
 
 class ValidatePersonalAccessToken(TokenModel):
@@ -98,12 +93,12 @@ class PersonalAccessTokenMetadata(TokenModel):
     audience: BoundedText
     scopes: Scopes
     created_at: UtcDatetime
-    expires_at: UtcDatetime
+    expires_at: CredentialExpiry
     status: PersonalAccessTokenStatus
 
     @model_validator(mode="after")
     def validate_lifetime(self) -> Self:
-        if self.expires_at <= self.created_at:
+        if is_expired(self.expires_at, self.created_at):
             raise ValueError("Expiry must be after creation")
         return self
 

@@ -8,8 +8,8 @@ from fastmcp.server.dependencies import get_access_token
 
 from umbod.core.callers import AuthenticationProvenance, CallerContext, SubjectIdentity
 from umbod.core.usage.models import UsageOwnership
-from umbod.mcp.usage.identity import resolve_mcp_usage_owner
-from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
+from umbod.mcp.auth.agent_tokens import effective_oauth_provider, verified_agent_identity
+from umbod.mcp.auth.caller import authentication_provenance_for_token, caller_context_from_access_token
 from umbod.mcp.logging.audit.event import (
     McpAnonymousAuditActor,
     McpAuditActorState,
@@ -17,6 +17,7 @@ from umbod.mcp.logging.audit.event import (
     McpAuthenticatedAuditActor,
 )
 from umbod.mcp.signals.events import McpInvocationActor
+from umbod.mcp.usage.identity import resolve_mcp_usage_owner
 
 _USER_ID_FALLBACK_FIELDS = ("email", "preferred_username")
 
@@ -91,13 +92,15 @@ class McpAuditIdentityAdapter:
 
 def _request_identity_snapshot(fastmcp_context: object) -> _RequestIdentitySnapshot:
     server = getattr(fastmcp_context, "fastmcp", None)
-    authentication = authentication_provenance(getattr(server, "auth", None))
-    snapshot = _access_token_snapshot(get_access_token(), authentication)
+    provider = getattr(server, "auth", None)
+    token = get_access_token()
+    oauth_provider = effective_oauth_provider(provider, token)
+    snapshot = _access_token_snapshot(provider, token, oauth_provider)
     configured_issuer = getattr(server, 'usage_identity_issuer', '')
     return _normalize_request_identity(
         snapshot, _framework_context_snapshot(fastmcp_context),
         resolve_mcp_usage_owner(
-            snapshot.caller, getattr(server, 'auth', None),
+            snapshot.caller, oauth_provider,
             configured_issuer if isinstance(configured_issuer, str) else '',
         ),
     )
@@ -140,12 +143,18 @@ def _present_metadata(**values: str | None) -> Mapping[str, str]:
 
 
 def _access_token_snapshot(
-    token: object, authentication: AuthenticationProvenance,
+    provider: object, token: object, oauth_provider: object,
 ) -> _AccessTokenSnapshot:
+    authentication = authentication_provenance_for_token(provider, token)
+    caller = caller_context_from_access_token(token, authentication)
+    if authentication in {AuthenticationProvenance.AGENT_CREDENTIAL, AuthenticationProvenance.UNAVAILABLE}:
+        identity = verified_agent_identity(provider, token)
+        return _AccessTokenSnapshot(caller, {}, identity.agent_id if identity is not None else None)
     claims = getattr(token, "claims", None)
-    client_id = getattr(token, "client_id", None)
+    client_field = "original_client_id" if oauth_provider is not provider else "client_id"
+    client_id = getattr(token, client_field, None)
     return _AccessTokenSnapshot(
-        caller=caller_context_from_access_token(token, authentication),
+        caller=caller,
         claims=claims if isinstance(claims, Mapping) else {},
         client_id=client_id if isinstance(client_id, str) else None,
     )

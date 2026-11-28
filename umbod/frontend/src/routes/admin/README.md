@@ -15,6 +15,7 @@ description: Capability-checked administration layout, workspaces and compatibil
 - [Insights and diagnostic patterns](./(agent-insights)/insights/README.md) — Behaviour findings, log analytics and the standalone pattern editor.
 - [Groups](./groups/README.md) — Central administrator group catalogue route.
 - [Shared namespaces](./namespaces/+page.svelte) — Administration inventory for creating, editing, and deleting shared namespaces.
+- [Agent tokens](./agent-tokens/+page.svelte) — Administrator inventory for issuing, rotating, and revoking public MCP agent tokens.
 - [Permissions](./group-permissions/README.md) — Persistent permissions layout and lazy tab editors.
 - [System settings](./system-settings/+page.svelte) — Instance-wide filesystem approval and diagnostic reporting settings.
 

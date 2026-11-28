@@ -7,6 +7,7 @@ from fastmcp.tools import ToolResult
 from umbod.core.connectors.native.runtime.tools import ConnectorToolMapping
 from umbod.core.capabilities.tools.output_schema import PresentConnectorToolOutputSchema
 
+from umbod.mcp.authorization import agent_capability_component_auth
 from umbod.mcp.connectors.native.tools.definition.schema_annotations import (
     connector_tool_annotations,
     connector_tool_signature,
@@ -79,4 +80,6 @@ class FastMcpConnectorToolRegistrar:
                 self._file_app_registrations,
             ).register(mcp, mapping, invoker)
             return
-        mcp.add_tool(build_connector_tool_definition(mapping, invoker))
+        tool = build_connector_tool_definition(mapping, invoker)
+        tool.auth = agent_capability_component_auth(mcp)
+        mcp.add_tool(tool)

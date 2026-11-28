@@ -27,6 +27,7 @@ from umbod.core.connectors.downstream_mcp.personal.connections import PersonalAu
 from umbod.mcp.signals.diagnostics import invocation_failure
 from typing import Any, Literal
 
+from fastmcp.server.auth import AuthContext
 from fastmcp.server.dependencies import get_context
 from fastmcp.server.providers.proxy import ProxyTool
 from fastmcp.tools import ToolResult
@@ -38,6 +39,8 @@ from jsonschema.exceptions import ValidationError
 from referencing import Registry
 
 from umbod.core.capabilities import CapabilityIdentity
+from umbod.core.permissions.domain import ConnectorCapabilityRef
+from umbod.mcp.authorization import SharedDownstreamCapabilityComponent
 from umbod.core.invocation import (
     ConnectorInvocationDenied,
 )
@@ -133,12 +136,15 @@ class AuthorizedDownstreamTool(Tool):
         raise NotImplementedError
 
 
-class AuthorizedDownstreamProxyTool(AuthorizedDownstreamTool):
+class AuthorizedDownstreamProxyTool(AuthorizedDownstreamTool, SharedDownstreamCapabilityComponent):
     def __init__(self, *, identity: McpToolIdentity, backend_tool: ProxyTool, ensure_access: Callable[[], Awaitable[None]], public_name: str, execution_pipeline: ToolExecutionPipeline[ToolResult]) -> None:
         options = _proxy_tool_options(backend_tool)
         super().__init__(identity=identity, options=options, public_name=public_name, execution_pipeline=execution_pipeline)
         self._backend_tool = backend_tool
         self._ensure_access = ensure_access
+
+    def group_permission_ref(self, _context: AuthContext) -> ConnectorCapabilityRef:
+        return ConnectorCapabilityRef(self._identity.connector_id, "tool", self._identity.operation_name)
 
     async def _invoke_downstream(self, arguments: dict[str, Any]) -> ToolResult:
         await self._ensure_access()

@@ -41,15 +41,21 @@ def creation_body() -> dict[str, object]:
     }
 
 
+@pytest.mark.parametrize("expires", [True, False], ids=["finite", "never"])
 async def test_creation_reveals_secret_once_with_requested_effective_access(
-    client: AsyncClient, runtime: PersistenceRuntime, caller: CallerContext
+    client: AsyncClient, runtime: PersistenceRuntime, expires: bool
 ) -> None:
-    response = await client.post(URL, json=creation_body())
+    payload = creation_body()
+    if not expires:
+        payload["expires_at"] = None
+    response = await client.post(URL, json=payload)
     assert response.status_code == 201
     assert response.headers["cache-control"] == "no-store"
     body = response.json()
     assert body["metadata"]["audience"] == TELEMETRY_TOKEN_AUDIENCE
     assert body["metadata"]["scopes"] == [TELEMETRY_INGEST_SCOPE]
+    assert (body["metadata"]["expires_at"] is not None) == expires
+    assert (await client.get(URL)).json() == [body["metadata"]]
     assert body["metadata"]["owner"] == {
         "issuer": " https://issuer/ ",
         "subject": " Alice ",
@@ -132,7 +138,7 @@ async def test_creation_forbids_caller_selected_authority(
         {"name": "x" * 257},
         {"expires_at": "2030-01-01T00:00:00"},
         {"expires_at": "2000-01-01T00:00:00Z"},
-        {"expires_at": None},
+        {"expires_at": "never"},
     ],
 )
 async def test_creation_rejects_invalid_name_or_expiration(

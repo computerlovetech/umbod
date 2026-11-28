@@ -25,7 +25,7 @@ def test_invocation_actor_captures_only_trusted_opaque_usage_owner(
     claims: dict[str, str], owned: bool,
 ) -> None:
     monkeypatch.setattr('umbod.mcp.logging.audit.identity.get_access_token', lambda: AccessToken(claims, 'client'))
-    monkeypatch.setattr('umbod.mcp.logging.audit.identity.authentication_provenance', lambda provider: provenance)
+    monkeypatch.setattr('umbod.mcp.logging.audit.identity.authentication_provenance_for_token', lambda provider, token: provenance)
     actor = McpAuditIdentityAdapter().invocation_actor(None)
     assert isinstance(actor.usage_owner, UsageOwner if owned else UnavailableUsageOwner)
     assert actor.authenticated_user_id == 'subject'

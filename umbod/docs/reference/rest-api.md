@@ -10,7 +10,7 @@ Clients that are not browsers send `Authorization: Bearer <access token>` from y
 
 ## Personal access tokens
 
-A personal access token lets a user's agent send [telemetry](../self-host/telemetry.md). It cannot sign in or do anything else. Users also manage tokens in the workspace under **Access tokens**.
+A personal access token lets a user's agent send [telemetry](../self-host/telemetry.md). It cannot sign in or do anything else. Users also manage tokens in the workspace under **Access tokens**. Choose a duration or **Never** for no expiration. Tokens with no expiration can still be revoked.
 
 | Method | Path | Does |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ Create a token with all three fields:
 | Field | Rule |
 | --- | --- |
 | `name` | 1 to 256 characters |
-| `expires_at` | A future time with a timezone |
+| `expires_at` | A future time with a timezone, or explicit `null` for no expiration |
 | `permissions` | `{"telemetry": "write"}` is the only supported permission |
 
 The response is `201` with `metadata` and the `token`. The token is shown once, so store it right away. Umbod keeps only a hash.

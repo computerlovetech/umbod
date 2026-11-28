@@ -13,7 +13,7 @@ from umbod.core.agent_tokens import (
     IssuedAgentCredential,
     SecureAgentCredentialGenerator,
 )
-from umbod.core.agent_tokens.schema import AGENT_CREDENTIAL_TABLES
+from umbod.core.credential_expiry import NeverExpires
 from umbod.core.agent_tokens.store import DatabaseAgentCredentialStore
 from umbod.core.groups import GroupInstance, GroupInstanceLookup, GroupManagementService
 from umbod.core.groups.models import RegisterGroupMetadata
@@ -70,7 +70,6 @@ def group_management(database: Database) -> GroupManagementService:
 async def database() -> AsyncIterator[Database]:
     runtime = await prepared_inmemory_runtime()
     try:
-        await runtime.database.ensure_schema(AGENT_CREDENTIAL_TABLES)
         await create_group_management(runtime.database).register_group_metadata(
             RegisterGroupMetadata(
                 group_id="agent-group", label="Agent group", description=""
@@ -118,3 +117,17 @@ async def issued(
     create_request: CreateAgent,
 ) -> IssuedAgentCredential:
     return await service.create(administrator, create_request)
+
+
+@pytest_asyncio.fixture
+async def non_expiring(
+    service: AgentCredentialService,
+    administrator: AdministratorPrincipal,
+    create_request: CreateAgent,
+) -> IssuedAgentCredential:
+    request = CreateAgent(
+        display_name=create_request.display_name,
+        group_id=create_request.group_id,
+        expires_at=NeverExpires.NEVER,
+    )
+    return await service.create(administrator, request)

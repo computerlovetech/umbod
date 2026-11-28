@@ -10,6 +10,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 - [activity/](./activity/README.md) — Owner-scoped MCP usage summaries, harness activity, and harness session reads.
 - [admin_overview/](./admin_overview/README.md) — Overview metadata summary.
 - [agent_behaviour/](./agent_behaviour/README.md) — Published behaviour configuration and administrator-only self-report inspection.
+- [agent_tokens/](./agent_tokens/README.md) — Administrator lifecycle endpoints for MCP-only agent tokens.
 - [authentication/](./authentication/) — Authentication and cookie safeguards.
 - [authentication/membership.py](./authentication/membership.py) — Shared request-scoped caller snapshot for group authorization.
 - [capability_descriptions/](./capability_descriptions/) — Description overrides.

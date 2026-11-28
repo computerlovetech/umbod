@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from hashlib import sha256
 from typing import Literal
 from uuid import UUID
@@ -22,6 +22,7 @@ from umbod.core.agent_tokens import (
     RotateAgentCredential,
     SecureAgentCredentialGenerator,
 )
+from umbod.core.agent_tokens.schema import AGENT_METADATA
 from umbod.core.agent_tokens.store import DatabaseAgentCredentialStore
 from umbod.core.groups import GroupManagementService, RegisterGroup
 
@@ -76,11 +77,39 @@ async def test_listing_reports_expired_status_at_the_exact_expiry(
     clock: MutableClock,
     issued: IssuedAgentCredential,
 ) -> None:
-    clock.instant = issued.metadata.expires_at
+    expiry = issued.metadata.expires_at
+    assert isinstance(expiry, datetime)
+    clock.instant = expiry
 
     assert await service.list_agents(administrator) == (
         issued.metadata.model_copy(update={"status": AgentCredentialStatus.EXPIRED}),
     )
+
+
+async def test_non_expiring_credentials_stay_active_and_store_json_null(
+    service: AgentCredentialService,
+    administrator: AdministratorPrincipal,
+    clock: MutableClock,
+    non_expiring: IssuedAgentCredential,
+) -> None:
+    clock.instant += timedelta(days=36500)
+
+    assert await service.list_agents(administrator) == (non_expiring.metadata,)
+    assert non_expiring.metadata.status is AgentCredentialStatus.ACTIVE
+    encoded = AGENT_METADATA.codec.encode(non_expiring.metadata)
+    assert isinstance(encoded, dict)
+    assert encoded["expires_at"] is None
+
+
+async def test_legacy_timestamp_metadata_decodes_and_normalizes_to_utc(
+    issued: IssuedAgentCredential,
+) -> None:
+    legacy = issued.metadata.model_dump(mode="json")
+    legacy["expires_at"] = "2030-01-02T02:00:00+02:00"
+
+    decoded = AGENT_METADATA.codec.decode(legacy)
+
+    assert decoded.model_dump(mode="json")["expires_at"] == "2030-01-02T00:00:00Z"
 
 
 async def test_all_management_operations_deny_callers_without_exact_admin_membership(
@@ -123,7 +152,9 @@ async def test_creation_rejects_invalid_requests(
         case "missing_group":
             del values["group_id"]
         case "naive_expiry":
-            values["expires_at"] = create_request.expires_at.replace(tzinfo=None)
+            expiry = create_request.expires_at
+            assert isinstance(expiry, datetime)
+            values["expires_at"] = expiry.replace(tzinfo=None)
     with pytest.raises(ValidationError):
         await service.create(administrator, CreateAgent.model_validate(values))
     assert await service.list_agents(administrator) == ()
@@ -183,7 +214,9 @@ async def test_rotation_replaces_the_bearer_without_changing_the_agent(
 ) -> None:
     previous = issued.metadata
     if previous_state == "expired":
-        clock.instant = previous.expires_at
+        expiry = previous.expires_at
+        assert isinstance(expiry, datetime)
+        clock.instant = expiry
     if previous_state == "revoked":
         await service.revoke(administrator, previous.agent_id)
 
@@ -204,6 +237,25 @@ async def test_rotation_replaces_the_bearer_without_changing_the_agent(
     assert (
         await service.verify_for_public_mcp(replacement.token)
     ).agent_id == previous.agent_id
+
+
+async def test_rotating_a_non_expiring_credential_can_set_a_finite_expiry(
+    service: AgentCredentialService,
+    administrator: AdministratorPrincipal,
+    clock: MutableClock,
+    non_expiring: IssuedAgentCredential,
+) -> None:
+    agent_id = non_expiring.metadata.agent_id
+    expires_at = clock.now() + timedelta(days=1)
+
+    replacement = await service.rotate(
+        administrator, RotateAgentCredential(agent_id=agent_id, expires_at=expires_at)
+    )
+
+    assert replacement.metadata.expires_at == expires_at
+    assert await service.list_agents(administrator) == (replacement.metadata,)
+    with pytest.raises(InvalidAgentCredential):
+        await service.verify_for_public_mcp(non_expiring.token)
 
 
 async def test_rotation_rejects_a_deleted_group_but_metadata_remains_manageable(

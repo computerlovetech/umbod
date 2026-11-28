@@ -9,7 +9,7 @@ description: Group permission contracts, assignable target policies and persiste
 - [__init__.py](./__init__.py) — Public permission exports.
 - [catalog.py](./catalog.py) — Assignable target composition.
 - [domain.py](./domain.py) — Permission targets, grants and change requests.
-- [factories.py](./factories.py) — Persistent permission store composition.
+- [factories.py](./factories.py) — Persistent permission store and group-instance reader composition.
 - [management.py](./management.py) — Group permission registration and mutation.
 - [notifier.py](./notifier.py) — No-op permission change notifications.
 - [ports.py](./ports.py) — Permission storage, catalogue and notification contracts.

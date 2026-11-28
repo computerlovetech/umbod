@@ -8,6 +8,7 @@ from fastmcp.server.dependencies import get_server
 from fastmcp.tools import ToolResult
 from pydantic import Field, JsonValue
 
+from umbod.mcp.authorization import agent_platform_tool_auth
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode.sandbox import (
     FastMcpMontyCodeModeAdapter,
     OpenApiCodeModeExecutor,
@@ -79,6 +80,7 @@ def code_execution_result_is_error(result: ToolResult) -> bool:
 
 
 def register_connector_code_mode_tool(
+    mcp: FastMCP,
     registrar: McpObservedToolRegistrar,
     registry: RuntimeConnectorToolRegistry,
     timeout_seconds: float,
@@ -86,7 +88,7 @@ def register_connector_code_mode_tool(
     registry.code_mode_adapter = FastMcpMontyCodeModeAdapter(timeout_seconds)
     registrar.register(
         execute_code,
-        auth=None,
+        auth=agent_platform_tool_auth(mcp),
         result_is_error=code_execution_result_is_error,
         name="execute_code",
         description=CODEMODE_EXECUTE_DESCRIPTION,

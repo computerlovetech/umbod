@@ -1,5 +1,5 @@
 from base64 import urlsafe_b64decode
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from pydantic import SecretStr
@@ -87,9 +87,33 @@ async def test_verification_denies_at_and_after_expiry(
     issued: IssuedAgentCredential,
     offset: timedelta,
 ) -> None:
-    clock.instant = issued.metadata.expires_at + offset
+    expiry = issued.metadata.expires_at
+    assert isinstance(expiry, datetime)
+    clock.instant = expiry + offset
     with pytest.raises(InvalidAgentCredential, match="^Invalid agent credential$"):
         await service.verify_for_public_mcp(issued.token)
+
+
+async def test_non_expiring_credentials_still_verify_after_the_clock_advances(
+    service: AgentCredentialService,
+    clock: MutableClock,
+    non_expiring: IssuedAgentCredential,
+) -> None:
+    clock.instant += timedelta(days=36500)
+
+    verified = await service.verify_for_public_mcp(non_expiring.token)
+    assert verified.agent_id == non_expiring.metadata.agent_id
+
+
+async def test_verification_denies_a_revoked_non_expiring_credential(
+    service: AgentCredentialService,
+    administrator: AdministratorPrincipal,
+    non_expiring: IssuedAgentCredential,
+) -> None:
+    assert await service.revoke(administrator, non_expiring.metadata.agent_id)
+
+    with pytest.raises(InvalidAgentCredential):
+        await service.verify_for_public_mcp(non_expiring.token)
 
 
 async def test_verification_denies_when_group_id_is_deleted_even_with_same_label_present(

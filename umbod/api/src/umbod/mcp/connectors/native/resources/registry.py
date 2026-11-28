@@ -13,6 +13,7 @@ from umbod.core.publishing import (
 from umbod.core.connectors.native.runtime import ConnectorResourceMapping
 from umbod.proxies import Model
 
+from umbod.mcp.authorization import agent_capability_component_auth
 from umbod.mcp.connectors.native.resources.eligibility import (
     ConnectorResourceEligibilityContext,
     is_connector_resource_eligible,
@@ -50,11 +51,14 @@ class RuntimeConnectorResourceRegistry:
         )
         for mapping in eligible_mappings:
             if mapping.uri_template not in registered_uri_templates:
+                auth = agent_capability_component_auth(self._mcp)
+                auth_options = {"auth": auth} if auth is not None else {}
                 self._mcp.resource(
                     mapping.uri_template,
                     name=getattr(mapping, "name", None),
                     description=getattr(mapping, "description", None),
                     meta=_resource_meta(mapping),
+                    **auth_options,
                 )(_resource_reader(mapping))
                 self._registered_uri_templates_by_connector_id.setdefault(connector_id, set()).add(
                     mapping.uri_template

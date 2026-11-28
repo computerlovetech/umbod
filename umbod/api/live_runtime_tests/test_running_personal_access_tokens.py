@@ -121,8 +121,13 @@ verified_user_stage = pytest.mark.skipif(
 
 
 @pytest.fixture
+def token_has_expiry() -> bool:
+    return True
+
+
+@pytest.fixture
 def personal_token(
-    runtime_endpoints: RuntimeEndpoints,
+    runtime_endpoints: RuntimeEndpoints, token_has_expiry: bool,
 ) -> Iterator[tuple[PersonalAccessTokenMetadata, SecretStr]]:
     headers = {"Authorization": "Bearer " + runtime_endpoints.bearer_token}
     with httpx.Client(
@@ -137,7 +142,7 @@ def personal_token(
                 "name": "Codex runtime verification",
                 "expires_at": (
                     datetime.now(timezone.utc) + timedelta(hours=1)
-                ).isoformat(),
+                ).isoformat() if token_has_expiry else None,
             },
         )
         assert response.status_code == 201
@@ -146,6 +151,7 @@ def personal_token(
         metadata = PersonalAccessTokenMetadata.model_validate(data["metadata"])
         token = SecretStr(data["token"])
         try:
+            assert (data["metadata"]["expires_at"] is not None) == token_has_expiry
             yield metadata, token
         finally:
             revoked = client.delete(TOKEN_API_PATH + "/" + metadata.token_id)
@@ -271,6 +277,7 @@ def test_running_activity_sessions_read_only_owned_exports(
 
 
 @verified_user_stage
+@pytest.mark.parametrize("token_has_expiry", [True, False], ids=["finite", "never"])
 def test_running_owner_revocation_is_visible_to_collector_across_api_processes(
     runtime_endpoints: RuntimeEndpoints,
     personal_token: tuple[PersonalAccessTokenMetadata, SecretStr],
@@ -284,7 +291,7 @@ def test_running_owner_revocation_is_visible_to_collector_across_api_processes(
             headers=user_headers,
         )
         assert listed.status_code == 200
-        assert any(item["token_id"] == metadata.token_id for item in listed.json())
+        assert metadata.model_dump(mode="json") in listed.json()
         assert token.get_secret_value() not in listed.text
         assert "digest" not in listed.text
         foreign_headers = {

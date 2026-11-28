@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastmcp.server.dependencies import get_context
+from fastmcp.server.dependencies import get_access_token, get_context
 from fastmcp.tools import InputRequiredToolResult
 from mcp.types import ElicitRequest, ElicitRequestFormParams, ElicitResult, InputRequiredResult
 from umbod.core.invocation import (
@@ -16,6 +16,7 @@ from umbod.core.invocation import (
     ConnectorInvocationPolicy,
     DirectInvocationDecision,
 )
+from umbod.mcp.auth.agent_tokens import is_agent_access_token
 from umbod.mcp.connectors.native.approval_principal import (
     ApprovalCallerBinding,
     ApprovalCallerCapture,
@@ -55,8 +56,10 @@ class McpConnectorInvocationApprovalPolicy(ConnectorInvocationPolicy):
         decision = await self._policy.evaluate(invocation)
         if not isinstance(decision, AskInvocationDecision):
             return decision
-        caller = self._caller_capture.capture()
         context = get_context()
+        if is_agent_access_token(context.fastmcp.auth, get_access_token()):
+            raise ConnectorInvocationDenied("Agent credentials cannot approve connector invocations")
+        caller = self._caller_capture.capture()
         if context._is_modern_protocol():
             if self._is_codemode_request(context):
                 raise ConnectorInvocationDenied("Modern codemode approval is unsupported")

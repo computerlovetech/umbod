@@ -14,6 +14,7 @@ from umbod.core.callers import (
     DeclaredIssuer,
     SubjectIdentity,
 )
+from umbod.core.credential_expiry import CredentialExpiry, NeverExpires
 from umbod.core.personal_access_tokens import (
     IssuePersonalAccessToken,
     IssuedPersonalAccessToken,
@@ -114,7 +115,7 @@ async def issue(
     receiver: TokenReceiver,
     audience: str,
     scopes: tuple[str, ...],
-    expires_at: datetime,
+    expires_at: CredentialExpiry,
 ) -> IssuedPersonalAccessToken:
     return await receiver.service.issue(
         receiver.caller,
@@ -210,14 +211,15 @@ async def test_expired_token_is_denied(receiver: TokenReceiver) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("expires", [True, False], ids=["finite", "never"])
 async def test_revocation_is_immediate_and_never_falls_back_to_shared_bearer(
-    receiver: TokenReceiver,
+    receiver: TokenReceiver, expires: bool
 ) -> None:
     issued = await issue(
         receiver,
         TELEMETRY_TOKEN_AUDIENCE,
         (TELEMETRY_INGEST_SCOPE,),
-        datetime.now(timezone.utc) + timedelta(hours=1),
+        datetime.now(timezone.utc) + timedelta(hours=1) if expires else NeverExpires.NEVER,
     )
 
     def provide_config() -> OtlpReceiverConfig:

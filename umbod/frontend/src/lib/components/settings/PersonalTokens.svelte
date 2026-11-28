@@ -54,7 +54,11 @@
               <div>
                 <strong>{token.name}</strong>
                 <div class="hint">Permissions: {state.permissionsFor(token)}</div>
-                <div class="hint">Expires <DateTimeView value={token.expires_at} /></div>
+                {#if token.expires_at === null}
+                  <div class="hint">Never expires</div>
+                {:else}
+                  <div class="hint">Expires <DateTimeView value={token.expires_at} /></div>
+                {/if}
               </div>
               <span class={['status', token.status === 'active' && 'active']}>{token.status}</span>
               <Button variant="danger" size="compact" iconOnly disabled={state.pending || state.status !== 'ready'} onclick={(): Promise<void> => state.revoke(token.token_id)} aria-label={`Delete ${token.name}`} title={`Delete ${token.name}`}>

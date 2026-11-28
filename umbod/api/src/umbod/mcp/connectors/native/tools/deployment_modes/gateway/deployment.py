@@ -39,4 +39,4 @@ class GatewayConnectorToolDeploymentFactory:
     ) -> None:
         setattr(mcp, "connector_tool_search", InMemoryFuzzyConnectorToolSearch())
         register_connector_search_tool(mcp, GATEWAY_SEARCH_DESCRIPTION, registrar)
-        register_connector_execute_tool(registrar)
+        register_connector_execute_tool(mcp, registrar)

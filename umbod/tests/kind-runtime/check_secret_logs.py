@@ -6,6 +6,7 @@ from urllib.parse import unquote
 
 
 S3_CREDENTIAL_MARKER = re.compile(r"x-amz-(?:signature|credential|security-token)", re.IGNORECASE)
+AGENT_CREDENTIAL_MARKER = re.compile(r"umbod_agent_v1_[0-9a-f]{32}_[A-Za-z0-9_-]{43}")
 
 
 def decoded_log_line(line: str) -> str:
@@ -31,6 +32,7 @@ def check_secret_logs(output: str) -> None:
         any(value in output for value in sensitive_values())
         or re.search(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*", output)
         or S3_CREDENTIAL_MARKER.search(decoded_log_line(output))
+        or AGENT_CREDENTIAL_MARKER.search(decoded_log_line(output))
     ):
         raise SystemExit("Sensitive credentials or OAuth parameters appeared in service stdout")
 
@@ -43,6 +45,10 @@ def redacted_diagnostics(output: str) -> str:
     redacted = re.sub(r"-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA )?PRIVATE KEY-----", "[REDACTED PRIVATE KEY]", output)
     redacted = re.sub(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*", "[REDACTED JWT]", redacted)
     redacted = re.sub(r"kind-personal-(?:downstream|refresh)-token-[A-Za-z0-9_-]+", "[REDACTED TOKEN]", redacted)
+    redacted = "".join(
+        "[REDACTED AGENT TOKEN]\n" if AGENT_CREDENTIAL_MARKER.search(decoded_log_line(line)) else line
+        for line in redacted.splitlines(keepends=True)
+    )
     redacted = re.sub(r"kind-personal-dcr-secret-[A-Za-z0-9_-]+", "[REDACTED CLIENT SECRET]", redacted)
     redacted = re.sub(r"([?&](?:code|state)=)[^&\s\"\\]+", r"\1[REDACTED]", redacted)
     for value in sensitive_values():

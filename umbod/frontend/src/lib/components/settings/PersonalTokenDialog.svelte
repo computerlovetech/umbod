@@ -26,7 +26,7 @@
     <form aria-label="Create access token" onsubmit={(event: SubmitEvent): void => { event.preventDefault(); void state.create(); }}>
       <fieldset disabled={state.creating} aria-label="Token details">
         <TextField id={`${id}-name`} name="token-name" label="Token name" required maxlength={256} value={state.tokenName} oninput={(event: Event): void => state.setTokenName((event.currentTarget as HTMLInputElement).value)} />
-        <Select label="Expiration" options={state.expirationSelectOptions} value={String(state.expirationDays)} onchange={(value: string): void => state.setExpirationDays(Number(value))} disabled={state.creating} />
+        <Select label="Expiration" options={state.expirationOptions} value={state.expiration} onchange={state.selectExpiration} disabled={state.creating} />
         <fieldset class="permissions">
           <legend>Permissions</legend>
           <Checkbox id={`${id}-agent-logs`} label="Send agent logs" checked={state.allowsAgentLogs} onchange={(event: Event): void => state.setAgentLogs((event.currentTarget as HTMLInputElement).checked)} />

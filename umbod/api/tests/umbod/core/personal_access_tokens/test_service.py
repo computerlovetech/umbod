@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import cast
 
 import pytest
@@ -12,6 +12,7 @@ from umbod.core.callers import (
     UnavailableIssuer,
     UnavailableSubject,
 )
+from umbod.core.credential_expiry import NeverExpires
 from umbod.core.personal_access_tokens import (
     InvalidPersonalAccessToken,
     IssuePersonalAccessToken,
@@ -155,9 +156,26 @@ async def test_validation_denies_at_and_after_expiry(
     offset: timedelta,
 ) -> None:
     issued = await service.issue(caller, request_token)
-    clock.instant = request_token.expires_at + offset
+    expires_at = issued.metadata.expires_at
+    assert isinstance(expires_at, datetime)
+    clock.instant = expires_at + offset
     with pytest.raises(InvalidPersonalAccessToken):
         await service.validate(validation(issued.token))
+
+
+async def test_non_expiring_token_remains_valid_as_time_advances(
+    service: PersonalAccessTokenService,
+    caller: CallerContext,
+    request_token: IssuePersonalAccessToken,
+    clock: MutableClock,
+) -> None:
+    request = IssuePersonalAccessToken.model_validate(
+        request_token.model_dump() | {"expires_at": NeverExpires.NEVER}
+    )
+    issued = await service.issue(caller, request)
+    clock.instant += timedelta(days=3650)
+
+    assert (await service.validate(validation(issued.token))).expires_at is NeverExpires.NEVER
 
 
 @pytest.mark.parametrize(
@@ -233,7 +251,7 @@ async def test_management_rejects_untrusted_authentication(
     untrusted = CallerContext(
         authentication=authentication,
         subject=UnavailableSubject(kind="unavailable")
-        if authentication == AuthenticationProvenance.UNAVAILABLE
+        if authentication in {AuthenticationProvenance.UNAVAILABLE, AuthenticationProvenance.AGENT_CREDENTIAL}
         else caller.subject,
     )
     with pytest.raises(UntrustedPersonalAccessTokenCaller):

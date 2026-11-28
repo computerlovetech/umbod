@@ -34,6 +34,18 @@ describe('personal access token routes', (): void => {
     expect(transport.requests[1].outputSchema).toBe(createdTokenSchema);
     expect(() => api.tokens.revoke('../bad')).toThrow();
   });
+  it('accepts explicit null expiration on create and list without accepting omission', async (): Promise<void> => {
+    const permanent = { ...input, expires_at: null };
+    const issued = await new InMemoryPersonalAccessTokens().create(permanent);
+    const transport = new MemoryTransport();
+    const api = new PersonalAccessTokensApi(transport);
+    transport.response = issued;
+    await expect(api.tokens.create(permanent)).resolves.toEqual(issued);
+    expect(transport.requests[0]?.body).toMatchObject({ expires_at: null });
+    transport.response = [issued.metadata];
+    await expect(api.tokens.list()).resolves.toEqual([issued.metadata]);
+    expect(createTokenSchema.safeParse({ name: input.name, permissions: input.permissions }).success).toBe(false);
+  });
   it('blocks invalid outbound payloads and rejects malformed responses', async (): Promise<void> => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}'));
     const api = new PersonalAccessTokensApi(browserTransport({ fetch: request, configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 257 }) } }));

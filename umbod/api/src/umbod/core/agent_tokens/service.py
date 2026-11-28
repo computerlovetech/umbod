@@ -9,6 +9,7 @@ from pydantic import SecretStr
 
 from umbod.core.administrator.connector_configuration import AdministratorPrincipal
 from umbod.core.administrator.operations import AdministratorAccess
+from umbod.core.credential_expiry import CredentialExpiry, is_expired
 from umbod.core.groups import GroupInstance, GroupInstanceId, GroupInstanceLookup
 
 from .errors import (
@@ -16,6 +17,7 @@ from .errors import (
     AgentGroupNotFound,
     AgentNotFound,
     InvalidAgentCredential,
+    InvalidAgentCredentialExpiry,
 )
 from .models import (
     AgentCredentialMetadata,
@@ -41,8 +43,69 @@ _BEARER_PATTERN = re.compile(
 )
 
 
+def is_agent_credential_bearer(token: str) -> bool:
+    return token.startswith(_BEARER_PREFIX)
+
+
 def _digest(bearer: str) -> str:
     return sha256(bearer.encode("ascii")).hexdigest()
+
+
+def _checked_now(clock: AgentCredentialClock) -> datetime:
+    now = clock.now()
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("Clock must return an aware datetime")
+    return now
+
+
+async def _require_group_instance(
+    groups: GroupInstanceLookup, group_id: str
+) -> GroupInstance:
+    group = await groups.find_group_instance(group_id)
+    if group is None or group.group_id != group_id:
+        raise AgentGroupNotFound("Agent group does not exist")
+    return group
+
+
+class AgentCredentialVerifier:
+    def __init__(
+        self,
+        groups: GroupInstanceLookup,
+        store: AgentCredentialStore,
+        clock: AgentCredentialClock,
+    ) -> None:
+        self._groups = groups
+        self._store = store
+        self._clock = clock
+
+    async def verify_for_public_mcp(self, token: SecretStr) -> PublicMcpAgentIdentity:
+        bearer = token.get_secret_value()
+        if len(bearer) != _BEARER_LENGTH:
+            raise InvalidAgentCredential()
+        match = _BEARER_PATTERN.fullmatch(bearer)
+        if match is None:
+            raise InvalidAgentCredential()
+        record = await self._store.find(match.group(1))
+        if record is None or not compare_digest(record.digest, _digest(bearer)):
+            raise InvalidAgentCredential()
+        metadata = record.metadata
+        if metadata.status is not AgentCredentialStatus.ACTIVE:
+            raise InvalidAgentCredential()
+        try:
+            group = await _require_group_instance(self._groups, metadata.group_id)
+        except Exception:
+            raise InvalidAgentCredential() from None
+        if (
+            group.instance_id != record.group_instance_id
+            or is_expired(metadata.expires_at, _checked_now(self._clock))
+        ):
+            raise InvalidAgentCredential()
+        return PublicMcpAgentIdentity(
+            agent_id=metadata.agent_id,
+            group_id=metadata.group_id,
+            group_instance_id=group.instance_id,
+            audience="umbod:mcp",
+        )
 
 
 class AgentCredentialService:
@@ -59,12 +122,13 @@ class AgentCredentialService:
         self._store = store
         self._clock = clock
         self._generator = generator
+        self._verifier = AgentCredentialVerifier(groups, store, clock)
 
     async def create(
         self, principal: AdministratorPrincipal, request: CreateAgent
     ) -> IssuedAgentCredential:
         self._access.require(principal)
-        group = await self._require_group_instance(request.group_id)
+        group = await _require_group_instance(self._groups, request.group_id)
         self._require_future_expiry(request.expires_at)
         agent_id = self._generator.generate_id().hex
         metadata = self._active_metadata(
@@ -80,11 +144,11 @@ class AgentCredentialService:
     ) -> tuple[AgentCredentialMetadata, ...]:
         self._access.require(principal)
         credentials = await self._store.list_agents()
-        now = self._now()
+        now = _checked_now(self._clock)
         return tuple(
             metadata.model_copy(update={"status": AgentCredentialStatus.EXPIRED})
             if metadata.status is AgentCredentialStatus.ACTIVE
-            and metadata.expires_at <= now
+            and is_expired(metadata.expires_at, now)
             else metadata
             for metadata in credentials
         )
@@ -97,7 +161,7 @@ class AgentCredentialService:
         if previous is None:
             raise AgentNotFound("Agent does not exist")
         current = previous.metadata
-        group = await self._require_group_instance(current.group_id)
+        group = await _require_group_instance(self._groups, current.group_id)
         if group.instance_id != previous.group_instance_id:
             raise AgentGroupNotFound("Agent group instance no longer exists")
         self._require_future_expiry(request.expires_at)
@@ -144,36 +208,14 @@ class AgentCredentialService:
         return True
 
     async def verify_for_public_mcp(self, token: SecretStr) -> PublicMcpAgentIdentity:
-        bearer = token.get_secret_value()
-        if len(bearer) != _BEARER_LENGTH:
-            raise InvalidAgentCredential()
-        match = _BEARER_PATTERN.fullmatch(bearer)
-        if match is None:
-            raise InvalidAgentCredential()
-        record = await self._store.find(match.group(1))
-        if record is None or not compare_digest(record.digest, _digest(bearer)):
-            raise InvalidAgentCredential()
-        metadata = record.metadata
-        if metadata.status is not AgentCredentialStatus.ACTIVE:
-            raise InvalidAgentCredential()
-        try:
-            group = await self._require_group_instance(metadata.group_id)
-        except Exception:
-            raise InvalidAgentCredential() from None
-        if (
-            group.instance_id != record.group_instance_id
-            or metadata.expires_at <= self._now()
-        ):
-            raise InvalidAgentCredential()
-        return PublicMcpAgentIdentity(
-            agent_id=metadata.agent_id,
-            group_id=metadata.group_id,
-            group_instance_id=group.instance_id,
-            audience="umbod:mcp",
-        )
+        return await self._verifier.verify_for_public_mcp(token)
 
     def _active_metadata(
-        self, agent_id: str, display_name: str, group_id: str, expires_at: datetime
+        self,
+        agent_id: str,
+        display_name: str,
+        group_id: str,
+        expires_at: CredentialExpiry,
     ) -> AgentCredentialMetadata:
         credential_id = self._generator.generate_id().hex
         if agent_id == credential_id:
@@ -201,21 +243,9 @@ class AgentCredentialService:
             digest=_digest(bearer),
         ), SecretStr(bearer)
 
-    async def _require_group_instance(self, group_id: str) -> GroupInstance:
-        group = await self._groups.find_group_instance(group_id)
-        if group is None or group.group_id != group_id:
-            raise AgentGroupNotFound("Agent group does not exist")
-        return group
-
-    def _require_future_expiry(self, expires_at: datetime) -> None:
-        if expires_at <= self._now():
-            raise ValueError("Expiry must be in the future")
-
-    def _now(self) -> datetime:
-        now = self._clock.now()
-        if now.tzinfo is None or now.utcoffset() is None:
-            raise ValueError("Clock must return an aware datetime")
-        return now
+    def _require_future_expiry(self, expires_at: CredentialExpiry) -> None:
+        if is_expired(expires_at, _checked_now(self._clock)):
+            raise InvalidAgentCredentialExpiry()
 
     async def _replace(
         self,

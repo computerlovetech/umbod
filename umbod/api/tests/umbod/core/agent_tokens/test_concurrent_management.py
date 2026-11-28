@@ -116,7 +116,7 @@ async def test_stale_management_cannot_replace_the_winning_credential_state(
     issued = await service.create(administrator, create_request)
     request = RotateAgentCredential(
         agent_id=issued.metadata.agent_id,
-        expires_at=create_request.expires_at + timedelta(days=1),
+        expires_at=clock.now() + timedelta(days=2),
     )
 
     pending = asyncio.create_task(_mutate(service, administrator, request, first))

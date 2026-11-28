@@ -21,6 +21,7 @@ from umbod.core.connectors.downstream_mcp.stores.personal_oauth_schema import PE
 from pydantic import BaseModel
 
 from umbod.core.agent_behaviour.schema import AGENT_BEHAVIOUR_TABLES
+from umbod.core.agent_tokens.schema import AGENT_CREDENTIAL_TABLES
 from umbod.core.activation.stores.schema import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.capabilities.descriptions.stores.schema import (
     CAPABILITY_DESCRIPTION_OVERRIDE_TABLE,
@@ -85,6 +86,7 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     *INSTALL_CLAIM_TABLES,
     *USAGE_TABLES,
     *AGENT_BEHAVIOUR_TABLES,
+    *AGENT_CREDENTIAL_TABLES,
     *PORTABLE_CONNECTOR_DRAFT_TABLES,
     SYSTEM_SETTINGS_TABLE,
     PROVIDER_GROUP_MAPPINGS_TABLE,

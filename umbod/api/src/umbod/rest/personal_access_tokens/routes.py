@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from umbod.core.callers import CallerContext
+from umbod.core.credential_expiry import is_expired
 from umbod.core.personal_access_tokens import (
     IssuePersonalAccessToken,
     PersonalAccessTokenAccess,
@@ -34,7 +35,7 @@ async def create_personal_access_token(
     caller: Caller,
     service: TokenService,
 ) -> CreatedPersonalAccessToken:
-    if body.expires_at <= datetime.now(timezone.utc):
+    if is_expired(body.expires_at, datetime.now(timezone.utc)):
         raise HTTPException(status_code=422, detail="Expiry must be in the future")
     access = PersonalAccessTokenAccess(
         grants=tuple(

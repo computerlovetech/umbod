@@ -36,9 +36,9 @@ async def test_only_upstream_verified_provenance_resolves(provenance: Authentica
     caller = CallerSnapshot(
         caller=CallerContext(
             authentication=provenance,
-            subject=UnavailableSubject(kind="unavailable") if provenance == AuthenticationProvenance.UNAVAILABLE else SubjectIdentity(
-                issuer=DeclaredIssuer(value="issuer"), subject="alice"
-            ),
+            subject=UnavailableSubject(kind="unavailable")
+            if provenance in {AuthenticationProvenance.UNAVAILABLE, AuthenticationProvenance.AGENT_CREDENTIAL}
+            else SubjectIdentity(issuer=DeclaredIssuer(value="issuer"), subject="alice"),
         ),
         groups=GroupMembership(group_ids=("team",)),
     )

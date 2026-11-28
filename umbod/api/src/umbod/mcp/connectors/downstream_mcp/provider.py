@@ -2,7 +2,7 @@ from umbod.mcp.agent_behaviour.reservations import connector_tool_name_available
 from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperation, PersonalDiscoveryOperations
 from umbod.mcp.connectors.downstream_mcp.ports import DownstreamClientFactory
 from umbod.mcp.connectors.downstream_mcp.namespaces import PersonalToolNamespaceSnapshot
-from umbod.mcp.connectors.downstream_mcp.resource_access import AccessCheckedTemplate
+from umbod.mcp.connectors.downstream_mcp.resource_access import AccessCheckedTemplate, SharedDownstreamPrompt, SharedDownstreamResource
 
 import logging
 from collections.abc import Iterable, Mapping, Sequence
@@ -17,7 +17,7 @@ from fastmcp.prompts import Prompt
 from fastmcp.resources import Resource, ResourceTemplate
 from fastmcp.exceptions import ToolError
 from fastmcp.server.providers.base import Provider
-from fastmcp.server.providers.proxy import ProxyPrompt, ProxyResource, ProxyTemplate, ProxyTool
+from fastmcp.server.providers.proxy import ProxyTemplate, ProxyTool
 from fastmcp.tools import ToolResult
 from fastmcp.tools.base import Tool
 from mcp.types import Prompt as McpPrompt, Resource as McpResource, ResourceTemplate as McpResourceTemplate
@@ -408,7 +408,7 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
             "operation_name": prompt.name,
         }
         raw_prompt = McpPrompt(name=prompt.name, title=prompt.title, description=prompt.description, arguments=[argument.model_dump(exclude_none=True) for argument in prompt.arguments], icons=list(prompt.icons), _meta=meta)
-        backend = ProxyPrompt.from_mcp_prompt(partial(self._create_capability_client, CapabilityIdentity(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="prompt", capability_key=prompt.name)), raw_prompt)
+        backend = SharedDownstreamPrompt.from_mcp_prompt(partial(self._create_capability_client, CapabilityIdentity(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="prompt", capability_key=prompt.name)), raw_prompt)
         backend._backend_name = prompt.name
         backend.name = mangle_public_tool_name(connector_id, prompt.name)
         return backend
@@ -423,7 +423,7 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
             "operation_name": resource.uri,
         }
         raw_resource = McpResource(name=resource.name, title=resource.title, uri=resource.uri, description=resource.description, mimeType=resource.mime_type or None, size=resource.size or None, icons=list(resource.icons), annotations=resource.annotations or None, _meta=meta)
-        return ProxyResource.from_mcp_resource(partial(self._create_capability_client, CapabilityIdentity(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="resource", capability_key=resource.uri)), raw_resource)
+        return SharedDownstreamResource.from_mcp_resource(partial(self._create_capability_client, CapabilityIdentity(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="resource", capability_key=resource.uri)), raw_resource)
 
     def _materialize_template(self, connector_id: str, template: DiscoveredResourceTemplate) -> ResourceTemplate:
         template = template.model_copy(deep=True)

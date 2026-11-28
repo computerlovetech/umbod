@@ -34,6 +34,20 @@ def test_dynamic_registration_secrets_are_detected_and_fully_redacted() -> None:
     check_secret_logs(redacted)
 
 
+@pytest.mark.parametrize("percent_encoded", [False, True])
+def test_agent_bearer_diagnostics_are_detected_and_redacted(percent_encoded: bool) -> None:
+    bearer = "umbod_agent_v1_" + "a" * 32 + "_" + "b" * 43
+    if percent_encoded:
+        bearer = "".join(f"%{byte:02x}" for byte in bearer.encode())
+    output = "safe before\nAuthorization: Bearer " + bearer + "\nsafe after\n"
+
+    with pytest.raises(SystemExit, match="Sensitive credentials"):
+        check_secret_logs(output)
+    redacted = redacted_diagnostics(output)
+    assert redacted == "safe before\n[REDACTED AGENT TOKEN]\nsafe after\n"
+    check_secret_logs(redacted)
+
+
 def test_ordinary_s3_diagnostics_are_preserved() -> None:
     output = "S3 upload completion rejected: checksum mismatch\n"
     check_secret_logs(output)

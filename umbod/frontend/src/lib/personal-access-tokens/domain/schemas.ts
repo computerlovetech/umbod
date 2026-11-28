@@ -12,12 +12,12 @@ export const tokenMetadataSchema = z.strictObject({
   audience: boundedText,
   scopes: z.array(scope).min(1).max(64).refine((values: string[]): boolean => new Set(values).size === values.length),
   created_at: timestamp,
-  expires_at: timestamp,
+  expires_at: timestamp.nullable(),
   status: z.enum(['active', 'revoked'])
-}).refine((value): boolean => Date.parse(value.expires_at) > Date.parse(value.created_at));
+}).refine((value): boolean => value.expires_at === null || Date.parse(value.expires_at) > Date.parse(value.created_at));
 export const createTokenSchema = z.strictObject({
   name: boundedText,
-  expires_at: timestamp.refine((value: string): boolean => Date.parse(value) > Date.now()),
+  expires_at: timestamp.refine((value: string): boolean => Date.parse(value) > Date.now()).nullable(),
   permissions: z.strictObject({ telemetry: z.literal('write') })
 });
 export const createdTokenSchema = z.strictObject({ metadata: tokenMetadataSchema, token: z.string().min(1) });

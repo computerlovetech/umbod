@@ -3,6 +3,17 @@ from typing import Any
 
 from fastmcp.resources import Resource, ResourceTemplate
 from fastmcp.resources.base import ResourceResult
+from fastmcp.server.providers.proxy import ProxyPrompt, ProxyResource
+
+from umbod.mcp.authorization import SharedDownstreamCapabilityComponent
+
+
+class SharedDownstreamPrompt(ProxyPrompt, SharedDownstreamCapabilityComponent):
+    pass
+
+
+class SharedDownstreamResource(ProxyResource, SharedDownstreamCapabilityComponent):
+    pass
 
 
 class AccessCheckedResource(Resource):
@@ -21,7 +32,7 @@ class AccessCheckedResource(Resource):
         return await self._backend.read()
 
 
-class AccessCheckedTemplate(ResourceTemplate):
+class AccessCheckedTemplate(ResourceTemplate, SharedDownstreamCapabilityComponent):
     _backend: ResourceTemplate
     _ensure_access: Callable[[], Awaitable[None]]
 

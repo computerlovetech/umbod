@@ -3,11 +3,11 @@ from umbod.mcp.telemetry import McpTelemetryDependencies
 from dataclasses import dataclass
 
 from fastmcp import FastMCP
+from fastmcp.server.auth import AuthProvider
 from starlette.applications import Starlette
 
 from umbod.core.connectors.native.runtime import ConnectorRuntime
 from umbod.core.persistence import Database, PersistenceRuntime
-from umbod.mcp.auth import MCPAuthProvider
 from umbod.mcp.connectors.native import (
     ConnectorRuntimeStateReader,
     ConnectorRuntimeStateSynchronizationSource,
@@ -33,7 +33,7 @@ class PublicAppConfig:
     api_base_url: str | None
     persistence_runtime: PersistenceRuntime
     telemetry: McpTelemetryDependencies
-    auth_provider: MCPAuthProvider | None = None
+    auth_provider: AuthProvider | None = None
     connector_tool_runtime_state_store: InMemoryConnectorToolRuntimeStateStore | None = None
     group_permission_runtime_state: InMemoryGroupConnectorToolPermissions | None = None
 

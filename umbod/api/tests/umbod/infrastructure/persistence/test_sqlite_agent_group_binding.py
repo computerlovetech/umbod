@@ -8,29 +8,15 @@ from tests.persistence_runtime import prepared_sqlite_runtime
 from umbod.core.administrator import AdministratorAccess
 from umbod.core.administrator.connector_configuration import AdministratorPrincipal
 from umbod.core.agent_tokens import (
-    AgentCredentialService,
     CreateAgent,
     InvalidAgentCredential,
-    SecureAgentCredentialGenerator,
-    SystemAgentCredentialClock,
+    create_agent_credential_service,
+    create_agent_credential_verifier,
 )
-from umbod.core.agent_tokens.schema import AGENT_CREDENTIAL_TABLES
-from umbod.core.agent_tokens.store import DatabaseAgentCredentialStore
 from umbod.core.groups import RegisterGroup
 from umbod.core.groups.stores import registration
 from umbod.core.groups.stores.composition import create_group_management
 from umbod.core.groups.stores.reads import DatabaseGroupInstanceLookup
-from umbod.core.persistence import Database
-
-
-def _agent_credentials(database: Database) -> AgentCredentialService:
-    return AgentCredentialService(
-        AdministratorAccess("administrators"),
-        DatabaseGroupInstanceLookup(database),
-        DatabaseAgentCredentialStore(database),
-        SystemAgentCredentialClock(),
-        SecureAgentCredentialGenerator(),
-    )
 
 
 @pytest.mark.asyncio
@@ -43,9 +29,11 @@ async def test_recreated_group_from_another_runtime_does_not_revive_a_persisted_
     administrator = AdministratorPrincipal(memberships=("administrators",))
     issuer = await prepared_sqlite_runtime(path)
     try:
-        await issuer.database.ensure_schema(AGENT_CREDENTIAL_TABLES)
         await create_group_management(issuer.database).register_group(request)
-        issued = await _agent_credentials(issuer.database).create(
+        management = create_agent_credential_service(
+            issuer.database, AdministratorAccess("administrators")
+        )
+        issued = await management.create(
             administrator,
             CreateAgent(
                 display_name="Build agent",
@@ -58,7 +46,7 @@ async def test_recreated_group_from_another_runtime_does_not_revive_a_persisted_
 
     verifier = await prepared_sqlite_runtime(path)
     try:
-        credentials = _agent_credentials(verifier.database)
+        credentials = create_agent_credential_verifier(verifier.database)
         original = await credentials.verify_for_public_mcp(issued.token)
         assert original.agent_id == issued.metadata.agent_id
         remover = await prepared_sqlite_runtime(path)

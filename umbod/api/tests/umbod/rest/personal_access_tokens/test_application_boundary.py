@@ -158,10 +158,14 @@ def test_cookie_revocation_is_csrf_protected(api: AuthenticatedApi) -> None:
     assert api.client.get(URL, headers=bearer(api)).json()[0]["status"] == "active"
 
 
+@pytest.mark.parametrize("expires", [True, False], ids=["finite", "never"])
 def test_issued_ingestion_token_cannot_authenticate_user_or_admin_requests(
-    api: AuthenticatedApi,
+    api: AuthenticatedApi, expires: bool,
 ) -> None:
-    created = api.client.post(URL, json=body(), headers=bearer(api))
+    payload = body()
+    if not expires:
+        payload["expires_at"] = None
+    created = api.client.post(URL, json=payload, headers=bearer(api))
     assert created.status_code == 201
     token = SecretStr(created.json()["token"])
     headers = {"Authorization": "Bearer " + token.get_secret_value()}

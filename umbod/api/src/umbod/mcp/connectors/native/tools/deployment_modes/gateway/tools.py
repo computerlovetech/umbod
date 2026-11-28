@@ -1,10 +1,12 @@
 from typing import Annotated, Any
 
 from umbod.mcp.tools.registration import McpObservedToolRegistrar
+from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
 from fastmcp.tools import ToolResult
 from pydantic import Field
 
+from umbod.mcp.authorization import agent_platform_tool_auth
 from umbod.mcp.connectors.native.tools.infrastructure.authorization import (
     ConnectorToolAuthorizationScope,
 )
@@ -34,10 +36,10 @@ async def execute_tool(
     return await registry.execute_tool(tool_name, arguments, allowed_tool_refs)
 
 
-def register_connector_execute_tool(registrar: McpObservedToolRegistrar) -> None:
+def register_connector_execute_tool(mcp: FastMCP, registrar: McpObservedToolRegistrar) -> None:
     registrar.register(
         execute_tool,
-        auth=None,
+        auth=agent_platform_tool_auth(mcp),
         name="execute_tool",
         description="Execute an accessible connector tool by its generated flat-mode name.",
         tags={"connectors", "gateway"},

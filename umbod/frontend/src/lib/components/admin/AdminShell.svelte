@@ -12,6 +12,7 @@
     | 'connectors'
     | 'groups'
     | 'namespaces'
+    | 'agentTokens'
     | 'groupPermissions'
     | 'systemSettings';
 

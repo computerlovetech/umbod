@@ -14,6 +14,7 @@ from umbod.core.callers import (
     DeclaredIssuer,
     SubjectIdentity,
 )
+from umbod.core.credential_expiry import NeverExpires
 from umbod.core.personal_access_tokens import (
     InvalidPersonalAccessToken,
     IssuePersonalAccessToken,
@@ -51,14 +52,20 @@ def _request() -> IssuePersonalAccessToken:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("expires", [True, False], ids=["finite", "never"])
 async def test_token_survives_runtime_restart_with_only_its_hash_persisted(
-    tmp_path: Path,
+    tmp_path: Path, expires: bool
 ) -> None:
+    request = _request()
+    if not expires:
+        request = IssuePersonalAccessToken.model_validate(
+            request.model_dump() | {"expires_at": NeverExpires.NEVER}
+        )
     path = tmp_path / "personal-access-tokens.sqlite3"
     runtime = await prepared_sqlite_runtime(path)
     try:
         service = create_personal_access_token_service(runtime.database, _policy())
-        issued = await service.issue(_caller("alice"), _request())
+        issued = await service.issue(_caller("alice"), request)
     finally:
         await runtime.shutdown()
 

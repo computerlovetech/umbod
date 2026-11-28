@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
+from umbod.core.credential_expiry import CredentialExpiry, NeverExpires
 from umbod.core.personal_access_tokens import (
     IssuePersonalAccessToken,
     PersonalAccessTokenPolicy,
@@ -56,6 +57,28 @@ def test_request_rejects_blank_or_oversized_text(field: str, value: str) -> None
     payload[field] = value
     with pytest.raises(ValidationError):
         IssuePersonalAccessToken.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "raw_expiry,expected",
+    [
+        (None, NeverExpires.NEVER),
+        ("2030-01-02T01:00:00+01:00", datetime(2030, 1, 2, tzinfo=timezone.utc)),
+    ],
+    ids=["null", "timestamp"],
+)
+def test_request_normalizes_expiry(
+    raw_expiry: str | None, expected: CredentialExpiry
+) -> None:
+    request = IssuePersonalAccessToken.model_validate(
+        {
+            "name": "name",
+            "audience": "audience",
+            "scopes": ("read",),
+            "expires_at": raw_expiry,
+        }
+    )
+    assert request.expires_at == expected
 
 
 def test_request_rejects_naive_expiry() -> None:

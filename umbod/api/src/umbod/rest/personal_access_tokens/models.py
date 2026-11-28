@@ -2,6 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from umbod.core.credential_expiry import CredentialExpiry
 from umbod.core.personal_access_tokens.access import (
     PersonalAccessTokenPermission,
     PersonalAccessTokenResource,
@@ -10,7 +11,6 @@ from umbod.core.personal_access_tokens.access import (
 from umbod.core.personal_access_tokens.models import (
     BoundedText,
     PersonalAccessTokenMetadata,
-    UtcDatetime,
 )
 
 
@@ -18,7 +18,7 @@ class CreatePersonalAccessToken(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
 
     name: BoundedText
-    expires_at: UtcDatetime
+    expires_at: CredentialExpiry
     permissions: Annotated[
         dict[PersonalAccessTokenResource, PersonalAccessTokenPermission],
         Field(min_length=1),

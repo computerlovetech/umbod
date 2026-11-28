@@ -36,7 +36,7 @@ from umbod.core.connectors.downstream_mcp.personal.tools import (
 from umbod.mcp.signals.diagnostics import invocation_failure
 
 from .personal_recovery import personal_authorization_failure, personal_inventory_failure, validate_recovery_origin
-from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
+from umbod.mcp.auth.caller import authentication_provenance_for_token, caller_context_from_access_token
 from umbod.mcp.auth.membership import verified_mcp_caller
 
 from .namespaces import PersonalToolNameMatcher, PersonalToolNamespace
@@ -51,8 +51,10 @@ class McpPersonalCallerProvider:
 
     async def get_caller(self) -> PersonalCaller | UnavailablePersonalCaller:
         token = get_access_token()
-        authentication = authentication_provenance(self._server.auth)
-        if authentication is AuthenticationProvenance.UNAVAILABLE or token is None or not isinstance(token.claims, Mapping):
+        authentication = authentication_provenance_for_token(self._server.auth, token)
+        if authentication in {
+            AuthenticationProvenance.AGENT_CREDENTIAL, AuthenticationProvenance.UNAVAILABLE,
+        } or token is None or not isinstance(token.claims, Mapping):
             return UnavailablePersonalCaller(kind="unavailable")
         claims = authenticated_personal_mcp_claims(self._settings, self._policy, token.claims)
         resolution = canonical_principal(self._policy, personal_identity_facts(claims))

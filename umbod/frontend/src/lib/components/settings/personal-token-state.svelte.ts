@@ -3,6 +3,7 @@ import type { PersonalAccessTokensApi } from '#lib/personal-access-tokens/api.js
 import type { TokenMetadata } from '#lib/personal-access-tokens/domain/schemas.js';
 import type { ClipboardWriter } from '#lib/admin/clipboard.js';
 import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
+import { defaultTokenExpiration, isTokenExpirationChoice, timestampForTokenExpiration, tokenExpirationOptions, type TokenExpirationChoice } from '#lib/components/shared/token-expiration.js';
 
 const agentLogsScope = 'telemetry:write';
 
@@ -15,8 +16,8 @@ export class PersonalTokenState {
   private creationDialogOpen = $state(false);
   private agentLogs = $state(false);
   private name = $state('');
-  private expiration = $state(30);
-  readonly expirationOptions: readonly number[] = Object.freeze([7, 30, 60, 90]);
+  expiration = $state<TokenExpirationChoice>(defaultTokenExpiration);
+  readonly expirationOptions = tokenExpirationOptions;
   private access = $state<'loading' | 'ready' | 'signin' | 'forbidden' | 'error'>('loading');
   private rows = $state.raw<readonly TokenMetadata[]>([]);
   private scopes = $derived([...new Set(this.rows.flatMap((token: TokenMetadata): string[] => token.scopes))].sort());
@@ -35,11 +36,7 @@ export class PersonalTokenState {
 
   get createDialogOpen(): boolean { return this.creationDialogOpen; }
   get allowsAgentLogs(): boolean { return this.agentLogs; }
-  get expirationSelectOptions(): SelectOption[] {
-    return this.expirationOptions.map((days: number): SelectOption => ({ value: String(days), label: `${days} days` }));
-  }
   get tokenName(): string { return this.name; }
-  get expirationDays(): number { return this.expiration; }
   get canGenerate(): boolean { return !this.disposed && this.access === 'ready' && !this.loading; }
   get status(): string { return this.access; }
   get tokens(): readonly TokenMetadata[] { return this.rows; }
@@ -65,7 +62,7 @@ export class PersonalTokenState {
     if (this.disposed || this.pending || !this.canGenerate) return;
     this.dismiss();
     this.name = '';
-    this.expiration = 30;
+    this.expiration = defaultTokenExpiration;
     this.agentLogs = false;
     this.message = '';
     this.creationDialogOpen = true;
@@ -79,8 +76,8 @@ export class PersonalTokenState {
 
   setAgentLogs = (enabled: boolean): void => { this.agentLogs = enabled; };
   setTokenName = (value: string): void => { this.name = value; };
-  setExpirationDays = (value: number): void => {
-    if (this.expirationOptions.includes(value)) this.expiration = value;
+  selectExpiration = (value: string): void => {
+    if (isTokenExpirationChoice(value)) this.expiration = value;
     else this.message = 'Choose a supported expiration duration.';
   };
 
@@ -99,15 +96,15 @@ export class PersonalTokenState {
   create = async (): Promise<void> => {
     if (this.pending || !this.canGenerate || this.output) return;
     this.message = '';
-    if (!this.name.trim() || this.name.trim().length > 256 || !this.expirationOptions.includes(this.expiration)) {
-      this.message = 'Enter a token name of 1–256 characters and choose a supported expiration duration.';
+    if (!this.name.trim() || this.name.trim().length > 256) {
+      this.message = 'Enter a token name of 1–256 characters.';
       return;
     }
     if (!this.agentLogs) {
       this.message = 'Select at least one permission.';
       return;
     }
-    const expiresAt = new Date(this.now() + this.expiration * 86_400_000).toISOString();
+    const expiresAt = timestampForTokenExpiration(this.expiration, this.now());
     this.dismiss();
     const revision = this.secretRevision;
     this.operation = 'create';
@@ -177,7 +174,7 @@ export class PersonalTokenState {
       const rows = await this.api.tokens.list();
       if (this.disposed) return;
       this.replaceRows(rows);
-      if (this.outputTokenId && !this.rows.some((row: TokenMetadata): boolean => row.token_id === this.outputTokenId && row.status === 'active' && Date.parse(row.expires_at) > this.now())) this.dismiss();
+      if (this.outputTokenId && !this.rows.some((row: TokenMetadata): boolean => row.token_id === this.outputTokenId && row.status === 'active' && (row.expires_at === null || Date.parse(row.expires_at) > this.now()))) this.dismiss();
       this.access = 'ready';
     } catch (error: unknown) {
       if (!this.disposed) this.failure(error, 'Could not load personal access tokens. Contact your operator if the problem persists.');

@@ -5,6 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.types import ASGIApp
 
 from umbod.config import AppConfig
+from umbod.core.agent_tokens import is_agent_credential_bearer
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError, JwtVerifier
 from umbod.rest.authentication.caller import authentication_provenance, caller_context_from_claims
 from umbod.rest.authentication.deps import CALLER_CONTEXT_STATE_KEY, VERIFIED_ACCESS_CLAIMS_STATE_KEY
@@ -47,23 +48,23 @@ class RestAuthenticationMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             response.headers["Cache-Control"] = "no-store"
             return response
-        if (
-            (
-                self._settings.admin_authentication.mode == "disabled"
-                and within_namespace(path, "/api/admin")
-            )
-            or (
-                request.method == "OPTIONS"
-                and "origin" in request.headers
-                and "access-control-request-method" in request.headers
-            )
-            or not protected_rest_request(request.scope)
+        if not protected_rest_request(request.scope) or (
+            request.method == "OPTIONS"
+            and "origin" in request.headers
+            and "access-control-request-method" in request.headers
         ):
             return await call_next(request)
-        selection, verifier = self._selection(path)
         token = extract_request_jwt_token(
             request.headers, self._settings.admin_authentication.jwt_header_name,
         )
+        if is_agent_credential_bearer(token):
+            return self._unauthorized()
+        if (
+            self._settings.admin_authentication.mode == "disabled"
+            and within_namespace(path, "/api/admin")
+        ):
+            return await call_next(request)
+        selection, verifier = self._selection(path)
         default_simulation = self._default_simulation[selection] and type(verifier) is SimulatedJwtVerifier
         if (
             not token and selection != "admin" and not (self._local and default_simulation)

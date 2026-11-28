@@ -28,6 +28,7 @@ description: "Actor-independent presentation and interaction mechanics."
 - [Disclosure test support](./disclosure.test-support.svelte.ts) — Parent effect used to test that programmatic control does not subscribe to the disclosure state.
 - [PlusIcon.svelte](./PlusIcon.svelte) — Decorative leading plus for labeled creation buttons.
 - [DateTimeView.svelte](./DateTimeView.svelte) — Date and time display.
+- [Token expiration presets](./token-expiration.ts) — Shared duration choices and timestamp conversion for access and agent token forms.
 - [ModalShell.svelte](./ModalShell.svelte) — Native modal with a shared heading, close control, guarded dismissal, and initial focus.
 - [Modal DOM tests](./modal-shell.dom.test.ts) — Accessible close control, native cancellation guards, backdrop hit testing, and initial focus.
 - [Modal test harness](./modal-shell.test-support.svelte) — Mounted modal form for dismissal and reactive guard checks.

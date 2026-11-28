@@ -55,6 +55,7 @@ description: "Administration contracts, browser clients and feature state for co
 - [Filesystem system settings](./system-settings/filesystem-settings-route.ts) — Validated read, set, and reset operations for the instance approval policy.
 - [Provider group mappings](./system-settings/provider-group-mappings-route.ts) — Validated read, set, and reset operations for stored OAuth claim-to-group mappings.
 - [groups](./groups/README.md) — Shared group catalogue.
+- [Agent tokens](./agent-tokens/README.md) — Public MCP agent token lifecycle contracts and HTTP adapter.
 - [infrastructure](./infrastructure/README.md) — Transport and API composition.
 - [operations](./operations/README.md) — Browser mutation dispatch.
 - [Personal MCP servers](./personal-mcp-servers/README.md) — Personal server registration, policy and pre-publication OAuth setup.

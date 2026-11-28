@@ -86,7 +86,7 @@ it('opens the form on demand, selects options and updates the list after issuanc
   expiration.click();
   await tick();
   const options = [...dialog.querySelectorAll<HTMLElement>('[role="option"]')];
-  expect(options.map((option): string | null | undefined => option.querySelector('span')?.textContent)).toEqual(['7 days', '30 days', '60 days', '90 days']);
+  expect(options.map((option): string | null | undefined => option.querySelector('span')?.textContent)).toEqual(['7 days', '30 days', '60 days', '90 days', 'Never']);
   options[0].click();
   await vi.waitFor(() => expect(expiration.textContent).toContain('7 days'));
   expect(api.createCalls).toBe(0);
@@ -124,6 +124,26 @@ it('opens the form on demand, selects options and updates the list after issuanc
   await vi.waitFor(() => expect(list.textContent).toContain('No personal access tokens.'));
   expect(api.listCalls).toBe(1);
   expect(target.textContent).not.toContain('test-only-secret');
+});
+
+it('creates and displays an access token that never expires', async (): Promise<void> => {
+  const api = new InMemoryPersonalAccessTokens();
+  const target = render(api);
+  const dialog = await openCreate(target);
+  const expiration = labelledControl<HTMLButtonElement>(dialog, 'Expiration');
+  expiration.click();
+  await tick();
+  const never = [...dialog.querySelectorAll<HTMLElement>('[role="option"]')].find((option) => option.textContent?.trim() === 'Never');
+  if (!never) throw new Error('Missing Never option');
+  never.click();
+  await tick();
+  fillName(dialog, 'Permanent logs');
+  agentLogsCheckbox(dialog).click();
+  button(dialog, 'Create token').click();
+  const list = element<HTMLUListElement>(target, 'ul[aria-label="Personal access tokens"]');
+  await vi.waitFor(() => expect(list.textContent).toContain('Never expires'));
+  expect(api.rows[0]?.expires_at).toBeNull();
+  expect(list.querySelector('time')).toBeNull();
 });
 
 it('lists every token by default and matches a selected scope within a combined-scope token', async (): Promise<void> => {

@@ -1,10 +1,8 @@
-from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
 from pydantic import (
     AfterValidator,
-    AwareDatetime,
     BaseModel,
     ConfigDict,
     Field,
@@ -13,6 +11,7 @@ from pydantic import (
     model_validator,
 )
 
+from umbod.core.credential_expiry import CredentialExpiry
 from umbod.core.groups.models import GroupInstanceId
 
 
@@ -22,10 +21,6 @@ def _nonblank(value: str) -> str:
     return value
 
 
-def _utc(value: datetime) -> datetime:
-    return value.astimezone(timezone.utc)
-
-
 NonblankText = Annotated[str, StringConstraints(strict=True), AfterValidator(_nonblank)]
 UuidHex = Annotated[
     str,
@@ -33,7 +28,6 @@ UuidHex = Annotated[
         strict=True, min_length=32, max_length=32, pattern=r"^[0-9a-f]{32}$"
     ),
 ]
-UtcDatetime = Annotated[AwareDatetime, AfterValidator(_utc)]
 
 
 class AgentTokenModel(BaseModel):
@@ -43,12 +37,12 @@ class AgentTokenModel(BaseModel):
 class CreateAgent(AgentTokenModel):
     display_name: NonblankText
     group_id: NonblankText
-    expires_at: UtcDatetime
+    expires_at: CredentialExpiry
 
 
 class RotateAgentCredential(AgentTokenModel):
     agent_id: UuidHex
-    expires_at: UtcDatetime
+    expires_at: CredentialExpiry
 
 
 class AgentCredentialStatus(StrEnum):
@@ -62,7 +56,7 @@ class AgentCredentialMetadata(AgentTokenModel):
     display_name: NonblankText
     group_id: NonblankText
     credential_id: UuidHex
-    expires_at: UtcDatetime
+    expires_at: CredentialExpiry
     status: AgentCredentialStatus
 
     @model_validator(mode="after")

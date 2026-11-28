@@ -1,8 +1,8 @@
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, cast
 
 from fastmcp import FastMCP
-from fastmcp.server.auth import AuthContext
+from fastmcp.server.auth import AuthCheck, AuthContext
 
 from umbod.core.callers import LegacyGroupClaimPolicy
 from umbod.core.capabilities.domain import CapabilityKind
@@ -11,7 +11,63 @@ from umbod.core.permissions import (
     ConnectorCapabilityRef,
     InMemoryGroupConnectorToolPermissions,
 )
-from umbod.mcp.auth.membership import capture_mcp_caller
+from umbod.mcp.auth.agent_tokens import PublicAgentMultiAuth
+from umbod.mcp.auth.membership import McpAccessTokenAvailability, capture_mcp_caller, restricted_mcp_grants
+
+
+class SharedDownstreamCapabilityComponent:
+    def group_permission_ref(self, context: AuthContext) -> ConnectorCapabilityRef | None:
+        return _capability_ref_from_context(context)
+
+
+class _AgentCapabilityComponentCheck:
+    def __init__(self, server: FastMCP) -> None:
+        self._server = server
+
+    def __call__(self, context: AuthContext) -> bool:
+        grants = restricted_mcp_grants(self._server, context.token or McpAccessTokenAvailability.UNAVAILABLE)
+        if grants is None:
+            return True
+        ref = _capability_ref_from_context(context)
+        return ref is not None and ref in grants.capabilities
+
+
+class _AgentPlatformToolCheck:
+    def __init__(self, server: FastMCP) -> None:
+        self._server = server
+
+    def __call__(self, context: AuthContext) -> bool:
+        grants = restricted_mcp_grants(self._server, context.token or McpAccessTokenAvailability.UNAVAILABLE)
+        return grants is None or bool(grants.group_id)
+
+
+def agent_capability_component_auth(server: FastMCP) -> AuthCheck | None:
+    return _AgentCapabilityComponentCheck(server) if isinstance(getattr(server, "auth", None), PublicAgentMultiAuth) else None
+
+
+def agent_platform_tool_auth(server: FastMCP) -> AuthCheck | None:
+    return _AgentPlatformToolCheck(server) if isinstance(server.auth, PublicAgentMultiAuth) else None
+
+
+def agent_aware_capability_permission_check(
+    server: FastMCP, legacy: Callable[[AuthContext], Awaitable[bool]],
+) -> Callable[[AuthContext], Awaitable[bool]]:
+    async def check(context: AuthContext) -> bool:
+        grants = restricted_mcp_grants(server, context.token or McpAccessTokenAvailability.UNAVAILABLE)
+        if grants is None:
+            return await legacy(context)
+        component_auth = getattr(context.component, "auth", None)
+        if isinstance(component_auth, _AgentPlatformToolCheck):
+            return bool(grants.group_id)
+        if isinstance(context.component, SharedDownstreamCapabilityComponent):
+            ref = context.component.group_permission_ref(context)
+            return ref is not None and ref in grants.capabilities
+        if isinstance(component_auth, _AgentCapabilityComponentCheck):
+            ref = _capability_ref_from_context(context)
+            return ref is not None and ref in grants.capabilities
+        return False
+
+    return check
 
 
 def connector_capability_permission_check(

@@ -1,7 +1,8 @@
 from messaging.events import McpGroupPermissionChanged
 from umbod.core.messaging.stores.event_stream import append_event_in_session
-from umbod.core.groups import RegisterGroup
+from umbod.core.groups import GroupInstance, RegisterGroup
 from umbod.core.groups.stores.composition import create_group_management
+from umbod.core.groups.stores.reads import read_group_instance
 from umbod.core.groups.stores.registration import register_group_in_session
 from umbod.core.capabilities.domain import CapabilityKind
 from umbod.core.permissions.domain import (
@@ -28,7 +29,7 @@ from umbod.core.permissions.stores.schema import (
     GroupConnectorPermissionKey,
     GroupConnectorPermissionRecord,
 )
-from umbod.core.persistence.ports import Database, DatabaseSession, TransactionMode
+from umbod.core.persistence.ports import Database, DatabaseSession, ReadSession, TransactionMode
 from umbod.core.persistence.query import (
     AllOf,
     DeleteQuery,
@@ -57,8 +58,15 @@ class GroupPermissionStoreService:
         async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
             return await self.list_group_permissions_in_session(session, group_id)
 
+    async def read_for_group_instance(self, group: GroupInstance) -> GroupPermissionSet:
+        async with self._database.read_session() as session:
+            current = await read_group_instance(session, group.group_id)
+            if current != group:
+                return GroupPermissionSet(group_id="", connector_ids=(), capabilities=())
+            return await self.list_group_permissions_in_session(session, group.group_id)
+
     async def list_group_permissions_in_session(
-        self, session: DatabaseSession, group_id: str
+        self, session: ReadSession, group_id: str
     ) -> GroupPermissionSet:
         connector_ids = tuple(
             row.connector_id

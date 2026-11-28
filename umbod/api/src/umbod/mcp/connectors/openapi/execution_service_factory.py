@@ -16,7 +16,7 @@ from umbod.core.connectors.openapi.execution import (
     StrictOpenApiRequestCompiler,
 )
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
-from umbod.core.permissions.ports import GroupPermissionReader
+from umbod.core.permissions.ports import GroupPermissionLookup
 from umbod.mcp.connectors.openapi.availability import openapi_availability_reader
 from umbod.mcp.connectors.openapi.configuration import openapi_configuration_adapter
 
@@ -28,7 +28,7 @@ class OpenApiCapabilityExecutionServiceFactory:
     async def create(
         self,
         store: OpenApiConnectorStore,
-        permission_reader: GroupPermissionReader,
+        permission_reader: GroupPermissionLookup,
         client: AsyncStreamingHttpClient,
         execution_pipeline: ToolExecutionPipeline[OpenApiExecutionResponse],
     ) -> OpenApiCapabilityExecutionService:

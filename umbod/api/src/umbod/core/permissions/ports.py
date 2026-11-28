@@ -1,5 +1,6 @@
 from typing import Protocol
 
+from umbod.core.groups import GroupInstance
 from umbod.core.permissions.domain import (
     AssignablePermissionTargets,
     ConnectorCapabilityRef,
@@ -13,6 +14,10 @@ from umbod.core.permissions.domain import (
 
 class GroupPermissionLookup(Protocol):
     async def list_group_permissions(self, group_id: str) -> GroupPermissionSet: ...
+
+
+class GroupInstancePermissionReader(Protocol):
+    async def read_for_group_instance(self, group: GroupInstance) -> GroupPermissionSet: ...
 
 
 class GroupPermissionReader(GroupPermissionLookup, Protocol):

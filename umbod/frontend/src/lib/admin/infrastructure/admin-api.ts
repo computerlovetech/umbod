@@ -1,6 +1,8 @@
 import { FilesystemSettingsRoute } from '../system-settings/filesystem-settings-route';
 import { ProviderGroupMappingsRoute } from '../system-settings/provider-group-mappings-route';
 import { NamespacesRoute } from '../filesystem/namespaces-route';
+import { AgentTokensRoute } from '../agent-tokens/http-route';
+import type { AgentTokens } from '../agent-tokens/port';
 import { AnalyticsRoute } from '../analytics/http-route';
 import { GroupsRoute } from '../groups/http-route';
 import { PersonalServersRoute } from '../personal-mcp-servers/http-route';
@@ -21,6 +23,7 @@ export class AdminApi {
   readonly namespaces: NamespacesRoute;
   readonly filesystemSettings: FilesystemSettingsRoute;
   readonly providerGroupMappings: ProviderGroupMappingsRoute;
+  readonly agentTokens: AgentTokens;
   readonly analytics: AnalyticsRoute;
   readonly groups: GroupsRoute;
   readonly personalServers: PersonalServersRoute;
@@ -38,6 +41,7 @@ export class AdminApi {
     this.namespaces = new NamespacesRoute(transport);
     this.filesystemSettings = new FilesystemSettingsRoute(transport);
     this.providerGroupMappings = new ProviderGroupMappingsRoute(transport);
+    this.agentTokens = new AgentTokensRoute(transport);
     this.analytics = new AnalyticsRoute(transport);
     this.groups = new GroupsRoute(transport);
     this.personalServers = new PersonalServersRoute(transport);

@@ -61,6 +61,14 @@ Umbod uses the configured OAuth issuer and `UMBOD_MCP_PERMISSION_CLAIM` for all 
 
 Saved changes take effect on subsequent REST and MCP requests without a restart. Removing all mappings revokes ordinary OAuth group access. The API and MCP workers must share the same application database, as they do in the standard Helm and Compose installations. Separate in-memory stores do not share saved mappings.
 
+## MCP agent tokens
+
+In **Administration → Agent tokens**, administrators can issue, rotate, and revoke agent tokens. Choose 7, 30, 60, or 90 days, or choose **Never** for a token with no expiry. To issue a token through `POST /api/admin/tokens/agents`, specify an existing Umbod group and set `expires_at` to a future timestamp or explicitly to `null` for no expiry. The API returns the secret only on issuance or rotation. Store it in the agent's secret store and send it as a bearer credential on every HTTPS request to public `/mcp`. Do not put it in a URL.
+
+Agent tokens work with configured public OIDC authentication. REST and MCP workers must share the application database. Upgrade all workers before issuing a token with no expiry; older workers cannot read those credentials. The assigned Umbod group controls access to shared connector capabilities; provider group mappings only apply to human OAuth. Agent tokens cannot authenticate to REST, telemetry, or administrator MCP, and cannot use personal connectors, files, or tools that require human approval. Rotating or revoking a token invalidates the old bearer on the next MCP request, including in an existing session.
+
+After upgrading to this version, reconnect existing OAuth MCP sessions and restart any pending MCP approvals. Existing OAuth group mappings do not need to change.
+
 ## Administrator MCP
 
 Administrators can manage Umbod from an agent through three tools: `admin_discover`, `admin_inspect`, and `admin_apply`. They are served on a separate, private listener.

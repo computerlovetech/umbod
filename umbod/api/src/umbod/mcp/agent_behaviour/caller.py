@@ -4,7 +4,7 @@ from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token
 
 from umbod.core.callers import LOCAL_DEVELOPMENT_ISSUER, AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity, UnavailableIssuer
-from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
+from umbod.mcp.auth.caller import authentication_provenance_for_token, caller_context_from_access_token
 
 
 class DiagnosticCallerCapture(Protocol):
@@ -16,8 +16,9 @@ class CurrentDiagnosticCallerCapture:
         self._server = server
 
     def capture(self) -> CallerContext:
+        token = get_access_token()
         caller = caller_context_from_access_token(
-            get_access_token(), authentication_provenance(self._server.auth),
+            token, authentication_provenance_for_token(self._server.auth, token),
         )
         subject = caller.subject
         if caller.authentication == AuthenticationProvenance.LOCAL_TEST and isinstance(subject, SubjectIdentity) and isinstance(subject.issuer, UnavailableIssuer):

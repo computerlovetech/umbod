@@ -8,6 +8,7 @@ from pydantic.fields import FieldInfo
 
 from umbod.core.connectors.native.runtime import ConnectorPromptMapping
 
+from umbod.mcp.authorization import agent_capability_component_auth
 from umbod.mcp.connectors.native.prompts.naming import prompt_name
 
 
@@ -35,6 +36,7 @@ class FastMcpConnectorPromptRegistrar:
         mcp.prompt(
             name=prompt_name(mapping),
             description=getattr(mapping, "description", None),
+            auth=agent_capability_component_auth(mcp),
             meta={
                 "connector_id": mapping.connector_id,
                 "capability_kind": "prompt",

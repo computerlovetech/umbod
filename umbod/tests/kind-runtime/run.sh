@@ -238,7 +238,7 @@ for attempt in $(seq 1 60); do
     fi
     sleep 1
 done
-(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_provider_group_mappings.py)
+(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_provider_group_mappings.py live_runtime_tests/test_running_agent_tokens.py)
 (cd "${app_directory}/api" && uv run --locked python -c '
 import os
 import runpy

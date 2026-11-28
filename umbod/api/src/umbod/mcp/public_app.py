@@ -34,6 +34,7 @@ from typing import Literal
 from umbod.build_identity import UMBOD_RELEASE
 from umbod.http_metadata import HttpMetadataStarlette
 from fastmcp import FastMCP
+from fastmcp.server.auth import AuthContext
 from pydantic import TypeAdapter
 from fastmcp.server.middleware import AuthMiddleware, Middleware
 from mcp.server.request_state import RequestStateSecurity
@@ -58,10 +59,13 @@ from umbod.mcp.agent_behaviour.reservations import ensure_connector_tool_name_av
 from umbod.mcp.http_transport import MAX_MCP_REQUEST_BODY_BYTES, create_mcp_http_app
 from umbod.mcp.administrator.composition import register_configured_administrator_tools
 from umbod.mcp.auth.transport import AuthenticatedMcpTransport, McpTransportAuthentication, UnauthenticatedMcpTransport, configured_mcp_transport_authentication, fastmcp_authentication_provider
+from umbod.core.agent_tokens import create_agent_credential_verifier
+from umbod.core.permissions.factories import create_group_instance_permission_reader
+from umbod.mcp.auth.agent_tokens import PublicAgentMultiAuth, create_public_agent_auth
 from umbod.mcp.auth.membership import McpCallerSnapshotMiddleware
 from umbod.mcp.auth.consent_screen import install_umbod_consent_screen
-from umbod.mcp.auth.factory import MCPAuthProvider
 from umbod.mcp.auth.debug_middleware import MCPAuthDebugMiddleware
+from umbod.mcp.auth.factory import MCPAuthProvider
 from umbod.mcp.context import ConnectorRuntimeStateSynchronizerOptions, PublicAppConfig, PublicAppRuntimeContext
 from umbod.core.invocation import DatabaseApprovalNonceStore
 from umbod.core.invocation import DatabaseConnectorInvocationPolicyStore
@@ -116,9 +120,10 @@ from umbod.core.connectors.downstream_mcp.adapters.settings import (
 )
 from umbod.mcp.connectors.downstream_mcp.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinator, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
 from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, GroupDownstreamToolPermissionPolicy, NativeCapabilityProviderView, UnrestrictedDownstreamToolPermissionPolicy
+from umbod.mcp.connectors.downstream_mcp.permissions import DownstreamToolPermissionPolicySource, InstanceAwareDownstreamToolPermissionPolicy
 from umbod.mcp.live_permission_updates import DatabaseGroupPermissionReader, GroupPermissionStateReloader, HttpGroupPermissionReader, RuntimeGroupPermissionSynchronizer
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
-from umbod.mcp.authorization import connector_capability_permission_check
+from umbod.mcp.authorization import agent_aware_capability_permission_check, connector_capability_permission_check
 from umbod.mcp.connectors.openapi import DatabaseGroupPermissionReaderFactory, build_openapi_codemode_executor
 from umbod.mcp.connectors.openapi.inventory import read_openapi_tool_inventory
 from umbod.mcp.connectors.openapi.discovery_runtime import initialize_openapi_discovery, reconcile_openapi_discovery
@@ -159,6 +164,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authenticati
     signals = create_mcp_signals(invocation_log_sink, metrics_recorder, audit_recorder, telemetry.application_failures)
     usage_runtime = create_mcp_usage_runtime(settings, persistence_runtime.database, signals, telemetry.application_failures)
     publisher = McpInvocationPublisher(signals)
+
     middleware: list[Middleware] = [McpCapabilityCompletionMiddleware(signals.capability_completed, McpAuditIdentityAdapter(), PublishingSignalFailureHandler(telemetry.application_failures), time.monotonic, time.time_ns), McpResponseMetadataMiddleware(), McpProtocolMetricsMiddleware(metrics_recorder, clock=time.monotonic), McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
     approval_state_key = settings.connector_security.approval_state_key
     if not approval_state_key:
@@ -166,12 +172,13 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authenticati
             raise ValueError('Connector approval state key is required in production')
         approval_state_key = secrets.token_urlsafe(48)
     mcp = FastMCP(name=settings.runtime.app_name, version=UMBOD_RELEASE, auth=auth_provider, middleware=middleware, lifespan=usage_runtime.lifespan, request_state_security=RequestStateSecurity(keys=[approval_state_key], ttl=300.0, audience=f'{settings.runtime.app_name}:connector-approval'))
-    caller_snapshots = McpCallerSnapshotMiddleware(mcp, ConfiguredGroupMembershipSource(settings, persistence_runtime.database))
+    agent_auth_enabled = isinstance(auth_provider, PublicAgentMultiAuth)
+    instance_permissions = create_group_instance_permission_reader(persistence_runtime.database)
+    caller_snapshots = McpCallerSnapshotMiddleware(mcp, ConfiguredGroupMembershipSource(settings, persistence_runtime.database), instance_permissions)
     mcp.caller_snapshot_middleware = caller_snapshots
-    if group_permission_runtime_state is not None:
-        auth_check = personal_tool_permission_check(
-            connector_capability_permission_check(group_permission_runtime_state, mcp),
-        )
+    if group_permission_runtime_state is not None or agent_auth_enabled:
+        shared_check = connector_capability_permission_check(group_permission_runtime_state, mcp) if group_permission_runtime_state is not None else _unrestricted_shared_capability
+        auth_check = agent_aware_capability_permission_check(mcp, personal_tool_permission_check(shared_check))
         if settings.mcp.auth_debug_enabled:
             mcp.add_middleware(MCPAuthDebugMiddleware(auth=auth_check, permission_group_claim=settings.mcp.permission_group_claim))
         else:
@@ -243,7 +250,8 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authenticati
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, signals, mcp.execution_pipelines, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes)
     mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.execution_pipelines, telemetry.application_failures)
     signals.tool_inventory_observed.send(await read_openapi_tool_inventory(await mcp.openapi_connector_store_factory.create()))
-    downstream_permission_policy = UnrestrictedDownstreamToolPermissionPolicy() if group_permission_runtime_state is None else GroupDownstreamToolPermissionPolicy(group_permission_runtime_state, mcp)
+    shared_downstream_permissions = GroupDownstreamToolPermissionPolicy(group_permission_runtime_state, mcp) if group_permission_runtime_state is not None else UnrestrictedDownstreamToolPermissionPolicy()
+    downstream_permission_policy = InstanceAwareDownstreamToolPermissionPolicy(mcp, shared_downstream_permissions)
     await _register_downstream_mcp_provider(mcp, settings, downstream_permission_policy, persistence_runtime.database, invocation_policy, runtime, downstream_client_factory=downstream_client_factory)
     register_agent_instructions(mcp)
     mcp.middleware.insert(0, caller_snapshots)
@@ -264,7 +272,11 @@ class RuntimePublicToolIdentitySource:
         return tuple(identities)
 
 
-async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettings, permission_policy: UnrestrictedDownstreamToolPermissionPolicy | GroupDownstreamToolPermissionPolicy, database: Database, invocation_policy: ConnectorInvocationPolicy, *native_runtimes: ConnectorRuntime, downstream_client_factory: DownstreamClientFactory) -> None:
+def _unrestricted_shared_capability(_context: AuthContext) -> bool:
+    return True
+
+
+async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettings, permission_policy: DownstreamToolPermissionPolicySource, database: Database, invocation_policy: ConnectorInvocationPolicy, *native_runtimes: ConnectorRuntime, downstream_client_factory: DownstreamClientFactory) -> None:
     infrastructure_settings = downstream_mcp_infrastructure_settings_from_app_config(settings)
     stores = await create_downstream_mcp_stores(
         infrastructure_settings.credential_secret, database
@@ -349,10 +361,21 @@ async def create_runtime_context(config: PublicAppConfig, *, downstream_client_f
     group_permission_runtime_state = config.group_permission_runtime_state
     if group_permission_runtime_state is None and config.settings.mcp.auth_mode != "none":
         group_permission_runtime_state = InMemoryGroupConnectorToolPermissions(group_claim_fields=(config.settings.mcp.permission_group_claim,))
-    authentication = AuthenticatedMcpTransport(config.auth_provider) if config.auth_provider is not None else configured_mcp_transport_authentication(config.settings)
+    authentication = await _public_transport_authentication(config)
     persistence_runtime = config.persistence_runtime
     mcp = await build_mcp_with_openapi_adapters(config.settings, authentication, config.connector_runtime, (connector_tool_runtime_state_store, group_permission_runtime_state), openapi_adapters, persistence_runtime, telemetry=config.telemetry, downstream_client_factory=downstream_client_factory)
     return PublicAppRuntimeContext(mcp=mcp, http_app=create_mcp_http_app(mcp, path=_MCP_HTTP_PATH, stateless_http=config.stateless_http, max_request_body_bytes=MAX_MCP_REQUEST_BODY_BYTES), telemetry=config.telemetry, settings=config.settings, connector_runtime=config.connector_runtime, connector_tool_runtime_state_store=connector_tool_runtime_state_store, group_permission_runtime_state=group_permission_runtime_state, target_stores=ConnectorStorePair(connector_configuration_store=config.connector_runtime.connector_configuration_store, connector_publishing_store=config.connector_runtime.connector_publishing_store), source_strategy=source_strategy, api_base_url=config.api_base_url, persistence_runtime=persistence_runtime)
+
+async def _public_transport_authentication(config: PublicAppConfig) -> McpTransportAuthentication:
+    if config.auth_provider is not None:
+        return AuthenticatedMcpTransport(config.auth_provider)
+    authentication = configured_mcp_transport_authentication(config.settings)
+    if config.settings.mcp.auth_mode != 'oidc' or not isinstance(authentication, AuthenticatedMcpTransport):
+        return authentication
+    await config.persistence_runtime.readiness.ensure_ready()
+    verifier = create_agent_credential_verifier(config.persistence_runtime.database)
+    return AuthenticatedMcpTransport(create_public_agent_auth(authentication.provider, verifier))
+
 
 async def health_response(_request: Request) -> JSONResponse:
     return JSONResponse({'status': 'ok'})

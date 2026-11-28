@@ -29,15 +29,15 @@ describe('contextual workspace navigation', (): void => {
   test('administration sidebar shows only administration destinations', (): void => {
     expect(administrationNavigation.map((link): string => link.href)).toEqual([
       '/admin/connectors', '/admin/groups', '/admin/namespaces', '/admin/group-permissions/connectors',
-      '/admin/insights/agent-behaviour', '/admin/agent-diagnostics', '/admin/system-settings'
+      '/admin/agent-tokens', '/admin/insights/agent-behaviour', '/admin/agent-diagnostics', '/admin/system-settings'
     ]);
     expect(administrationNavigation.map((link): string | undefined => link.icon)).toEqual([
-      'connectors', 'groups', 'files', 'permissions', 'analytics', 'administration', 'settings'
+      'connectors', 'groups', 'files', 'permissions', 'key', 'analytics', 'administration', 'settings'
     ]);
     expect(administrationNavigation.map((link): string => link.id)).toEqual([
-      'connectors', 'groups', 'namespaces', 'groupPermissions', 'insights', 'agentDiagnostics', 'systemSettings'
+      'connectors', 'groups', 'namespaces', 'groupPermissions', 'agentTokens', 'insights', 'agentDiagnostics', 'systemSettings'
     ]);
-    expect(new Set(administrationNavigation.map((link): string => link.id)).size).toBe(7);
+    expect(new Set(administrationNavigation.map((link): string => link.id)).size).toBe(8);
     expect(administrationNavigation.filter((link): boolean => link.startsSection === true).map((link): string => link.href)).toEqual([]);
   });
 });

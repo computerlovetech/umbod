@@ -4,9 +4,10 @@ from typing import Annotated, Protocol
 
 from pydantic import Field, StringConstraints
 
+from umbod.core.credential_expiry import UtcDatetime
 from umbod.core.harness_plugins import Harness
 
-from .models import IssuedPersonalAccessToken, StoredPersonalAccessToken, TokenModel, TokenOwner, UtcDatetime
+from .models import IssuedPersonalAccessToken, StoredPersonalAccessToken, TokenModel, TokenOwner
 
 ClaimDigest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 

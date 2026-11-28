@@ -19,7 +19,7 @@ from umbod.core.capabilities.descriptions import (
 )
 from umbod.core.connectors.openapi.catalog import StoreBackedOpenApiCapabilityCatalog
 from umbod.core.permissions.domain import ConnectorToolRef
-from umbod.core.permissions.ports import GroupPermissionReader
+from umbod.core.permissions.ports import GroupPermissionLookup
 from umbod.mcp.connectors.openapi.deps import get_openapi_connector_store
 
 
@@ -90,7 +90,7 @@ class AuthorizedOpenApiDiscoveryCatalog:
     def __init__(
         self,
         capabilities: tuple[NormalizedCapability, ...],
-        permissions: GroupPermissionReader,
+        permissions: GroupPermissionLookup,
         groups: tuple[str, ...],
     ) -> None:
         self._capabilities = tuple(capability.model_copy(deep=True) for capability in capabilities)

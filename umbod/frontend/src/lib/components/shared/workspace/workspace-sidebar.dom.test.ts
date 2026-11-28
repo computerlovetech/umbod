@@ -105,7 +105,7 @@ describe('contextual sidebar rendering', (): void => {
     expect(document.querySelector('h1')?.textContent).toBe('Existing files page');
   });
 
-  test.each(['connectors', 'groups', 'namespaces', 'groupPermissions', 'insights', 'agentDiagnostics', 'systemSettings'] as const)('administration selects %s while preserving the page and identity frame', async (activeItem): Promise<void> => {
+  test.each(['connectors', 'groups', 'namespaces', 'groupPermissions', 'agentTokens', 'insights', 'agentDiagnostics', 'systemSettings'] as const)('administration selects %s while preserving the page and identity frame', async (activeItem): Promise<void> => {
     component = mount(AdminShell, {
       target: document.body,
       props: {
@@ -117,7 +117,7 @@ describe('contextual sidebar rendering', (): void => {
     const links = Array.from(document.querySelectorAll('nav[aria-label="Administration navigation"] a'));
     expect(links.map((link): string | null => link.getAttribute('href'))).toEqual([
       '/admin/connectors', '/admin/groups', '/admin/namespaces', '/admin/group-permissions/connectors',
-      '/admin/insights/agent-behaviour', '/admin/agent-diagnostics', '/admin/system-settings'
+      '/admin/agent-tokens', '/admin/insights/agent-behaviour', '/admin/agent-diagnostics', '/admin/system-settings'
     ]);
     expect(document.querySelectorAll('nav a[aria-current="page"]')).toHaveLength(1);
     expect(document.querySelector('nav a.section-start')).toBeNull();

@@ -1,12 +1,14 @@
 from dataclasses import dataclass
 
-from umbod.mcp.auth.factory import MCPAuthProvider, MCPAuthProviderFactory
+from fastmcp.server.auth import AuthProvider
+
+from umbod.mcp.auth.factory import MCPAuthProviderFactory
 from umbod.mcp.settings import MCPAppSettings
 
 
 @dataclass(frozen=True)
 class AuthenticatedMcpTransport:
-    provider: MCPAuthProvider
+    provider: AuthProvider
 
 
 @dataclass(frozen=True)
@@ -17,7 +19,7 @@ class UnauthenticatedMcpTransport:
 McpTransportAuthentication = AuthenticatedMcpTransport | UnauthenticatedMcpTransport
 
 
-def fastmcp_authentication_provider(authentication: McpTransportAuthentication) -> MCPAuthProvider | None:
+def fastmcp_authentication_provider(authentication: McpTransportAuthentication) -> AuthProvider | None:
     if isinstance(authentication, AuthenticatedMcpTransport):
         return authentication.provider
     if isinstance(authentication, UnauthenticatedMcpTransport):

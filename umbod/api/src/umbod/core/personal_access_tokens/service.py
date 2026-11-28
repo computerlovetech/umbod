@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Unpack
 
 from umbod.core.callers import CallerContext
+from umbod.core.credential_expiry import is_expired
 
 from .errors import (
     InvalidPersonalAccessToken,
@@ -52,7 +53,7 @@ class PersonalAccessTokenIssuer:
     def build(
         self, owner: TokenOwner, request: IssuePersonalAccessToken, now: datetime,
     ) -> tuple[StoredPersonalAccessToken, IssuedPersonalAccessToken]:
-        if request.expires_at <= now:
+        if is_expired(request.expires_at, now):
             raise ValueError("Expiry must be in the future")
         if not set(request.scopes).issubset(self._policy.allowed_scopes):
             raise ValueError("Unsupported personal access token scopes")
@@ -135,7 +136,7 @@ class PersonalAccessTokenService:
         metadata = record.metadata
         if (
             metadata.status != PersonalAccessTokenStatus.ACTIVE
-            or checked_now(self._clock) >= metadata.expires_at
+            or is_expired(metadata.expires_at, checked_now(self._clock))
             or request.audience != metadata.audience
             or not set(request.required_scopes).issubset(metadata.scopes)
         ):
