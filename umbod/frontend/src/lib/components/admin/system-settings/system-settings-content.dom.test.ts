@@ -328,7 +328,7 @@ function changeProviderValue(value: string): void {
   field.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-test('edits saved mappings and clears them only when the reset is saved', async (): Promise<void> => {
+test('warns before deleting a mapping and applies the confirmed deletion only on save', async (): Promise<void> => {
   const providerGroupMappings = mappingsAdministration(savedMappings);
   const get = vi.spyOn(providerGroupMappings, 'get');
   const update = vi.spyOn(providerGroupMappings, 'update');
@@ -345,6 +345,8 @@ test('edits saved mappings and clears them only when the reset is saved', async 
   expect(settings.querySelector('header h2')?.textContent).toBe('Group mappings');
   expect(settings.textContent).toContain('Provider values grant group access only through saved mappings.');
   expect(settings.textContent).not.toMatch(/inherit|default/i);
+  expect(findButton('Clear saved mappings')).toBeUndefined();
+  expect(button('Add mapping').querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   expect(button('Save changes').disabled).toBe(true);
 
   changeProviderValue('Edited value');
@@ -363,27 +365,67 @@ test('edits saved mappings and clears them only when the reset is saved', async 
   expect(remove.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   remove.click();
   await tick();
-  expect(settings.textContent).toContain('No mappings.');
-  button('Discard changes').click();
-  await tick();
+  const dialog = element<HTMLDialogElement>('dialog[role="alertdialog"][open]');
+  const description = document.getElementById(dialog.getAttribute('aria-describedby') ?? '');
+  expect(description?.textContent).toContain('Maintainer');
+  expect(description?.textContent).toContain('Registered Team (registered-team)');
+  expect(document.activeElement).toBe(button('Cancel'));
+  expect(description?.textContent).toContain('may lose access to the Umbod group after you save changes');
+  expect(description?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   expect(providerValueField().value).toBe(' Maintainer\nTier 2 ');
+  expect(button('Save changes').disabled).toBe(true);
 
-  button('Clear saved mappings').click();
+  button('Cancel').click();
   await tick();
+  expect(document.querySelector('dialog')).toBeNull();
+  expect(providerValueField().value).toBe(' Maintainer\nTier 2 ');
+  expect(update).not.toHaveBeenCalled();
+
+  remove.click();
+  await tick();
+  button('Delete mapping').click();
+  await tick();
+  expect(document.querySelector('dialog')).toBeNull();
+  await vi.waitFor(() => expect(document.activeElement).toBe(button('Add mapping')));
   expect(settings.textContent).toContain('No mappings.');
-  expect(settings.querySelector('textarea')).toBeNull();
   expect(update).not.toHaveBeenCalled();
   button('Discard changes').click();
   await tick();
   expect(providerValueField().value).toBe(' Maintainer\nTier 2 ');
 
-  button('Clear saved mappings').click();
+  element<HTMLButtonElement>('button[aria-label="Remove mapping 1"]').click();
+  await tick();
+  button('Delete mapping').click();
   await tick();
   button('Save changes').click();
   await vi.waitFor(() => expect(settings.textContent).toContain('No unsaved changes'));
-  expect(update).toHaveBeenCalledExactlyOnceWith({ operation: 'reset' }, expect.any(AbortSignal));
+  expect(update).toHaveBeenCalledExactlyOnceWith({ operation: 'set', mappings: [] }, expect.any(AbortSignal));
   expect(settings.textContent).toContain('No mappings.');
-  expect(settings.textContent).not.toContain('Clear saved mappings');
+});
+
+test('deletes only the selected group when mappings share a provider value', async (): Promise<void> => {
+  const secondGroup = { ...registeredGroup, group_id: 'second-team', label: 'Second Team' };
+  const [firstMapping] = savedMappings.mappings;
+  const providerGroupMappings = mappingsAdministration({
+    source: 'admin_override',
+    mappings: [firstMapping, { ...firstMapping, group_id: secondGroup.group_id }]
+  });
+  const update = vi.spyOn(providerGroupMappings, 'update');
+  mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
+    providerGroupMappings, groups: { list: async () => [registeredGroup, secondGroup] }
+  });
+  const remove = await vi.waitFor(() => {
+    const control = element<HTMLButtonElement>('button[aria-label="Remove mapping 2"]');
+    expect(control.disabled).toBe(false);
+    return control;
+  });
+  remove.click();
+  await tick();
+  expect(element('dialog[open]').textContent).toContain('Second Team (second-team)');
+  button('Delete mapping').click();
+  await tick();
+  button('Save changes').click();
+  await vi.waitFor(() => expect(update).toHaveBeenCalledExactlyOnceWith({ operation: 'set', mappings: [firstMapping] }, expect.any(AbortSignal)));
 });
 
 test('keeps rules visible after a catalogue failure and lets an unavailable group be replaced', async (): Promise<void> => {
@@ -506,7 +548,7 @@ test('keeps an added draft when save fails and prevents duplicate requests while
   expect(providerValueField().value).toBe(' Level 1 Support ');
   expect(save.disabled).toBe(false);
   save.click();
-  await vi.waitFor(() => expect(button('Clear saved mappings').disabled).toBe(false));
+  await vi.waitFor(() => expect(settings.textContent).toContain('No unsaved changes'));
   expect(update).toHaveBeenNthCalledWith(2, {
     operation: 'set', mappings: [{ external_value: ' Level 1 Support ', group_id: 'registered-team' }]
   }, expect.any(AbortSignal));

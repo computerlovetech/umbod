@@ -9,15 +9,14 @@ import {
 import type { ProviderGroupMappingsAdministration } from '#lib/admin/system-settings/provider-group-mappings-port.js';
 
 type Row = Readonly<{ id: number; mapping: Readonly<ProviderGroupMapping> }>;
-type SavedMappings = { source: ProviderGroupMappings['source']; rows: readonly Row[] };
 type GroupOption = { value: string; label: string; disabled?: boolean };
 type Catalogue = { kind: 'loading' | 'failed' } | { kind: 'ready'; options: GroupOption[]; ids: ReadonlySet<string> };
-type Draft = { operation: 'set'; rows: readonly Row[] } | { operation: 'reset' };
 type Failure = { kind: 'read' | 'write' | 'access'; message: string };
 
 export class ProviderGroupMappingsState {
-  #saved = $state.raw<SavedMappings>();
-  #draft = $state.raw<Draft>();
+  #saved = $state.raw<readonly Row[]>();
+  #draft = $state.raw<readonly Row[]>();
+  #removalId = $state<number>();
   #catalogue = $state.raw<Catalogue>({ kind: 'loading' });
   #failure = $state.raw<Failure>();
   #pending = $state.raw<AbortController>();
@@ -33,22 +32,23 @@ export class ProviderGroupMappingsState {
   get busy(): boolean { return this.ready && this.#pending !== undefined; }
   get loading(): boolean { return !this.ready && !this.#failure; }
   get dirty(): boolean { return this.#draft !== undefined; }
-  get #resetting(): boolean { return this.#draft?.operation === 'reset'; }
-  get canReset(): boolean {
-    return this.#saved?.source === 'admin_override' && !this.#resetting;
-  }
   get failure(): string | undefined { return this.#failure?.message; }
   get canRetry(): boolean { return this.#failure?.kind === 'read'; }
   get catalogueStatus(): Catalogue['kind'] { return this.#catalogue.kind; }
-  get editable(): boolean { return this.ready && !this.busy && !this.#resetting && this.#catalogue.kind === 'ready'; }
-  get rows(): readonly Row[] {
-    if (this.#resetting) return [];
-    return this.#draft?.operation === 'set' ? this.#draft.rows : this.#saved?.rows ?? [];
+  get editable(): boolean { return this.ready && !this.busy && this.#catalogue.kind === 'ready'; }
+  get rows(): readonly Row[] { return this.#draft ?? this.#saved ?? []; }
+  get removalTarget(): Row | undefined {
+    if (this.#removalId === undefined || !this.editable) return undefined;
+    return this.rows.find((row): boolean => row.id === this.#removalId);
+  }
+  get removalGroupLabel(): string | undefined {
+    const groupId = this.removalTarget?.mapping.group_id;
+    if (!groupId) return undefined;
+    return this.groupOptions(groupId).find(({ value }): boolean => value === groupId)?.label;
   }
 
   #validation = $derived.by((): { message?: string; patch?: ProviderGroupMappingsPatch } => {
     if (!this.dirty) return {};
-    if (this.#resetting) return { patch: { operation: 'reset' } };
     if (this.#catalogue.kind !== 'ready') return {};
     const mappings = this.rows.map(({ mapping }): Readonly<ProviderGroupMapping> => mapping);
     const result = providerGroupMappingListSchema.safeParse(mappings);
@@ -67,6 +67,7 @@ export class ProviderGroupMappingsState {
   get canSave(): boolean { return !this.busy && this.#validation.patch !== undefined; }
 
   start = (): void => {
+    this.cancelRemoval();
     void this.load();
     void this.loadGroups();
   };
@@ -113,19 +114,24 @@ export class ProviderGroupMappingsState {
     this.#replace(this.rows.map((row): Row => row.id === id ? { ...row, mapping: { ...row.mapping, [field]: value } } : row));
   }
 
-  remove(id: number): void {
+  requestRemoval(id: number): void {
     if (!this.editable) return;
-    this.#replace(this.rows.filter((row): boolean => row.id !== id));
+    this.#removalId = id;
   }
 
-  reset = (): void => {
-    if (!this.canReset || this.busy) return;
-    this.#draft = { operation: 'reset' };
-    this.#failure = undefined;
+  cancelRemoval = (): void => {
+    this.#removalId = undefined;
+  };
+
+  confirmRemoval = (): void => {
+    const target = this.removalTarget;
+    this.cancelRemoval();
+    if (target) this.#replace(this.rows.filter((row): boolean => row.id !== target.id));
   };
 
   discard = (): void => {
     if (this.busy) return;
+    this.cancelRemoval();
     this.#draft = undefined;
     this.#failure = undefined;
   };
@@ -137,6 +143,7 @@ export class ProviderGroupMappingsState {
   };
 
   dispose = (): void => {
+    this.cancelRemoval();
     this.#pending?.abort();
     this.#catalogueRequest?.abort();
     this.#pending = undefined;
@@ -144,7 +151,7 @@ export class ProviderGroupMappingsState {
   };
 
   #replace(rows: readonly Row[]): void {
-    this.#draft = { operation: 'set', rows };
+    this.#draft = rows;
     this.#failure = undefined;
   }
 
@@ -157,9 +164,9 @@ export class ProviderGroupMappingsState {
     this.#pending = request;
     this.#failure = undefined;
     try {
-      const { source, mappings } = await send(request.signal);
+      const { mappings } = await send(request.signal);
       if (request.signal.aborted) return;
-      this.#saved = { source, rows: mappings.map((mapping): Row => this.#row(mapping)) };
+      this.#saved = mappings.map((mapping): Row => this.#row(mapping));
       this.#draft = undefined;
     } catch (error) {
       if (!request.signal.aborted && !this.#revokeAccess(error)) this.#recordFailure(error, operation);
