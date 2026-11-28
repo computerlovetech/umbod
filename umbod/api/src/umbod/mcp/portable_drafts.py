@@ -12,7 +12,6 @@ from fastmcp.server.middleware.authorization import _requested_version
 from fastmcp.tools import Tool, ToolResult
 from mcp.types import CallToolRequestParams, ListToolsRequest
 from pydantic import BaseModel, PrivateAttr
-from pydantic_monty import AsyncMonty
 
 from umbod.core.callers import AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity, UnavailableIssuer
 from umbod.core.connectors.portable.draft_validation import DraftValidationUnavailable, PortableDraftValidation
@@ -27,7 +26,7 @@ from umbod.core.connectors.portable.managed import (
 )
 from umbod.core.persistence import Database
 from umbod.core.responses import RetryAdvice, ToolErrorDetails
-from umbod.infrastructure.portable_connectors import MontyDraftSourceValidator, portable_sdk_mount
+from umbod.infrastructure import open_portable_draft_validator
 from umbod.mcp.auth.agent_tokens import effective_oauth_provider
 from umbod.mcp.auth.caller import authentication_provenance_for_token, caller_context_from_access_token
 from umbod.mcp.auth.membership import verified_mcp_caller
@@ -173,11 +172,12 @@ class PortableDraftValidationRuntime:
             return
         async with AsyncExitStack() as stack:
             try:
-                mount = stack.enter_context(portable_sdk_mount())
-                pool = await stack.enter_async_context(AsyncMonty(max_processes=_VALIDATION_CONCURRENCY))
+                validator = await stack.enter_async_context(open_portable_draft_validator(
+                    max_processes=_VALIDATION_CONCURRENCY, deadline_seconds=_VALIDATION_DEADLINE_SECONDS,
+                ))
                 self._validation = PortableDraftValidation(
                     PortableConnectorDrafts(DatabaseDraftStore(self._database)),
-                    MontyDraftSourceValidator(pool, mount, _VALIDATION_DEADLINE_SECONDS),
+                    validator,
                     max_concurrent_validations=_VALIDATION_CONCURRENCY,
                 )
             except Exception:

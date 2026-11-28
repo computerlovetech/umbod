@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         create_receiver_app_with_registry,
         install_telemetry_receiver,
     )
+    from umbod.infrastructure.portable_connectors import open_portable_draft_validator
 
 from umbod.infrastructure.key_value import create_inmemory_key_value_driver, create_request_cache
 from umbod.infrastructure.telemetry import (
@@ -94,6 +95,7 @@ __all__ = [
     "create_content_driver",
     "create_namespace_driver",
     "create_filesystem",
+    "open_portable_draft_validator",
 ]
 
 _EXPORTS: dict[str, str] = {
@@ -109,6 +111,7 @@ _EXPORTS: dict[str, str] = {
     "create_telemetry_app": ".metrics.collector.composition",
     "create_receiver_app_with_registry": ".metrics.collector.composition",
     "install_telemetry_receiver": ".metrics.collector.composition",
+    "open_portable_draft_validator": ".portable_connectors",
 }
 
 

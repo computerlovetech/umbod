@@ -25,7 +25,7 @@ from umbod.config.system_settings import ConfiguredSystemSettingsDefaults
 from umbod.core.connectors.downstream_mcp.models import NoAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_DEFINITION_TABLE, ConnectorDefinitionStoreService, SaveConnectorDefinition
 from umbod.core.connectors.native.runtime import ConnectorRuntime
-from umbod.core.connectors.portable.draft_validation import DraftValidationUnavailable, ValidationOutcome
+from umbod.core.connectors.portable.draft_validation import DraftValidationReport, DraftValidationUnavailable, PortableDraftValidation
 from umbod.core.connectors.portable.drafts import DatabaseDraftStore, DraftRevision, DraftWriteUnconfirmed
 from umbod.core.connectors.portable.drafts.models import DraftAuthor
 from umbod.core.connectors.portable.managed import DatabaseManagedConnectorStore, ManagedSubmissionWriteUnconfirmed
@@ -35,7 +35,6 @@ from umbod.core.persistence import AllFields, Database, NoFilter, Query, Unorder
 from umbod.core.publishing.factories import create_connector_publishing_store
 from umbod.core.system_settings import SystemSettingsService, create_system_settings_service_with_defaults
 from umbod.core.system_settings.models import UpdatePortableConnectorSettings
-from umbod.infrastructure.portable_connectors import MontyDraftSourceValidator
 from umbod.mcp.agent_behaviour.reservations import connector_tool_name_available
 from umbod.mcp.context import PublicAppConfig
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
@@ -318,10 +317,10 @@ async def test_uncertain_draft_write_requires_inspection_and_hides_storage_error
 async def test_validator_startup_failure_reports_that_validation_did_not_start(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
 ) -> None:
-    def mount_unavailable() -> None:
+    def validation_unavailable(*, max_processes: int, deadline_seconds: float) -> None:
         raise OSError(_PRIVATE_SOURCE)
 
-    monkeypatch.setattr("umbod.mcp.portable_drafts.portable_sdk_mount", mount_unavailable)
+    monkeypatch.setattr("umbod.mcp.portable_drafts.open_portable_draft_validator", validation_unavailable)
     async with _harness("flat") as harness, harness.connect("author") as client:
         await harness.set_enabled(True)
         receipt = _payload(await client.call_tool(_CREATE, {"source": "1"}))
@@ -334,10 +333,10 @@ async def test_validator_startup_failure_reports_that_validation_did_not_start(
 
 
 async def test_validator_outage_is_a_tool_error_not_a_source_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def validate_unavailable(_validator: MontyDraftSourceValidator, _source: str) -> ValidationOutcome:
+    async def validate_unavailable(_validator: PortableDraftValidation, _revision: DraftRevision) -> DraftValidationReport:
         raise DraftValidationUnavailable(_PRIVATE_SOURCE)
 
-    monkeypatch.setattr(MontyDraftSourceValidator, "validate", validate_unavailable)
+    monkeypatch.setattr(PortableDraftValidation, "validate_saved_revision", validate_unavailable)
     async with _harness("flat") as harness, harness.connect("author") as client:
         await harness.set_enabled(True)
         receipt = _payload(await client.call_tool(_CREATE, {"source": _PRIVATE_SOURCE}))
@@ -477,15 +476,15 @@ async def test_overlapping_submissions_of_same_revision_share_one_receipt(monkey
     second_read = Event()
     read_count = 0
     validation_count = 0
-    validate = MontyDraftSourceValidator.validate
+    validate = PortableDraftValidation.validate_saved_revision
     read = DatabaseDraftStore.read
 
-    async def pause_validation(validator: MontyDraftSourceValidator, source: str) -> ValidationOutcome:
+    async def pause_validation(validator: PortableDraftValidation, revision: DraftRevision) -> DraftValidationReport:
         nonlocal validation_count
         validation_count += 1
         validating.set()
         await release_validation.wait()
-        return await validate(validator, source)
+        return await validate(validator, revision)
 
     async def track_read(store: DatabaseDraftStore, author: DraftAuthor, draft_id: UUID, revision_id: UUID) -> DraftRevision:
         nonlocal read_count
@@ -495,7 +494,7 @@ async def test_overlapping_submissions_of_same_revision_share_one_receipt(monkey
             second_read.set()
         return revision
 
-    monkeypatch.setattr(MontyDraftSourceValidator, "validate", pause_validation)
+    monkeypatch.setattr(PortableDraftValidation, "validate_saved_revision", pause_validation)
     monkeypatch.setattr(DatabaseDraftStore, "read", track_read)
     async with _harness("flat") as harness, harness.connect("admin") as first, harness.connect("admin") as second:
         await harness.set_enabled(True)
