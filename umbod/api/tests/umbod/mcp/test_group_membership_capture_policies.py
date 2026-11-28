@@ -11,7 +11,7 @@ def _legacy_membership(
     claims: Mapping[str, object], claim_fields: Sequence[str], policy: LegacyGroupClaimPolicy,
 ) -> GroupMembership:
     return INHERITED_GROUP_MEMBERSHIP.resolve(
-        claims, claim_fields, policy, AuthenticationProvenance.UPSTREAM_VERIFIED,
+        claims, claim_fields, policy, AuthenticationProvenance.LOCAL_SIMULATION,
     )
 
 

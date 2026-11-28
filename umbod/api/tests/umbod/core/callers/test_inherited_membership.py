@@ -2,6 +2,7 @@ import pytest
 
 from umbod.core.callers import AuthenticationProvenance, LegacyGroupClaimPolicy
 from umbod.core.callers.membership import (
+    INHERITED_GROUP_MEMBERSHIP,
     UNAVAILABLE_GROUP_MEMBERSHIP,
     GroupMembershipResolver,
     ProviderGroupOverrides,
@@ -18,32 +19,32 @@ _RESOLVER = GroupMembershipResolver(ProviderGroupOverrides(
 
 
 @pytest.mark.parametrize("policy", list(LegacyGroupClaimPolicy))
-def test_rules_replace_matched_values_without_inheriting_values_with_stale_targets(policy: LegacyGroupClaimPolicy) -> None:
+def test_explicit_rules_grant_only_mapped_groups(policy: LegacyGroupClaimPolicy) -> None:
     groups = _RESOLVER.resolve(
         {"iss": _ISSUER, "groups": ["support", "stale-value", "uncatalogued", "staff"]},
         ("groups",), policy, _UPSTREAM,
     )
-    assert set(groups.group_ids) == {"customer-ops", "uncatalogued", "readers", "engineers"}
-    assert len(groups.group_ids) == 4
+    assert set(groups.group_ids) == {"customer-ops", "readers", "engineers"}
+    assert len(groups.group_ids) == 3
 
 
 @pytest.mark.parametrize("policy", list(LegacyGroupClaimPolicy))
 @pytest.mark.parametrize("fields", [("groups", "other"), ("other",)])
-def test_other_claim_inherits_without_override(policy: LegacyGroupClaimPolicy, fields: tuple[str, ...]) -> None:
+def test_other_claim_never_grants_ordinary_groups(policy: LegacyGroupClaimPolicy, fields: tuple[str, ...]) -> None:
     groups = _RESOLVER.resolve(
-        {"iss": _ISSUER, "groups": ["stale-value"], "other": ["stale-value", "support"]},
+        {"iss": _ISSUER, "groups": ["uncatalogued"], "other": ["readers", "support"]},
         fields, policy, _UPSTREAM,
     )
-    assert groups.group_ids == ("stale-value", "support")
+    assert groups.group_ids == ()
 
 
-@pytest.mark.parametrize("issuer", [None, "https://other.example/", _ISSUER.rstrip("/")])
-def test_other_or_missing_issuer_keeps_direct_access(issuer: str | None) -> None:
+@pytest.mark.parametrize("issuer", [None, "https://other.example/", _ISSUER.rstrip("/"), [_ISSUER]])
+def test_missing_or_mismatched_issuer_denies_membership(issuer: object) -> None:
     groups = _RESOLVER.resolve(
         {"iss": issuer, "groups": ["stale-value", "support"], "role": "staff"},
         ("groups",), LegacyGroupClaimPolicy.RUNTIME, _UPSTREAM,
     )
-    assert groups.group_ids == ("stale-value", "support")
+    assert groups.group_ids == ()
 
 
 @pytest.mark.parametrize("provenance", [
@@ -57,11 +58,13 @@ def test_unverified_callers_keep_legacy_semantics(provenance: AuthenticationProv
     assert groups.group_ids == ("support",)
 
 
-def test_stale_target_suppresses_inheritance_even_inside_a_mixed_legacy_claim() -> None:
-    claims = {"iss": _ISSUER, "groups": ["stale-value", 42, "retained"]}
-    for policy in (LegacyGroupClaimPolicy.RUNTIME, LegacyGroupClaimPolicy.OPENAPI):
-        assert _RESOLVER.resolve(claims, ("groups",), policy, _UPSTREAM).group_ids == ("retained",)
-    assert _RESOLVER.resolve(claims, ("groups",), LegacyGroupClaimPolicy.PERSONAL, _UPSTREAM).group_ids == ()
+@pytest.mark.parametrize("policy", list(LegacyGroupClaimPolicy))
+@pytest.mark.parametrize("value", [["support", 42], {"support": True}, 42, None])
+def test_malformed_verified_claim_never_partially_grants_membership(
+    policy: LegacyGroupClaimPolicy, value: object,
+) -> None:
+    claims = {"iss": _ISSUER, "groups": value}
+    assert _RESOLVER.resolve(claims, ("groups",), policy, _UPSTREAM).group_ids == ()
 
 
 def test_overrides_match_provider_values_and_never_chain_through_internal_group_ids() -> None:
@@ -75,8 +78,11 @@ def test_overrides_match_provider_values_and_never_chain_through_internal_group_
     assert groups.group_ids == ("stale-value",)
 
 
-def test_snapshot_read_failure_never_falls_back_for_verified_membership() -> None:
-    groups = UNAVAILABLE_GROUP_MEMBERSHIP.resolve(
+@pytest.mark.parametrize(
+    "resolver", [INHERITED_GROUP_MEMBERSHIP, UNAVAILABLE_GROUP_MEMBERSHIP]
+)
+def test_missing_or_unavailable_mappings_deny_verified_membership(resolver: GroupMembershipResolver) -> None:
+    groups = resolver.resolve(
         {"iss": _ISSUER, "groups": "support"}, ("groups",), LegacyGroupClaimPolicy.RUNTIME, _UPSTREAM,
     )
     assert groups.group_ids == ()

@@ -32,7 +32,7 @@ describe('central group management', () => {
     state.setLabel('Valid');
     await state.save();
     expect(create).not.toHaveBeenCalled();
-    expect(state.error).toContain('already exists');
+    expect(state.error).toBe('A group with this exact Group ID already exists.');
     expect(state.label).toBe('Valid');
     state.setGroupId('different');
     state.setDescription('x'.repeat(2001));
@@ -52,7 +52,7 @@ describe('central group management', () => {
     expect(state.formOpen).toBe(true);
     expect(state.label).toBe('My draft');
     expect(state.description).toBe('My draft description');
-    expect(state.error).toContain('now exists with different metadata');
+    expect(state.error).toContain('This Group ID now exists with different metadata.');
     expect(state.message).toBe('');
     expect(await api.list()).toEqual([group]);
   });

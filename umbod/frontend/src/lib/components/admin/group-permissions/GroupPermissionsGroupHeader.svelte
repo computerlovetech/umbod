@@ -16,7 +16,7 @@
   <div>
     <h2>{label}</h2>
     {#if description}<p>{description}</p>{/if}
-    <p>Provider group ID: <code>{groupId}</code></p>
+    <p>Group ID: <code>{groupId}</code></p>
   </div>
   {#if badge}{@render badge()}{/if}
 </header>

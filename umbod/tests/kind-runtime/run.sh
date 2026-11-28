@@ -238,6 +238,7 @@ for attempt in $(seq 1 60); do
     fi
     sleep 1
 done
+(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_provider_group_mappings.py)
 (cd "${app_directory}/api" && uv run --locked python -c '
 import os
 import runpy
@@ -245,9 +246,11 @@ from urllib.request import build_opener, install_opener
 opener = build_opener()
 opener.addheaders = [("Authorization", "Bearer " + os.environ["UMBOD_TEST_BEARER_TOKEN"])]
 install_opener(opener)
-runpy.run_path(os.environ["UMBOD_TEST_BOOTSTRAP_PATH"], run_name="__main__")
+bootstrap = runpy.run_path(os.environ["UMBOD_TEST_BOOTSTRAP_PATH"])
+bootstrap["main"]()
+bootstrap["seed_signed_group_mappings"](os.environ["UMBOD_TEST_API_BASE_URL"])
 ')
-(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_personal_usage.py live_runtime_tests/test_running_mcp_administrator_hosting.py live_runtime_tests/test_running_user_profile.py live_runtime_tests/test_running_personal_access_tokens.py live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_personal_oauth_setup.py live_runtime_tests/test_running_personal_oauth_policy.py live_runtime_tests/test_running_personal_tools_policy.py live_runtime_tests/test_running_user_catalogue.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py live_runtime_tests/test_running_filesystem_homes.py live_runtime_tests/test_running_filesystem_sharing.py live_runtime_tests/test_running_filesystem_s3.py live_runtime_tests/test_running_identity_directory.py live_runtime_tests/test_running_provider_group_mappings.py)
+(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_personal_usage.py live_runtime_tests/test_running_mcp_administrator_hosting.py live_runtime_tests/test_running_user_profile.py live_runtime_tests/test_running_personal_access_tokens.py live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_personal_oauth_setup.py live_runtime_tests/test_running_personal_oauth_policy.py live_runtime_tests/test_running_personal_tools_policy.py live_runtime_tests/test_running_user_catalogue.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py live_runtime_tests/test_running_filesystem_homes.py live_runtime_tests/test_running_filesystem_sharing.py live_runtime_tests/test_running_filesystem_s3.py live_runtime_tests/test_running_identity_directory.py)
 for container_name in api api-b mcp mcp-b; do
     kubectl --context "${kube_context}" logs deployment/umbod-core --container "${container_name}" \
         | python3 "${script_directory}/check_secret_logs.py"

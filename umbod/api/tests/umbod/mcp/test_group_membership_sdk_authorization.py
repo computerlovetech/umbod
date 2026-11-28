@@ -69,9 +69,9 @@ def test_sdk_permission_callback_reads_current_grants_and_token_each_call() -> N
     [
         ({"groups": ["external-team"]}, True, False),
         ({"provider_roles": ["external-team"]}, False, False),
-        ({"provider_roles": ["registered-team"]}, True, True),
+        ({"provider_roles": ["registered-team"]}, False, True),
         ({"groups": ["registered-team"]}, False, True),
-        ({"groups": ["independent-team"]}, True, True),
+        ({"groups": ["independent-team"]}, False, True),
     ],
 )
 def test_sdk_permission_callback_uses_configured_group_policy(

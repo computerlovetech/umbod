@@ -29,7 +29,7 @@ describe('shared group permissions presentation', () => {
     const body = render(GroupPermissionsGroupHeader, { props: { groupId: 'provider-team', label: 'Support Team', description: 'Shared group description', badge } }).body;
     expect(body).toContain('Support Team');
     expect(body).toContain('Shared group description');
-    expect(body).toContain('provider-team');
+    expect(body).toContain('>Group ID: <code>provider-team</code></p>');
     expect(body).toContain('Root only');
     expect(body).toMatch(/aria-hidden="true"[^>]*>ST/);
   });

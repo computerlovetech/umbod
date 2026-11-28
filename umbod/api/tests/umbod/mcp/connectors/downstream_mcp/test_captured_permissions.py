@@ -212,8 +212,8 @@ def test_capture_uses_same_token_and_actual_server_authentication(
     observe = Mock(wraps=permission_boundary.caller_context_from_access_token)
     monkeypatch.setattr(permission_boundary, "caller_context_from_access_token", observe)
 
-    assert GroupDownstreamToolPermissionPolicy(_permissions(), INHERITED_GROUP_MEMBERSHIP).capture().allows("weather", "forecast")
-
+    allowed = GroupDownstreamToolPermissionPolicy(_permissions(), INHERITED_GROUP_MEMBERSHIP).capture().allows("weather", "forecast")
+    assert allowed is (expected != AuthenticationProvenance.UPSTREAM_VERIFIED)
     observe.assert_called_once_with(token, expected)
 
 

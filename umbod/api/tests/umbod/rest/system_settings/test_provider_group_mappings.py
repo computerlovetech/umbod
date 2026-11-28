@@ -85,41 +85,17 @@ def test_admin_route_returns_uncached_built_in_default(client: TestClient) -> No
     assert response.json() == {"mappings": [], "source": "built_in_default"}
 
 
-def test_inherits_resolved_issuer_and_permission_claim_until_override_and_regenerates_on_reset(
-    runtime_environment: None, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("UMBOD_PROFILE", "local")
-    monkeypatch.setenv("UMBOD_AUTH", "auth0")
-    monkeypatch.setenv("UMBOD_OIDC_DOMAIN", "legacy-issuer.example")
-    monkeypatch.setenv("UMBOD_OIDC_ISSUER_URL", "")
-    monkeypatch.setenv("UMBOD_OIDC_CLIENT_ID", "test-client")
-    monkeypatch.setenv("UMBOD_OIDC_CLIENT_SECRET", "test-secret")
-    monkeypatch.setenv("UMBOD_OIDC_AUDIENCE", "test-audience")
-    monkeypatch.setenv("UMBOD_ADMIN_MEMBERSHIP_CLAIM", "groups")
-    monkeypatch.setenv("UMBOD_MCP_PERMISSION_CLAIM", "https://example.test/claims/teams")
+def test_registered_groups_are_not_suggested_before_save_or_after_reset(client: TestClient) -> None:
     group_id = " Team / Read "
-    inherited = {
-        "external_value": group_id,
-        "group_id": group_id,
-    }
-    with _client() as client:
-        registered_before = client.get(_GROUPS, headers=_ADMIN).json()["groups"]
-        assert registered_before == []
-        _register(client, group_id)
-        assert client.get(_PATH, headers=_ADMIN).json() == {
-            "mappings": [inherited], "source": "inherited_claim_default",
-        }
+    _register(client, group_id)
+    assert client.get(_PATH, headers=_ADMIN).json() == {"mappings": [], "source": "built_in_default"}
 
-        saved = _set(client, {**inherited, "external_value": "external helpdesk group"})
-        _register(client, "another-team")
-        assert client.get(_PATH, headers=_ADMIN).json() == saved
-
-        restored = client.patch(_PATH, json=_RESET, headers=_ADMIN)
-        assert restored.status_code == 200
-        assert restored.json() == {
-            "mappings": [inherited, {**inherited, "external_value": "another-team", "group_id": "another-team"}],
-            "source": "inherited_claim_default",
-        }
+    _set(client, {"external_value": "external helpdesk group", "group_id": group_id})
+    reset = client.patch(_PATH, json=_RESET, headers=_ADMIN)
+    assert reset.status_code == 200
+    assert reset.headers["Cache-Control"] == "no-store"
+    assert reset.json() == {"mappings": [], "source": "built_in_default"}
+    assert client.get(_PATH, headers=_ADMIN).json() == reset.json()
 
 
 def test_top_level_patch_contract_is_discriminated_in_admin_openapi(
@@ -283,7 +259,7 @@ def test_non_authenticated_or_disabled_mode_cannot_use_resource(
         )
 
 
-def test_database_read_failure_does_not_return_inherited_default(
+def test_database_read_failure_does_not_return_built_in_default(
     runtime_environment: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

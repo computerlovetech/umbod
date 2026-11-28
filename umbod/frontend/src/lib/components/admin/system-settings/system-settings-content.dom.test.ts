@@ -304,12 +304,12 @@ const savedMappings: ProviderGroupMappings = {
   mappings: [{ external_value: ' Maintainer\nTier 2 ', group_id: registeredGroup.group_id }]
 };
 
-function mappingsAdministration(defaults: ProviderGroupMappings, initial: ProviderGroupMappings = defaults): ProviderGroupMappingsAdministration {
+function mappingsAdministration(initial: ProviderGroupMappings): ProviderGroupMappingsAdministration {
   let current = initial;
   return {
     get: async (): Promise<ProviderGroupMappings> => current,
     update: async (patch): Promise<ProviderGroupMappings> => {
-      current = patch.operation === 'reset' ? defaults : { mappings: patch.mappings, source: 'admin_override' };
+      current = patch.operation === 'reset' ? builtInMappings : { mappings: patch.mappings, source: 'admin_override' };
       return current;
     }
   };
@@ -328,8 +328,8 @@ function changeProviderValue(value: string): void {
   field.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-test('can save an empty override or clear it to restore the built-in default', async (): Promise<void> => {
-  const providerGroupMappings = mappingsAdministration(builtInMappings, savedMappings);
+test('edits saved mappings and clears them only when the reset is saved', async (): Promise<void> => {
+  const providerGroupMappings = mappingsAdministration(savedMappings);
   const get = vi.spyOn(providerGroupMappings, 'get');
   const update = vi.spyOn(providerGroupMappings, 'update');
   const navigate = mountSettings(configuredDiagnostics(), settingsPath, undefined, {
@@ -341,10 +341,10 @@ test('can save an empty override or clear it to restore the built-in default', a
 
   await vi.waitFor(() => expect(providerValueField().value).toBe(' Maintainer\nTier 2 '));
   expect(link.getAttribute('aria-current')).toBe('location');
-  expect(document.body.textContent).toContain('Admin override');
-  expect(element('section[aria-label="Group mapping settings"] header h2').textContent).toBe('Inherited mappings with explicit overrides');
-  expect(document.body.textContent).toContain('Saved changes and resets take effect immediately.');
-  expect(document.body.textContent).not.toContain('Inherited suggestions');
+  const settings = element('section[aria-label="Group mapping settings"]');
+  expect(settings.querySelector('header h2')?.textContent).toBe('Group mappings');
+  expect(settings.textContent).toContain('Provider values grant group access only through saved mappings.');
+  expect(settings.textContent).not.toMatch(/inherit|default/i);
   expect(button('Save changes').disabled).toBe(true);
 
   changeProviderValue('Edited value');
@@ -354,94 +354,36 @@ test('can save an empty override or clear it to restore the built-in default', a
   expect(providerValueField().value).toBe(' Maintainer\nTier 2 ');
   expect(update).not.toHaveBeenCalled();
 
-  element<HTMLButtonElement>('button[aria-label="Remove mapping 1"]').click();
+  const remove = element<HTMLButtonElement>('button[aria-label="Remove mapping 1"]');
+  const mapping = providerValueField().closest('fieldset');
+  expect(mapping?.contains(element<HTMLButtonElement>('button[role="combobox"]'))).toBe(true);
+  expect(mapping?.contains(remove)).toBe(true);
+  expect(remove.title).toBe('Remove mapping 1');
+  expect(remove.textContent?.trim()).toBe('');
+  expect(remove.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+  remove.click();
   await tick();
-  expect(document.body.textContent).toContain('No explicit mappings.');
-  button('Save changes').click();
-  await vi.waitFor(() => expect(button('Save changes').disabled).toBe(true));
-  expect(update).toHaveBeenNthCalledWith(1, { operation: 'set', mappings: [] }, expect.any(AbortSignal));
-
-  button('Clear saved overrides').click();
+  expect(settings.textContent).toContain('No mappings.');
+  button('Discard changes').click();
   await tick();
-  expect(document.body.textContent).toContain('Save changes to remove all explicit mappings.');
-  expect(update).toHaveBeenCalledTimes(1);
-  button('Save changes').click();
-  await vi.waitFor(() => expect(document.body.textContent).toContain('Built-in default'));
-  expect(update).toHaveBeenNthCalledWith(2, { operation: 'reset' }, expect.any(AbortSignal));
-  expect(document.body.textContent).toContain('No explicit mappings.');
-});
+  expect(providerValueField().value).toBe(' Maintainer\nTier 2 ');
 
-const inheritedTeam = { external_value: 'registered-team', group_id: 'registered-team' };
-const inheritedOther = { ...inheritedTeam, external_value: 'other-team', group_id: 'other-team' };
-const inheritedMappings: ProviderGroupMappings = { source: 'inherited_claim_default', mappings: [inheritedOther, inheritedTeam] };
-const overrideTeam = 'button[aria-label="Override inherited mapping 2"]';
-
-test('copies only the selected inherited suggestion into explicit rules and restores suggestions on reset', async (): Promise<void> => {
-  const providerGroupMappings = mappingsAdministration(inheritedMappings);
-  const update = vi.spyOn(providerGroupMappings, 'update');
-  mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
-    providerGroupMappings, groups: { list: async () => [registeredGroup] }
-  });
-
-  await vi.waitFor(() => expect(element<HTMLButtonElement>(overrideTeam).disabled).toBe(false));
-  expect(document.body.textContent).toContain('Inherited from OAuth configuration');
-  expect(document.body.textContent).toContain('No explicit mappings.');
-  expect(element('section[aria-label="Group mapping settings"]').querySelector('input, textarea')).toBeNull();
-  expect(button('Save changes').disabled).toBe(true);
-  element<HTMLButtonElement>(overrideTeam).click();
+  button('Clear saved mappings').click();
   await tick();
-
-  expect(element('section[aria-label="Group mapping settings"]').querySelectorAll('input, textarea')).toHaveLength(1);
-  expect(providerValueField().value).toBe(inheritedTeam.external_value);
-  expect(document.querySelector(overrideTeam)).toBeNull();
+  expect(settings.textContent).toContain('No mappings.');
+  expect(settings.querySelector('textarea')).toBeNull();
   expect(update).not.toHaveBeenCalled();
-  button('Save changes').click();
-  await vi.waitFor(() => expect(document.body.textContent).toContain('Admin override'));
-  expect(update).toHaveBeenCalledExactlyOnceWith({
-    operation: 'set', mappings: [inheritedTeam]
-  }, expect.any(AbortSignal));
-  expect(document.body.textContent).not.toContain('Inherited suggestions');
-  expect(document.body.textContent).toContain('Values without a matching explicit rule still use inherited OAuth mappings');
+  button('Discard changes').click();
+  await tick();
+  expect(providerValueField().value).toBe(' Maintainer\nTier 2 ');
 
-  button('Clear saved overrides').click();
+  button('Clear saved mappings').click();
   await tick();
   button('Save changes').click();
-  await vi.waitFor(() => expect(element<HTMLButtonElement>(overrideTeam).disabled).toBe(false));
-  expect(update).toHaveBeenNthCalledWith(2, { operation: 'reset' }, expect.any(AbortSignal));
-  expect(document.body.textContent).toContain('No explicit mappings.');
-  expect(element('section[aria-label="Group mapping settings"]').querySelector('input, textarea')).toBeNull();
-});
-
-test('remaps an inherited value to a registered group before saving the override', async (): Promise<void> => {
-  const providerGroupMappings = mappingsAdministration(inheritedMappings);
-  const update = vi.spyOn(providerGroupMappings, 'update');
-  mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
-    providerGroupMappings, groups: { list: async () => [registeredGroup] }
-  });
-
-  const override = 'button[aria-label="Override inherited mapping 1"]';
-  await vi.waitFor(() => expect(element<HTMLButtonElement>(override).disabled).toBe(false));
-  element<HTMLButtonElement>(override).click();
-  await tick();
-
-  const selector = element<HTMLButtonElement>('button[role="combobox"]');
-  expect(selector.textContent).toContain('other-team (unavailable)');
-  expect(document.querySelector('input[type="checkbox"]')).toBeNull();
-  expect(button('Save changes').disabled).toBe(true);
-  expect(update).not.toHaveBeenCalled();
-
-  selector.click();
-  await tick();
-  element<HTMLElement>('[role="option"]:not([aria-disabled])').click();
-  await tick();
-  expect(selector.textContent).toContain('Registered Team (registered-team)');
-  expect(button('Save changes').disabled).toBe(false);
-  button('Save changes').click();
-
-  await vi.waitFor(() => expect(document.body.textContent).toContain('Admin override'));
-  expect(update).toHaveBeenCalledExactlyOnceWith({
-    operation: 'set', mappings: [{ ...inheritedOther, group_id: registeredGroup.group_id }]
-  }, expect.any(AbortSignal));
+  await vi.waitFor(() => expect(settings.textContent).toContain('No unsaved changes'));
+  expect(update).toHaveBeenCalledExactlyOnceWith({ operation: 'reset' }, expect.any(AbortSignal));
+  expect(settings.textContent).toContain('No mappings.');
+  expect(settings.textContent).not.toContain('Clear saved mappings');
 });
 
 test('keeps rules visible after a catalogue failure and lets an unavailable group be replaced', async (): Promise<void> => {
@@ -465,7 +407,8 @@ test('keeps rules visible after a catalogue failure and lets an unavailable grou
 
   button('Retry loading groups').click();
   await vi.waitFor(() => expect(selector.textContent).toContain('removed-team (unavailable)'));
-  changeProviderValue('Support');
+  const editedValue = ' Support\nTier 2\nEscalation ';
+  changeProviderValue(editedValue);
   await tick();
   expect(button('Save changes').disabled).toBe(true);
 
@@ -478,14 +421,15 @@ test('keeps rules visible after a catalogue failure and lets an unavailable grou
   expect(selector.textContent).toContain('Registered Team (registered-team)');
   button('Save changes').click();
   await vi.waitFor(() => expect(update).toHaveBeenCalledWith({
-    operation: 'set', mappings: [{ ...stale.mappings[0], external_value: 'Support', group_id: 'registered-team' }]
+    operation: 'set', mappings: [{ external_value: editedValue, group_id: registeredGroup.group_id }]
   }, expect.any(AbortSignal)));
+  await vi.waitFor(() => expect(providerValueField().value).toBe(editedValue));
 });
 
 test('recognizes a previously unavailable target when it is registered before returning to mappings', async (): Promise<void> => {
   const list = vi.fn<GroupCatalogue['list']>().mockResolvedValueOnce([]).mockResolvedValue([registeredGroup]);
   const navigate = mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
-    providerGroupMappings: mappingsAdministration(builtInMappings, savedMappings), groups: { list }
+    providerGroupMappings: mappingsAdministration(savedMappings), groups: { list }
   });
   const selector = 'button[role="combobox"]';
   await vi.waitFor(() => expect(element(selector).textContent).toContain('registered-team (unavailable)'));
@@ -497,7 +441,7 @@ test('recognizes a previously unavailable target when it is registered before re
 });
 
 test('refreshes mappings when returning without replacing an unsaved draft', async (): Promise<void> => {
-  const providerGroupMappings = mappingsAdministration(builtInMappings, savedMappings);
+  const providerGroupMappings = mappingsAdministration(savedMappings);
   const get = vi.spyOn(providerGroupMappings, 'get');
   const navigate = mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
     providerGroupMappings, groups: { list: async () => [registeredGroup] }
@@ -530,7 +474,10 @@ test('keeps an added draft when save fails and prevents duplicate requests while
     providerGroupMappings, groups: { list: async () => [registeredGroup] }
   });
   await vi.waitFor(() => expect(button('Add mapping').disabled).toBe(false));
-  expect(document.body.textContent).toContain('Built-in default');
+  const settings = element('section[aria-label="Group mapping settings"]');
+  expect(settings.textContent).toContain('No mappings.');
+  expect(settings.textContent).not.toContain('Clear saved mappings');
+  expect(settings.querySelector('textarea')).toBeNull();
 
   button('Add mapping').click();
   await tick();
@@ -559,7 +506,7 @@ test('keeps an added draft when save fails and prevents duplicate requests while
   expect(providerValueField().value).toBe(' Level 1 Support ');
   expect(save.disabled).toBe(false);
   save.click();
-  await vi.waitFor(() => expect(document.body.textContent).toContain('Admin override'));
+  await vi.waitFor(() => expect(button('Clear saved mappings').disabled).toBe(false));
   expect(update).toHaveBeenNthCalledWith(2, {
     operation: 'set', mappings: [{ external_value: ' Level 1 Support ', group_id: 'registered-team' }]
   }, expect.any(AbortSignal));

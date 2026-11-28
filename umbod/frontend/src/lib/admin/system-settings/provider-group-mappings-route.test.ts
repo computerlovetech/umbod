@@ -7,35 +7,37 @@ import type { ProviderGroupMappings, ProviderGroupMappingsPatch } from './domain
 const path = '/admin/system-settings/provider-group-mappings';
 const first = { external_value: ' Maintain\n\ufeff', group_id: 'team-a' };
 const second = { ...first, group_id: 'team-b' };
-const inherited: ProviderGroupMappings = {
-  mappings: [{ external_value: first.group_id, group_id: first.group_id }], source: 'inherited_claim_default'
-};
+const saved: ProviderGroupMappings = { mappings: [first, second], source: 'admin_override' };
+const cleared: ProviderGroupMappings = { mappings: [], source: 'built_in_default' };
 
 class RecordingTransport implements Transport {
   readonly requests: TransportRequest<unknown>[] = [];
 
-  constructor(private readonly response: ProviderGroupMappings) {}
+  constructor(private readonly responses: readonly ProviderGroupMappings[]) {}
 
   async request<T>(request: TransportRequest<T>): Promise<T> {
+    const response = this.responses[this.requests.length];
     this.requests.push(request);
     if (request.requestBody?.kind === 'json') request.requestBody.schema.parse(request.requestBody.value);
     if (!request.outputSchema) throw new Error('Missing response schema');
-    return request.outputSchema.parse(this.response);
+    return request.outputSchema.parse(response);
   }
 }
 
 test('uses the mappings resource with explicit replacements and reset, preserving order and literal values', async (): Promise<void> => {
-  const transport = new RecordingTransport(inherited);
-  const api = new AdminApi(transport).providerGroupMappings;
   const { signal } = new AbortController();
   const set: ProviderGroupMappingsPatch = { operation: 'set', mappings: [second, first] };
   const empty: ProviderGroupMappingsPatch = { operation: 'set', mappings: [] };
   const reset: ProviderGroupMappingsPatch = { operation: 'reset' };
+  const reversed: ProviderGroupMappings = { source: 'admin_override', mappings: set.mappings };
+  const emptyOverride: ProviderGroupMappings = { source: 'admin_override', mappings: empty.mappings };
+  const transport = new RecordingTransport([saved, reversed, emptyOverride, cleared]);
+  const api = new AdminApi(transport).providerGroupMappings;
 
-  await expect(api.get(signal)).resolves.toEqual(inherited);
-  await api.update(set, signal);
-  await api.update(empty, signal);
-  await expect(api.update(reset, signal)).resolves.toEqual(inherited);
+  await expect(api.get(signal)).resolves.toEqual(saved);
+  await expect(api.update(set, signal)).resolves.toEqual(reversed);
+  await expect(api.update(empty, signal)).resolves.toEqual(emptyOverride);
+  await expect(api.update(reset, signal)).resolves.toEqual(cleared);
   expect(transport.requests.map(({ method, path, signal, requestBody }) => [
     method, path, signal, requestBody?.kind === 'json' ? requestBody.schema.parse(requestBody.value) : undefined
   ])).toEqual([
@@ -46,10 +48,9 @@ test('uses the mappings resource with explicit replacements and reset, preservin
   ]);
 });
 
-test.each(['admin_override', 'built_in_default'] as const)('accepts mappings from %s', async (source): Promise<void> => {
-  const result: ProviderGroupMappings = { mappings: source === 'built_in_default' ? [] : [first, second], source };
-  const api = new AdminApi(new RecordingTransport(result)).providerGroupMappings;
-  await expect(api.get(new AbortController().signal)).resolves.toEqual(result);
+test('accepts an empty mapping list before any mappings are saved', async (): Promise<void> => {
+  const api = new AdminApi(new RecordingTransport([cleared])).providerGroupMappings;
+  await expect(api.get(new AbortController().signal)).resolves.toEqual(cleared);
 });
 
 test.each([
@@ -70,7 +71,9 @@ test.each([
 
 test.each([
   { mappings: [], source: 'unknown_source' },
-  { mappings: [first], source: 'deployment_default' },
+  { mappings: [], source: 'deployment_default' },
+  { mappings: [], source: 'inherited_claim_default' },
+  { mappings: [first], source: 'built_in_default' },
   { mappings: [first, first], source: 'admin_override' },
   { mappings: [{ ...first, group_id: null }], source: 'admin_override' },
   { mappings: [{ ...first, external_value: 1 }], source: 'admin_override' },

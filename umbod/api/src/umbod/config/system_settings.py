@@ -1,4 +1,3 @@
-from umbod.core.callers.membership import ProviderMembershipClaim
 from umbod.core.system_settings import SettingsNotConfigured, SystemSettings
 
 from .app import AppConfig
@@ -12,13 +11,3 @@ class ConfiguredSystemSettingsDefaults:
         if self._approval is None:
             return SettingsNotConfigured.UNSET
         return SystemSettings(require_mcp_file_deletion_approval=self._approval)
-
-
-def configured_provider_membership_claim(
-    config: AppConfig,
-) -> ProviderMembershipClaim | SettingsNotConfigured:
-    issuer = config.oidc.issuer_url
-    claim = config.mcp.permission_group_claim
-    if config.mcp.auth_mode != "oidc" or not issuer.strip() or not claim.strip():
-        return SettingsNotConfigured.UNSET
-    return ProviderMembershipClaim(issuer=issuer, claim=claim)

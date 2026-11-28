@@ -51,13 +51,6 @@ class DatabaseProviderGroupMappingsStore:
         except Exception:
             raise SettingsStorageUnavailable() from None
 
-    async def registered_group_ids(self) -> frozenset[str]:
-        try:
-            async with self._database.read_session() as session:
-                return await read_registered_group_ids(session)
-        except Exception:
-            raise SettingsStorageUnavailable() from None
-
     async def replace(self, mappings: ProviderGroupMappings) -> None:
         try:
             async with self._database.session(

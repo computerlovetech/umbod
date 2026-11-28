@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from tests.persistence_runtime import prepared_sqlite_runtime
-from umbod.core.callers.membership import ProviderMembershipClaim
 from umbod.core.groups import RegisterGroup
 from umbod.core.groups.stores.composition import create_group_management
 from umbod.core.persistence import Database
@@ -16,16 +15,10 @@ from umbod.core.system_settings import (
 )
 from umbod.core.system_settings.provider_group_mappings import (
     ProviderGroupMapping,
-    ProviderGroupMappingsService,
     create_provider_group_mappings_service,
 )
 
 _ADMINISTRATOR = "administrator"
-_PROVIDER_CLAIM = ProviderMembershipClaim(issuer="https://issuer.example/", claim="groups")
-
-
-def _mappings_service(database: Database) -> ProviderGroupMappingsService:
-    return create_provider_group_mappings_service(database, _PROVIDER_CLAIM)
 
 
 @asynccontextmanager
@@ -43,32 +36,31 @@ async def test_sqlite_persists_empty_override_and_reset_independently_of_approva
 ) -> None:
     path = tmp_path / "settings.sqlite"
     async with _open_database(path) as database:
-        await create_group_management(database).register_group(RegisterGroup(group_id="team"))
-        mappings = _mappings_service(database)
+        mappings = create_provider_group_mappings_service(database)
         approval = create_system_settings_service(database)
-        inherited = await mappings.get(_ADMINISTRATOR)
-        assert inherited.source == "inherited_claim_default"
-        assert inherited.mappings == (ProviderGroupMapping(external_value="team", group_id="team"),)
+        default = await mappings.get(_ADMINISTRATOR)
+        assert default.source is SettingsSource.BUILT_IN_DEFAULT
+        assert default.mappings == ()
 
         saved_mappings = await mappings.replace(_ADMINISTRATOR, ())
+        assert saved_mappings.source is SettingsSource.ADMIN_OVERRIDE
         saved_approval = await approval.set_settings(
             _ADMINISTRATOR,
             UpdateSystemSettings(require_mcp_file_deletion_approval=False),
         )
-        assert saved_mappings.source is SettingsSource.ADMIN_OVERRIDE
         assert await mappings.get(_ADMINISTRATOR) == saved_mappings
 
     async with _open_database(path) as database:
-        mappings = _mappings_service(database)
+        mappings = create_provider_group_mappings_service(database)
         approval = create_system_settings_service(database)
         assert await mappings.get(_ADMINISTRATOR) == saved_mappings
 
-        assert await mappings.reset(_ADMINISTRATOR) == inherited
+        assert await mappings.reset(_ADMINISTRATOR) == default
         assert await approval.get_effective_settings(_ADMINISTRATOR) == saved_approval
 
     async with _open_database(path) as database:
-        mappings = _mappings_service(database)
-        assert await mappings.get(_ADMINISTRATOR) == inherited
+        mappings = create_provider_group_mappings_service(database)
+        assert await mappings.get(_ADMINISTRATOR) == default
 
 
 @pytest.mark.asyncio
@@ -86,12 +78,12 @@ async def test_sqlite_persists_whole_list_replacement_after_reopen(
         await create_group_management(database).register_group(
             RegisterGroup(group_id="accepted")
         )
-        mappings = _mappings_service(database)
+        mappings = create_provider_group_mappings_service(database)
 
         await mappings.replace(_ADMINISTRATOR, (first,))
         saved = await mappings.replace(_ADMINISTRATOR, (second, first))
 
     async with _open_database(path) as database:
-        mappings = _mappings_service(database)
+        mappings = create_provider_group_mappings_service(database)
         assert await mappings.get(_ADMINISTRATOR) == saved
         assert saved.mappings == (second, first)

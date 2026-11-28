@@ -42,6 +42,6 @@ def test_empty_string_issuer_is_declared_not_absent() -> None:
 def test_personal_membership_normalization_is_strict_and_preserves_strings(value: object, expected: tuple[str, ...]) -> None:
     membership = INHERITED_GROUP_MEMBERSHIP.resolve(
         {"groups": value}, ("groups",), LegacyGroupClaimPolicy.PERSONAL,
-        AuthenticationProvenance.UPSTREAM_VERIFIED,
+        AuthenticationProvenance.LOCAL_SIMULATION,
     )
     assert membership.group_ids == expected

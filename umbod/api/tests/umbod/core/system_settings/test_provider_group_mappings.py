@@ -1,6 +1,5 @@
 import pytest
 
-from umbod.core.callers.membership import ProviderMembershipClaim
 from umbod.core.system_settings import (
     SettingsNotConfigured,
     SettingsSource,
@@ -14,9 +13,8 @@ from umbod.core.system_settings.provider_group_mappings import (
 
 _ADMINISTRATOR = "administrator"
 _GROUP_ID = "team"
-_PROVIDER_CLAIM = ProviderMembershipClaim(issuer="https://issuer.example/", claim="groups")
-_INHERITED_RULE = ProviderGroupMapping(
-    external_value=_GROUP_ID,
+_RULE = ProviderGroupMapping(
+    external_value="staff",
     group_id=_GROUP_ID,
 )
 
@@ -27,9 +25,6 @@ class MemoryMappings:
 
     async def read(self) -> ProviderGroupMappings | SettingsNotConfigured:
         return self._settings
-
-    async def registered_group_ids(self) -> frozenset[str]:
-        return frozenset({_GROUP_ID, "\u001c"})
 
     async def replace(self, mappings: ProviderGroupMappings) -> None:
         self._settings = mappings
@@ -44,28 +39,15 @@ class UnavailableMappings(MemoryMappings):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("provider_claim", "initial_source", "initial_mappings"),
-    [
-        (SettingsNotConfigured.UNSET, SettingsSource.BUILT_IN_DEFAULT, ()),
-        (_PROVIDER_CLAIM, "inherited_claim_default", (_INHERITED_RULE,)),
-    ],
-)
-async def test_saved_empty_list_is_distinct_from_idempotent_reset(
-    provider_claim: ProviderMembershipClaim | SettingsNotConfigured,
-    initial_source: str,
-    initial_mappings: ProviderGroupMappings,
-) -> None:
-    service = ProviderGroupMappingsService(
-        MemoryMappings(SettingsNotConfigured.UNSET),
-        provider_claim,
-    )
+@pytest.mark.parametrize("mappings", [(), (_RULE,)])
+async def test_save_and_idempotent_reset(mappings: ProviderGroupMappings) -> None:
+    service = ProviderGroupMappingsService(MemoryMappings(SettingsNotConfigured.UNSET))
     initial = await service.get(_ADMINISTRATOR)
-    assert initial.mappings == initial_mappings
-    assert initial.source == initial_source
+    assert initial.mappings == ()
+    assert initial.source is SettingsSource.BUILT_IN_DEFAULT
 
-    saved = await service.replace(_ADMINISTRATOR, ())
-    assert saved.mappings == ()
+    saved = await service.replace(_ADMINISTRATOR, mappings)
+    assert saved.mappings == mappings
     assert saved.source is SettingsSource.ADMIN_OVERRIDE
     assert await service.get(_ADMINISTRATOR) == saved
 
@@ -76,9 +58,6 @@ async def test_saved_empty_list_is_distinct_from_idempotent_reset(
 
 @pytest.mark.asyncio
 async def test_storage_failure_is_not_an_unset_override() -> None:
-    service = ProviderGroupMappingsService(
-        UnavailableMappings(SettingsNotConfigured.UNSET),
-        SettingsNotConfigured.UNSET,
-    )
+    service = ProviderGroupMappingsService(UnavailableMappings(SettingsNotConfigured.UNSET))
     with pytest.raises(SettingsStorageUnavailable):
         await service.get(_ADMINISTRATOR)

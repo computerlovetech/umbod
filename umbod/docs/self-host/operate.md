@@ -51,6 +51,16 @@ Umbod does not migrate the database between incompatible versions. Rehearse an u
 - **Telemetry:** remove any public `/v1/*` route and point exporters at the [private collector](telemetry.md).
 - **Files outside a namespace** are no longer visible. Their contents are not deleted. Export them before you upgrade.
 
+## Map provider values to Umbod groups
+
+Create and manage Umbod groups in **Administration → Groups**. A Group ID is an Umbod identifier and cannot be changed after creation.
+
+OAuth sign-ins get ordinary group permissions only from saved mappings. After deploying without mappings, sign in as an administrator and open **System settings → Group mappings**. For each group whose access should be restored, enter the provider claim value, select the corresponding Umbod group, and save. A value identical to a Group ID still needs a mapping. Existing groups and their permissions do not need to be recreated.
+
+Umbod uses the configured OAuth issuer and `UMBOD_MCP_PERMISSION_CLAIM` for all mappings. Review saved mappings before changing either setting. Administrator membership is configured separately and does not depend on mappings. The Google MCP adapter does not currently expose the upstream issuer, so ordinary group mappings do not apply to those sign-ins.
+
+Saved changes take effect on subsequent REST and MCP requests without a restart. Removing all mappings revokes ordinary OAuth group access. The API and MCP workers must share the same application database, as they do in the standard Helm and Compose installations. Separate in-memory stores do not share saved mappings.
+
 ## Administrator MCP
 
 Administrators can manage Umbod from an agent through three tools: `admin_discover`, `admin_inspect`, and `admin_apply`. They are served on a separate, private listener.

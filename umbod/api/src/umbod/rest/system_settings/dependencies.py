@@ -4,10 +4,7 @@ from typing import Annotated, Literal
 from fastapi import Depends, HTTPException, Request
 
 from umbod.config import AppConfig
-from umbod.config.system_settings import (
-    ConfiguredSystemSettingsDefaults,
-    configured_provider_membership_claim,
-)
+from umbod.config.system_settings import ConfiguredSystemSettingsDefaults
 from umbod.core.persistence import PersistenceReadiness
 from umbod.core.system_settings import (
     SettingsStorageUnavailable,
@@ -75,7 +72,6 @@ def get_authorized_system_settings(
 
 def get_authorized_provider_group_mappings(
     actor: Annotated[AdministratorRole, Depends(require_settings_administrator)],
-    config: Annotated[AppConfig, Depends(get_app_config)],
     factories: Annotated[
         ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)
     ],
@@ -83,9 +79,6 @@ def get_authorized_provider_group_mappings(
     runtime = factories.persistence_runtime
     return AuthorizedSettings(
         actor=actor,
-        service=create_provider_group_mappings_service(
-            runtime.database,
-            provider_claim=configured_provider_membership_claim(config),
-        ),
+        service=create_provider_group_mappings_service(runtime.database),
         readiness=runtime.readiness,
     )

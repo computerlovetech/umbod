@@ -46,7 +46,8 @@ describe('group management form wiring', () => {
     expect(list).not.toBeNull();
     expect(list?.textContent).toContain(group.label);
     expect(list?.textContent).toContain(group.description);
-    expect(list?.textContent).toContain(group.group_id);
+    expect(list?.textContent).toContain('Group ID');
+    expect(list?.querySelector('code')?.textContent).toBe(group.group_id);
     for (const label of ['Edit Operators', 'Delete Operators']) {
       const action = button(label);
       expect(action.textContent?.trim()).toBe('');
@@ -60,7 +61,9 @@ describe('group management form wiring', () => {
     await tick();
     button('Delete Operators').click();
     await tick();
-    expect(document.querySelector('section[aria-label="Confirm group deletion"]')).not.toBeNull();
+    const confirmation = document.querySelector('section[aria-label="Confirm group deletion"]');
+    expect(confirmation?.textContent).toContain('Delete group with ID');
+    expect(confirmation?.querySelector('code')?.textContent).toBe(group.group_id);
   });
 
   it('shows login-observed groups during creation and selects their exact provider values', async (): Promise<void> => {
@@ -73,7 +76,9 @@ describe('group management form wiring', () => {
     expect(addGroup.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     addGroup.click();
     await vi.waitFor(() => expect(document.querySelector('.observed-groups button')?.textContent).toBe(value));
+    expect(document.querySelector('label[for="provider-group-id"]')?.textContent).toContain('Group ID');
     expect(document.body.textContent).toContain('Groups observed from logins');
+    expect(document.body.textContent).toContain('Select a value to fill in the Group ID. This does not create a mapping.');
     (document.querySelector('.observed-groups button') as HTMLButtonElement).click();
     await tick();
     expect((document.getElementById('provider-group-id') as HTMLInputElement).value).toBe(value);

@@ -71,11 +71,7 @@ Self-hosting? Personal connectors need [one extra setting](../self-host/operate.
 
 ## Map provider groups
 
-By default, Umbod uses values from the configured OIDC permission claim as group IDs. The inherited suggestions show registered groups, not an allowlist.
-
-If a provider value differs from the Umbod group ID, open **Administration → System settings → Group mappings**. Enter the exact provider value, select a registered group, and save. Changes apply to subsequent REST and MCP requests without a restart. These mappings do not change who can administer Umbod.
-
-To restore direct matching for a value, remove its mapping and save. To restore direct matching for all values, choose **Clear saved overrides**, then **Save changes**.
+OAuth sign-ins need saved mappings for ordinary group access, even when a provider claim value matches an Umbod group ID. See [Map provider values to Umbod groups](../self-host/operate.md#map-provider-values-to-umbod-groups) for setup and upgrade instructions.
 
 ## Change or remove access
 

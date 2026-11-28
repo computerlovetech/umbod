@@ -21,7 +21,7 @@ def resolve_legacy_group_membership(
         case LegacyGroupClaimPolicy.OPENAPI:
             return _group_membership_from_values(_openapi_group_values(value) for value in values)
         case LegacyGroupClaimPolicy.PERSONAL:
-            groups = {group for value in values for group in _personal_group_values(value)}
+            groups = {group for value in values for group in validated_group_claim_values(value)}
             return GroupMembership(group_ids=tuple(sorted(groups)))
     assert_never(policy)
 
@@ -34,7 +34,7 @@ def _openapi_group_values(value: object) -> tuple[str, ...]:
     return ()
 
 
-def _personal_group_values(value: object) -> tuple[str, ...]:
+def validated_group_claim_values(value: object) -> tuple[str, ...]:
     if isinstance(value, str):
         return (value,) if value.strip() else ()
     if isinstance(value, (list, tuple)) and all(isinstance(item, str) for item in value):

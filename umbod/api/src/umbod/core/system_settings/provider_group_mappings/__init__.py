@@ -1,7 +1,4 @@
-from umbod.core.callers.membership import ProviderMembershipClaim
 from umbod.core.persistence import Database
-
-from ..ports import SettingsNotConfigured
 
 from .errors import UnregisteredMappingGroups
 from .models import (
@@ -28,8 +25,5 @@ __all__ = [
 
 def create_provider_group_mappings_service(
     database: Database,
-    provider_claim: ProviderMembershipClaim | SettingsNotConfigured,
 ) -> ProviderGroupMappingsService:
-    return ProviderGroupMappingsService(
-        DatabaseProviderGroupMappingsStore(database), provider_claim
-    )
+    return ProviderGroupMappingsService(DatabaseProviderGroupMappingsStore(database))

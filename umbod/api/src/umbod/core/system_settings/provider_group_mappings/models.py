@@ -15,14 +15,6 @@ def _validate_mapping_value(value: str) -> str:
     return value
 
 
-def is_mappable_group_id(group_id: str) -> bool:
-    try:
-        _validate_mapping_value(group_id)
-    except ValueError:
-        return False
-    return True
-
-
 type MappingValue = Annotated[StrictStr, AfterValidator(_validate_mapping_value)]
 
 
@@ -50,6 +42,4 @@ class EffectiveProviderGroupMappings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     mappings: ProviderGroupMappings
-    source: Literal[
-        SettingsSource.ADMIN_OVERRIDE, SettingsSource.BUILT_IN_DEFAULT, "inherited_claim_default"
-    ]
+    source: Literal[SettingsSource.BUILT_IN_DEFAULT, SettingsSource.ADMIN_OVERRIDE]

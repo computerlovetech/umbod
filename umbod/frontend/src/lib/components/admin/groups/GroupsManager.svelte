@@ -8,7 +8,7 @@
   let { state }: { state: GroupsState } = $props();
 </script>
 
-<SubpageContainer title="Groups" headingId="groups-title" lede="Manage shared group labels and descriptions. Registration grants no access and does not change identity provider membership.">
+<SubpageContainer title="Groups" headingId="groups-title" lede="Manage Umbod groups and their labels and descriptions. Creating a group does not grant access.">
   {#snippet navigation()}{/snippet}
   {#snippet actions()}
     {#if !state.denied}<Button disabled={state.pending} onclick={state.create}><PlusIcon />Add Group</Button>{/if}
@@ -18,7 +18,7 @@
   {#if state.error && !state.formOpen}<p role="alert">{state.error}</p>{/if}
   {#if state.message && !state.formOpen}<p role="status">{state.message}</p>{/if}
   {#if !state.denied}
-    <AdminRecordList items={state.groups} keyOf={(group) => group.group_id} label="Groups" recordHeading="Group" detailHeading="Provider group ID" emptyMessage="No groups yet.">
+    <AdminRecordList items={state.groups} keyOf={(group) => group.group_id} label="Groups" recordHeading="Group" detailHeading="Group ID" emptyMessage="No groups yet.">
       {#snippet identity(group)}
         <div class="group-identity">
           <span class="group-icon" aria-hidden="true">
@@ -35,7 +35,7 @@
         </div>
       {/snippet}
       {#snippet detail(group)}
-        <div class="group-provider"><span>Provider group ID</span><code>{group.group_id}</code></div>
+        <div class="group-provider"><span>Group ID</span><code>{group.group_id}</code></div>
       {/snippet}
       {#snippet actions(group)}
         <Button variant="secondary" iconOnly disabled={state.pending} aria-label={`Edit ${group.label}`} title={`Edit ${group.label}`} onclick={() => state.edit(group)}>
@@ -50,7 +50,7 @@
     {#if state.deleting !== null}
       <section aria-label="Confirm group deletion">
         <h2>Delete group?</h2>
-        <p>Delete provider group ID <code>{state.deleting}</code>? Deletion is blocked while connector, capability or filesystem references remain.</p>
+        <p>Delete group with ID <code>{state.deleting}</code>? Deletion is blocked while connector, capability or filesystem references remain.</p>
         <div class="actions">
           <Button variant="danger" disabled={state.pending} onclick={state.delete}>{state.pending ? 'Deleting…' : 'Confirm delete'}</Button>
           <Button variant="secondary" disabled={state.pending} onclick={state.cancel}>Cancel</Button>
