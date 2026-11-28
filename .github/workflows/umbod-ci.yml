@@ -201,7 +201,7 @@ jobs:
         run: uv run --no-project --python 3.12 --with pytest==9.0.2 python -m pytest umbod/scripts/tests/${{ matrix.tests }} -q
       - name: Verify literal PowerShell configuration binding
         if: matrix.os == 'windows-latest'
-        run: uv run --no-project --python 3.12 --with pytest==9.0.2 --with 'pydantic>=2.13.4,<3' python -m pytest --noconftest --import-mode=importlib -o pythonpath=src umbod/api/tests/umbod/core/harness_plugins/test_installers.py -k powershell_binding_executes -q
+        run: uv run --no-project --python 3.14 --with pytest==9.0.2 --with 'pydantic>=2.13.4,<3' python -m pytest --noconftest --import-mode=importlib -o pythonpath=src umbod/api/tests/umbod/core/harness_plugins/test_installers.py -k powershell_binding_executes -q
 
   backend-tests:
     needs: changes
