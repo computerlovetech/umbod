@@ -398,6 +398,9 @@ test('warns before deleting a mapping and applies the confirmed deletion only on
   button('Delete mapping').click();
   await tick();
   button('Save changes').click();
+  await tick();
+  expect(update).not.toHaveBeenCalled();
+  button('Save group mappings').click();
   await vi.waitFor(() => expect(settings.textContent).toContain('No unsaved changes'));
   expect(update).toHaveBeenCalledExactlyOnceWith({ operation: 'set', mappings: [] }, expect.any(AbortSignal));
   expect(settings.textContent).toContain('No mappings.');
@@ -425,7 +428,52 @@ test('deletes only the selected group when mappings share a provider value', asy
   button('Delete mapping').click();
   await tick();
   button('Save changes').click();
+  await tick();
+  button('Save group mappings').click();
   await vi.waitFor(() => expect(update).toHaveBeenCalledExactlyOnceWith({ operation: 'set', mappings: [firstMapping] }, expect.any(AbortSignal)));
+});
+
+test('warns about instance-wide authorization before saving an edited mapping and keeps the draft on cancel', async (): Promise<void> => {
+  const providerGroupMappings = mappingsAdministration(savedMappings);
+  const update = vi.spyOn(providerGroupMappings, 'update');
+  mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
+    providerGroupMappings, groups: { list: async () => [registeredGroup] }
+  });
+  await vi.waitFor(() => expect(providerValueField().readOnly).toBe(false));
+  changeProviderValue('Edited provider value');
+  await tick();
+
+  const save = button('Save changes');
+  save.click();
+  await tick();
+  const dialog = element<HTMLDialogElement>('dialog[role="alertdialog"][open]');
+  const description = document.getElementById(dialog.getAttribute('aria-describedby') ?? '');
+  expect(description?.textContent).toContain('Users may gain or lose access to Umbod groups');
+  expect(document.activeElement).toBe(button('Cancel'));
+  expect(update).not.toHaveBeenCalled();
+
+  button('Cancel').click();
+  await tick();
+  expect(document.querySelector('dialog[open]')).toBeNull();
+  await vi.waitFor(() => expect(document.activeElement).toBe(save));
+  expect(providerValueField().value).toBe('Edited provider value');
+  expect(update).not.toHaveBeenCalled();
+
+  save.click();
+  await tick();
+  element<HTMLDialogElement>('dialog[open]').dispatchEvent(new Event('cancel', { cancelable: true }));
+  await tick();
+  expect(document.querySelector('dialog[open]')).toBeNull();
+  await vi.waitFor(() => expect(document.activeElement).toBe(save));
+  expect(update).not.toHaveBeenCalled();
+
+  save.click();
+  await tick();
+  button('Save group mappings').click();
+  await vi.waitFor(() => expect(update).toHaveBeenCalledExactlyOnceWith({
+    operation: 'set', mappings: [{ external_value: 'Edited provider value', group_id: registeredGroup.group_id }]
+  }, expect.any(AbortSignal)));
+  expect(document.querySelector('dialog[open]')).toBeNull();
 });
 
 test('keeps rules visible after a catalogue failure and lets an unavailable group be replaced', async (): Promise<void> => {
@@ -462,6 +510,8 @@ test('keeps rules visible after a catalogue failure and lets an unavailable grou
   await tick();
   expect(selector.textContent).toContain('Registered Team (registered-team)');
   button('Save changes').click();
+  await tick();
+  button('Save group mappings').click();
   await vi.waitFor(() => expect(update).toHaveBeenCalledWith({
     operation: 'set', mappings: [{ external_value: editedValue, group_id: registeredGroup.group_id }]
   }, expect.any(AbortSignal)));
@@ -538,9 +588,13 @@ test('keeps an added draft when save fails and prevents duplicate requests while
   const save = button('Save changes');
   expect(save.disabled).toBe(false);
   save.click();
-  save.click();
+  await tick();
+  const confirm = button('Save group mappings');
+  confirm.click();
+  confirm.click();
   await tick();
   expect(save.disabled).toBe(true);
+  await vi.waitFor(() => expect(document.activeElement?.textContent).toBe('Saving changes…'));
   expect(update).toHaveBeenCalledTimes(1);
   pending.reject(new HttpError(503, 'Service unavailable', null));
 
@@ -548,6 +602,8 @@ test('keeps an added draft when save fails and prevents duplicate requests while
   expect(providerValueField().value).toBe(' Level 1 Support ');
   expect(save.disabled).toBe(false);
   save.click();
+  await tick();
+  button('Save group mappings').click();
   await vi.waitFor(() => expect(settings.textContent).toContain('No unsaved changes'));
   expect(update).toHaveBeenNthCalledWith(2, {
     operation: 'set', mappings: [{ external_value: ' Level 1 Support ', group_id: 'registered-team' }]

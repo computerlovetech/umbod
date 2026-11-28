@@ -16,7 +16,7 @@ type Failure = { kind: 'read' | 'write' | 'access'; message: string };
 export class ProviderGroupMappingsState {
   #saved = $state.raw<readonly Row[]>();
   #draft = $state.raw<readonly Row[]>();
-  #removalId = $state<number>();
+  #confirmation = $state.raw<{ kind: 'save' } | { kind: 'remove'; id: number }>();
   #catalogue = $state.raw<Catalogue>({ kind: 'loading' });
   #failure = $state.raw<Failure>();
   #pending = $state.raw<AbortController>();
@@ -38,8 +38,9 @@ export class ProviderGroupMappingsState {
   get editable(): boolean { return this.ready && !this.busy && this.#catalogue.kind === 'ready'; }
   get rows(): readonly Row[] { return this.#draft ?? this.#saved ?? []; }
   get removalTarget(): Row | undefined {
-    if (this.#removalId === undefined || !this.editable) return undefined;
-    return this.rows.find((row): boolean => row.id === this.#removalId);
+    const confirmation = this.#confirmation;
+    if (confirmation?.kind !== 'remove' || !this.editable) return undefined;
+    return this.rows.find((row): boolean => row.id === confirmation.id);
   }
   get removalGroupLabel(): string | undefined {
     const groupId = this.removalTarget?.mapping.group_id;
@@ -65,9 +66,10 @@ export class ProviderGroupMappingsState {
 
   get validationMessage(): string | undefined { return this.#validation.message; }
   get canSave(): boolean { return !this.busy && this.#validation.patch !== undefined; }
+  get saveConfirmationOpen(): boolean { return this.#confirmation?.kind === 'save' && this.canSave; }
 
   start = (): void => {
-    this.cancelRemoval();
+    this.cancelConfirmation();
     void this.load();
     void this.loadGroups();
   };
@@ -115,35 +117,42 @@ export class ProviderGroupMappingsState {
   }
 
   requestRemoval(id: number): void {
-    if (!this.editable) return;
-    this.#removalId = id;
+    if (!this.editable || this.#confirmation || !this.rows.some((row): boolean => row.id === id)) return;
+    this.#confirmation = { kind: 'remove', id };
   }
 
-  cancelRemoval = (): void => {
-    this.#removalId = undefined;
+  cancelConfirmation = (): void => {
+    this.#confirmation = undefined;
   };
 
   confirmRemoval = (): void => {
     const target = this.removalTarget;
-    this.cancelRemoval();
-    if (target) this.#replace(this.rows.filter((row): boolean => row.id !== target.id));
+    if (!target) return;
+    this.cancelConfirmation();
+    this.#replace(this.rows.filter((row): boolean => row.id !== target.id));
   };
 
   discard = (): void => {
     if (this.busy) return;
-    this.cancelRemoval();
+    this.cancelConfirmation();
     this.#draft = undefined;
     this.#failure = undefined;
   };
 
-  save = async (): Promise<void> => {
+  requestSave = (): void => {
+    if (!this.canSave || this.#confirmation) return;
+    this.#confirmation = { kind: 'save' };
+  };
+
+  confirmSave = async (): Promise<void> => {
     const patch = this.#validation.patch;
-    if (this.busy || !patch) return;
+    if (!this.saveConfirmationOpen || !patch) return;
+    this.cancelConfirmation();
     await this.#request((signal): Promise<ProviderGroupMappings> => this.settings.update(patch, signal), 'write');
   };
 
   dispose = (): void => {
-    this.cancelRemoval();
+    this.cancelConfirmation();
     this.#pending?.abort();
     this.#catalogueRequest?.abort();
     this.#pending = undefined;
