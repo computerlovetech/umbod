@@ -16,10 +16,10 @@ export const providerGroupMappingListSchema = z.array(providerGroupMappingSchema
   });
 });
 
-export const providerGroupMappingsSchema = z.strictObject({
-  mappings: providerGroupMappingListSchema,
-  source: z.enum(['admin_override', 'deployment_default', 'inherited_claim_default', 'built_in_default'])
-});
+export const providerGroupMappingsSchema = z.discriminatedUnion('source', [
+  z.strictObject({ source: z.literal('built_in_default'), mappings: z.tuple([]) }),
+  z.strictObject({ source: z.literal('admin_override'), mappings: providerGroupMappingListSchema })
+]);
 
 export const providerGroupMappingsPatchSchema = z.discriminatedUnion('operation', [
   z.strictObject({ operation: z.literal('set'), mappings: providerGroupMappingListSchema }),

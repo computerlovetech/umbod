@@ -16,8 +16,6 @@ from umbod.rest.settings import APISettings
 
 _PATH = "/api/admin/system-settings/provider-group-mappings"
 _GROUPS = "/api/admin/groups"
-_FILESYSTEM = "/api/admin/system-settings/filesystem"
-_ENV = "UMBOD_PROVIDER_GROUP_OVERRIDES"
 _RULE = {
     "external_value": " Staff ",
     "group_id": "umbod-admins",
@@ -43,7 +41,6 @@ def runtime_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv(
         "UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability)
     )
-    monkeypatch.delenv(_ENV, raising=False)
 
 
 def _settings(auth_mode: str = "jwt") -> APISettings:
@@ -88,41 +85,17 @@ def test_admin_route_returns_uncached_built_in_default(client: TestClient) -> No
     assert response.json() == {"mappings": [], "source": "built_in_default"}
 
 
-def test_inherits_resolved_issuer_and_permission_claim_until_override_and_regenerates_on_reset(
-    runtime_environment: None, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("UMBOD_PROFILE", "local")
-    monkeypatch.setenv("UMBOD_AUTH", "auth0")
-    monkeypatch.setenv("UMBOD_OIDC_DOMAIN", "legacy-issuer.example")
-    monkeypatch.setenv("UMBOD_OIDC_ISSUER_URL", "")
-    monkeypatch.setenv("UMBOD_OIDC_CLIENT_ID", "test-client")
-    monkeypatch.setenv("UMBOD_OIDC_CLIENT_SECRET", "test-secret")
-    monkeypatch.setenv("UMBOD_OIDC_AUDIENCE", "test-audience")
-    monkeypatch.setenv("UMBOD_ADMIN_MEMBERSHIP_CLAIM", "groups")
-    monkeypatch.setenv("UMBOD_MCP_PERMISSION_CLAIM", "https://example.test/claims/teams")
+def test_registered_groups_are_not_suggested_before_save_or_after_reset(client: TestClient) -> None:
     group_id = " Team / Read "
-    inherited = {
-        "external_value": group_id,
-        "group_id": group_id,
-    }
-    with _client() as client:
-        registered_before = client.get(_GROUPS, headers=_ADMIN).json()["groups"]
-        assert registered_before == []
-        _register(client, group_id)
-        assert client.get(_PATH, headers=_ADMIN).json() == {
-            "mappings": [inherited], "source": "inherited_claim_default",
-        }
+    _register(client, group_id)
+    assert client.get(_PATH, headers=_ADMIN).json() == {"mappings": [], "source": "built_in_default"}
 
-        saved = _set(client, {**inherited, "external_value": "external helpdesk group"})
-        _register(client, "another-team")
-        assert client.get(_PATH, headers=_ADMIN).json() == saved
-
-        restored = client.patch(_PATH, json=_RESET, headers=_ADMIN)
-        assert restored.status_code == 200
-        assert restored.json() == {
-            "mappings": [inherited, {**inherited, "external_value": "another-team", "group_id": "another-team"}],
-            "source": "inherited_claim_default",
-        }
+    _set(client, {"external_value": "external helpdesk group", "group_id": group_id})
+    reset = client.patch(_PATH, json=_RESET, headers=_ADMIN)
+    assert reset.status_code == 200
+    assert reset.headers["Cache-Control"] == "no-store"
+    assert reset.json() == {"mappings": [], "source": "built_in_default"}
+    assert client.get(_PATH, headers=_ADMIN).json() == reset.json()
 
 
 def test_top_level_patch_contract_is_discriminated_in_admin_openapi(
@@ -258,27 +231,6 @@ def test_reset_releases_mapping_target_for_deletion(client: TestClient) -> None:
     assert client.delete(f"{_GROUPS}/mapping-target", headers=_ADMIN).status_code == 204
 
 
-def test_invalid_deployment_is_masked_but_blocks_reset_without_affecting_approval(
-    runtime_environment: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv(_ENV, "{private-input")
-    with _client() as client:
-        missing = client.get(_PATH, headers=_ADMIN)
-        assert missing.status_code == 503
-        assert missing.json() == _UNAVAILABLE
-        assert missing.headers["Cache-Control"] == "no-store"
-        saved = _set(client)
-        assert client.get(_PATH, headers=_ADMIN).json() == saved
-
-        reset = client.patch(_PATH, json=_RESET, headers=_ADMIN)
-        assert reset.status_code == 503
-        assert reset.json() == _UNAVAILABLE
-        assert reset.headers["Cache-Control"] == "no-store"
-        assert client.get(_PATH, headers=_ADMIN).json() == saved
-        assert client.get(_FILESYSTEM, headers=_ADMIN).status_code == 200
-
-
 @pytest.mark.parametrize("method", ["GET", "PATCH"])
 def test_provider_claim_mapping_does_not_grant_admin_access(
     client: TestClient, method: str
@@ -307,11 +259,10 @@ def test_non_authenticated_or_disabled_mode_cannot_use_resource(
         )
 
 
-def test_database_read_failure_does_not_return_deployment_default(
+def test_database_read_failure_does_not_return_built_in_default(
     runtime_environment: None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv(_ENV, "[]")
     runtime = create_inmemory_runtime()
     factories = ConnectorApiDependencyFactories.from_settings(_settings(), runtime, [])
 

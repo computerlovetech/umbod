@@ -5,6 +5,10 @@ from pathlib import Path
 from typing import Literal
 
 from umbod.core.groups.models import RegisterGroup
+from umbod.core.system_settings.provider_group_mappings import (
+    ProviderGroupMapping,
+    create_provider_group_mappings_service,
+)
 from umbod.core.groups.stores.composition import create_group_management
 from umbod.core.filesystem.namespaces import CreateSharedNamespace, NamespaceGroupAccess, SaveSharedNamespace, SharedNamespaceView
 from umbod.infrastructure import create_filesystem_namespace_management
@@ -36,7 +40,7 @@ class AcceptedTestVerifier:
             raise JwtVerificationError()
         return JwtClaims(claims={
             "iss": "issuer", "sub": token,
-            "filesystem_groups": ["team", "team", 42] if token != "outsider" else [],
+            "filesystem_groups": ["team", "team"] if token != "outsider" else [],
             "groups": ["wrong-claim"],
         })
 
@@ -51,7 +55,6 @@ class FilesystemHttp:
 
 def create_shared_namespace(http: FilesystemHttp, access: Literal["read", "read_write"]) -> SharedNamespaceView:
     database = http.factories.persistence_runtime.database
-    http.client.portal.call(create_group_management(database).register_group, RegisterGroup(group_id="team"))
     management = create_filesystem_namespace_management(database=database, issuer="issuer")
     return http.client.portal.call(management.create, CreateSharedNamespace(
         name="Team files", groups=[NamespaceGroupAccess(group_id="team", access=access)],
@@ -97,7 +100,8 @@ def filesystem_settings(
         filesystem={"upload_max_bytes": filesystem_upload_max_bytes},
         connector_store=filesystem_persistence_config,
         personal_connections={"enabled": filesystem_personal_enabled, "identity_namespace": "test:filesystem"},
-        mcp={"permission_group_claim": "filesystem_groups"},
+        oidc={"issuer_url": "issuer"},
+        mcp={"auth_mode": "oidc", "permission_group_claim": "filesystem_groups"},
     )
 
 
@@ -162,6 +166,13 @@ def _filesystem_client(root: FastAPI) -> Iterator[FilesystemHttp]:
     with TestClient(root, headers={"Authorization": "Bearer alice"}) as client:
         assert client.get("/api/me/filesystem/namespaces").status_code == 200
         factories = captured[-1]
+        database = factories.persistence_runtime.database
+        client.portal.call(create_group_management(database).register_group, RegisterGroup(group_id="team"))
+        client.portal.call(
+            create_provider_group_mappings_service(database).replace,
+            "administrator",
+            (ProviderGroupMapping(external_value="team", group_id="team"),),
+        )
         yield FilesystemHttp(client, app, root, factories)
 
 

@@ -9,18 +9,11 @@ import {
 import type { ProviderGroupMappingsAdministration } from '#lib/admin/system-settings/provider-group-mappings-port.js';
 
 type Row = Readonly<{ id: number; mapping: Readonly<ProviderGroupMapping> }>;
-type SavedMappings = { source: ProviderGroupMappings['source']; explicit: readonly Row[]; inherited: readonly Row[] };
+type SavedMappings = { source: ProviderGroupMappings['source']; rows: readonly Row[] };
 type GroupOption = { value: string; label: string; disabled?: boolean };
 type Catalogue = { kind: 'loading' | 'failed' } | { kind: 'ready'; options: GroupOption[]; ids: ReadonlySet<string> };
 type Draft = { operation: 'set'; rows: readonly Row[] } | { operation: 'reset' };
 type Failure = { kind: 'read' | 'write' | 'access'; message: string };
-
-const sourceLabels: Record<ProviderGroupMappings['source'], string> = {
-  admin_override: 'Admin override',
-  deployment_default: 'Deployment default',
-  inherited_claim_default: 'Inherited from OAuth configuration',
-  built_in_default: 'Built-in default'
-};
 
 export class ProviderGroupMappingsState {
   #saved = $state.raw<SavedMappings>();
@@ -40,23 +33,22 @@ export class ProviderGroupMappingsState {
   get busy(): boolean { return this.ready && this.#pending !== undefined; }
   get loading(): boolean { return !this.ready && !this.#failure; }
   get dirty(): boolean { return this.#draft !== undefined; }
-  get resetting(): boolean { return this.#draft?.operation === 'reset'; }
+  get #resetting(): boolean { return this.#draft?.operation === 'reset'; }
   get canReset(): boolean {
-    return this.#saved?.source === 'admin_override' && !this.resetting;
+    return this.#saved?.source === 'admin_override' && !this.#resetting;
   }
-  get sourceLabel(): string | undefined { return this.#saved && sourceLabels[this.#saved.source]; }
   get failure(): string | undefined { return this.#failure?.message; }
   get canRetry(): boolean { return this.#failure?.kind === 'read'; }
   get catalogueStatus(): Catalogue['kind'] { return this.#catalogue.kind; }
-  get editable(): boolean { return this.ready && !this.busy && !this.resetting && this.#catalogue.kind === 'ready'; }
-  get inheritedRows(): readonly Row[] { return this.#saved?.inherited ?? []; }
+  get editable(): boolean { return this.ready && !this.busy && !this.#resetting && this.#catalogue.kind === 'ready'; }
   get rows(): readonly Row[] {
-    return this.#draft?.operation === 'set' ? this.#draft.rows : this.#saved?.explicit ?? [];
+    if (this.#resetting) return [];
+    return this.#draft?.operation === 'set' ? this.#draft.rows : this.#saved?.rows ?? [];
   }
 
   #validation = $derived.by((): { message?: string; patch?: ProviderGroupMappingsPatch } => {
     if (!this.dirty) return {};
-    if (this.resetting) return { patch: { operation: 'reset' } };
+    if (this.#resetting) return { patch: { operation: 'reset' } };
     if (this.#catalogue.kind !== 'ready') return {};
     const mappings = this.rows.map(({ mapping }): Readonly<ProviderGroupMapping> => mapping);
     const result = providerGroupMappingListSchema.safeParse(mappings);
@@ -111,21 +103,10 @@ export class ProviderGroupMappingsState {
     return [{ value: groupId, label: groupId ? `${groupId} (unavailable)` : label, disabled: true }, ...this.#catalogue.options];
   }
 
-  isOverridden(externalValue: string): boolean {
-    return this.rows.some(({ mapping }): boolean => mapping.external_value === externalValue);
-  }
-
   add = (): void => {
     if (!this.editable) return;
     this.#replace([...this.rows, this.#row({ external_value: '', group_id: '' })]);
   };
-
-  addOverride(id: number): void {
-    if (!this.editable) return;
-    const inherited = this.inheritedRows.find((row): boolean => row.id === id);
-    if (!inherited || this.isOverridden(inherited.mapping.external_value)) return;
-    this.#replace([...this.rows, this.#row({ ...inherited.mapping })]);
-  }
 
   change(id: number, field: keyof ProviderGroupMapping, value: string): void {
     if (!this.editable) return;
@@ -178,10 +159,7 @@ export class ProviderGroupMappingsState {
     try {
       const { source, mappings } = await send(request.signal);
       if (request.signal.aborted) return;
-      const rows = mappings.map((mapping): Row => this.#row(mapping));
-      this.#saved = source === 'inherited_claim_default'
-        ? { source, explicit: [], inherited: rows }
-        : { source, explicit: rows, inherited: [] };
+      this.#saved = { source, rows: mappings.map((mapping): Row => this.#row(mapping)) };
       this.#draft = undefined;
     } catch (error) {
       if (!request.signal.aborted && !this.#revokeAccess(error)) this.#recordFailure(error, operation);

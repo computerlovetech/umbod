@@ -57,13 +57,8 @@ def _project_callers(
 
 
 @pytest.fixture
-def deployment_rules() -> tuple[dict[str, str], ...]:
-    return ()
-
-
-@pytest.fixture
 def factories(
-    deployment_rules: tuple[dict[str, str], ...], monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> ConnectorApiDependencyFactories:
     environment = {
         "UMBOD_PROFILE": "production",
@@ -83,9 +78,6 @@ def factories(
     }
     for name, value in environment.items():
         monkeypatch.setenv(name, value)
-    monkeypatch.delenv("UMBOD_PROVIDER_GROUP_OVERRIDES", raising=False)
-    if deployment_rules:
-        monkeypatch.setenv("UMBOD_PROVIDER_GROUP_OVERRIDES", json.dumps(deployment_rules))
     settings = load_app_config_without_env_file()
     settings.rest.metrics_enabled = False
     return ConnectorApiDependencyFactories.from_settings(settings, create_inmemory_runtime(), ())
@@ -138,7 +130,7 @@ def admin_headers(signing_key: rsa.RSAPrivateKey) -> dict[str, str]:
 
 @pytest.fixture
 def user_headers(signing_key: rsa.RSAPrivateKey) -> dict[str, str]:
-    return _headers(signing_key, _SUBJECT, {_PERMISSION_CLAIM: [_EXTERNAL_GROUP]})
+    return _headers(signing_key, _SUBJECT, {_PERMISSION_CLAIM: [_LOCAL_GROUP, _EXTERNAL_GROUP]})
 
 
 @pytest.fixture
@@ -161,11 +153,11 @@ def _set_mapping(client: TestClient, headers: dict[str, str], group_id: str) -> 
     assert response.status_code == 200, response.text
 
 
-def test_saved_mapping_replaces_direct_membership_without_changing_caller_identities(
+def test_saved_mapping_enables_ordinary_membership_without_changing_caller_identities(
     client: TestClient, admin_headers: dict[str, str], user_headers: dict[str, str],
 ) -> None:
     before = _projection(client, user_headers)
-    assert before.group_ids == ((_EXTERNAL_GROUP,),) * 3
+    assert before.group_ids == ((),) * 3
     assert before.filesystem.caller.authentication == AuthenticationProvenance.UPSTREAM_VERIFIED
     _set_mapping(client, admin_headers, _LOCAL_GROUP)
 
@@ -185,7 +177,7 @@ def test_admin_claim_cannot_supply_an_ordinary_membership_and_mapping_cannot_gra
     assert _register_response.status_code == 204
     _set_mapping(client, admin_headers, _ADMIN_GROUP)
     ordinary_member = _headers(signing_key, _SUBJECT, {_PERMISSION_CLAIM: [_EXTERNAL_GROUP]})
-    other_claim_member = _headers(signing_key, _SUBJECT, {"roles": [_EXTERNAL_GROUP]})
+    other_claim_member = _headers(signing_key, _SUBJECT, {"roles": [_ADMIN_GROUP + "-other", _EXTERNAL_GROUP]})
 
     assert _projection(client, ordinary_member).group_ids == ((_ADMIN_GROUP,),) * 3
     assert client.get(_MAPPINGS, headers=ordinary_member).status_code == 403
@@ -218,17 +210,18 @@ def test_null_target_is_rejected_without_changing_active_membership(
     assert _projection(client, user_headers).group_ids == ((_LOCAL_GROUP,),) * 3
 
 
-@pytest.mark.parametrize("deployment_rules", [({**_RULE, "group_id": _LOCAL_GROUP},)])
-def test_saved_empty_list_overrides_deployment_rules_until_reset(
+def test_empty_save_and_reset_both_clear_verified_membership(
     client: TestClient, admin_headers: dict[str, str], user_headers: dict[str, str],
 ) -> None:
+    _set_mapping(client, admin_headers, _LOCAL_GROUP)
     assert _projection(client, user_headers).group_ids == ((_LOCAL_GROUP,),) * 3
 
     assert client.patch(_MAPPINGS, headers=admin_headers, json={"operation": "set", "mappings": []}).status_code == 200
-    assert _projection(client, user_headers).group_ids == ((_EXTERNAL_GROUP,),) * 3
+    assert _projection(client, user_headers).group_ids == ((),) * 3
 
+    _set_mapping(client, admin_headers, _LOCAL_GROUP)
     assert client.patch(_MAPPINGS, headers=admin_headers, json={"operation": "reset"}).status_code == 200
-    assert _projection(client, user_headers).group_ids == ((_LOCAL_GROUP,),) * 3
+    assert _projection(client, user_headers).group_ids == ((),) * 3
 
 
 def test_rest_caller_dependencies_share_one_membership_capture_per_request(
@@ -268,7 +261,7 @@ def test_nonverified_caller_uses_legacy_membership_without_reading_mappings(
     _personal_app(app).dependency_overrides[get_caller_context] = deployment_caller
     monkeypatch.setattr(factories.group_membership_source, "capture", fail_capture)
 
-    assert _projection(client, user_headers).group_ids == ((_EXTERNAL_GROUP,),) * 3
+    assert _projection(client, user_headers).group_ids == ((_LOCAL_GROUP, _EXTERNAL_GROUP),) * 3
 
 
 def test_unavailable_mapping_read_denies_verified_groups_without_breaking_admin_authentication(

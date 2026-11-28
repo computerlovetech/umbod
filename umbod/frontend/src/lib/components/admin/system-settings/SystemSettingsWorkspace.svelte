@@ -67,7 +67,7 @@
       {@render detailHeader('Agent diagnostics', 'Controls for diagnostic reporting on this instance.', diagnosticsIcon)}
       {@render diagnostics()}
     {:else if section === 'provider-group-mappings'}
-      {@render detailHeader('Inherited mappings with explicit overrides', 'Saved changes and resets take effect immediately.', providerMappingsIcon)}
+      {@render detailHeader('Group mappings', 'Provider values grant group access only through saved mappings.', providerMappingsIcon)}
       {@render providerMappings()}
     {:else}
       {@render detailHeader('Filesystem', 'Controls for file operations on this instance.', folderIcon)}

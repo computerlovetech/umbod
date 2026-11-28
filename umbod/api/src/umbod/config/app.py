@@ -475,7 +475,6 @@ class AppConfig(ConfigModel):
         default_factory=OpenApiConnectorConfig
     )
     filesystem: FilesystemRuntimeConfig = Field(default_factory=FilesystemRuntimeConfig)
-    provider_group_overrides: str | None = Field(default=None, exclude=True, repr=False)
     cors: CorsConfig = Field(default_factory=CorsConfig)
     feature_toggles: FeatureTogglesConfig = Field(default_factory=FeatureTogglesConfig)
     admin_authentication: AdminAuthConfig = Field(default_factory=AdminAuthConfig)

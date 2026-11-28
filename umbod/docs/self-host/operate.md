@@ -53,13 +53,13 @@ Umbod does not migrate the database between incompatible versions. Rehearse an u
 
 ## Map provider values to Umbod groups
 
-By default, values from `UMBOD_MCP_PERMISSION_CLAIM` match Umbod group IDs by name. In **System settings → Group mappings**, enter a provider value and select a registered Umbod group to replace that match. Unmapped values still match by name. Administrator membership is configured separately.
+Create and manage Umbod groups in **Administration → Groups**. A Group ID is an Umbod identifier and cannot be changed after creation.
 
-Umbod uses the configured OAuth issuer and membership claim for all mappings. Review saved mappings before changing either setting.
+OAuth sign-ins get ordinary group permissions only from saved mappings. After deploying without mappings, sign in as an administrator and open **System settings → Group mappings**. For each group whose access should be restored, enter the provider claim value, select the corresponding Umbod group, and save. A value identical to a Group ID still needs a mapping. Existing groups and their permissions do not need to be recreated.
 
-For deployment defaults, set `UMBOD_PROVIDER_GROUP_OVERRIDES` to a JSON array of mappings with `external_value` and `group_id`. Set the same value for the API and public MCP workers. In Helm, use `core.api.env.UMBOD_PROVIDER_GROUP_OVERRIDES` and `core.mcp.env.UMBOD_PROVIDER_GROUP_OVERRIDES`; in Compose, set it in `.env` before recreating both services.
+Umbod uses the configured OAuth issuer and `UMBOD_MCP_PERMISSION_CLAIM` for all mappings. Review saved mappings before changing either setting. Administrator membership is configured separately and does not depend on mappings. The Google MCP adapter does not currently expose the upstream issuer, so ordinary group mappings do not apply to those sign-ins.
 
-Saving a list replaces the deployment defaults. Saving an empty list keeps only inherited matches. **Reset to default** restores the deployment defaults. Saved changes and resets apply on subsequent requests without a restart.
+Saved changes take effect on subsequent REST and MCP requests without a restart. Removing all mappings revokes ordinary OAuth group access. The API and MCP workers must share the same application database, as they do in the standard Helm and Compose installations. Separate in-memory stores do not share saved mappings.
 
 ## Administrator MCP
 

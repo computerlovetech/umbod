@@ -34,9 +34,7 @@ OPAQUE = '"' + "a" * 64 + '"'
 
 @pytest.fixture
 def sharing_http(filesystem_http: FilesystemHttp) -> FilesystemHttp:
-    filesystem_http.factories.settings.oidc.issuer_url = "issuer"
     filesystem_http.factories.settings.admin_authentication.mode = "jwt"
-    register_recipient(filesystem_http, "team")
     return filesystem_http
 
 
@@ -289,7 +287,6 @@ def test_nonadmin_owner_can_select_registered_groups_without_admin_catalogue_acc
     filesystem_full_http: FilesystemHttp, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sharing_http = filesystem_full_http
-    sharing_http.factories.settings.oidc.issuer_url = "issuer"
     sharing_http.factories.settings.admin_authentication.mode = "jwt"
     private_node = create_private_node(sharing_http)
 

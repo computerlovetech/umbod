@@ -3,7 +3,11 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Protocol
 
-from .groups import LegacyGroupClaimPolicy, resolve_legacy_group_membership
+from .groups import (
+    LegacyGroupClaimPolicy,
+    resolve_legacy_group_membership,
+    validated_group_claim_values,
+)
 from .models import AuthenticationProvenance, GroupMembership
 
 
@@ -48,36 +52,18 @@ class GroupMembershipResolver:
         if authentication != AuthenticationProvenance.UPSTREAM_VERIFIED:
             return resolve_legacy_group_membership(claims, claim_fields, policy)
         overrides = self.overrides
-        if overrides is MembershipRuleAvailability.UNAVAILABLE:
+        if not isinstance(overrides, ProviderGroupOverrides):
             return GroupMembership(group_ids=())
-        if isinstance(overrides, ProviderGroupOverrides) and (
-            claims.get("iss") == overrides.provider_claim.issuer
-            and overrides.provider_claim.claim in claim_fields
-        ):
-            return _resolve_with_overrides(claims, claim_fields, policy, overrides)
-        return resolve_legacy_group_membership(claims, claim_fields, policy)
-
-
-def _resolve_with_overrides(
-    claims: Mapping[str, object],
-    claim_fields: Sequence[str],
-    policy: LegacyGroupClaimPolicy,
-    overrides: ProviderGroupOverrides,
-) -> GroupMembership:
-    resolved: dict[str, None] = {}
-    for field in claim_fields:
-        groups = resolve_legacy_group_membership(claims, (field,), policy).group_ids
-        for group_id in groups:
-            targets = (
-                overrides.targets_by_value.get(group_id, (group_id,))
-                if field == overrides.provider_claim.claim
-                else (group_id,)
-            )
-            resolved.update(dict.fromkeys(targets))
-    groups = tuple(resolved)
-    return GroupMembership(
-        group_ids=tuple(sorted(groups)) if policy is LegacyGroupClaimPolicy.PERSONAL else groups
-    )
+        selector = overrides.provider_claim
+        if claims.get("iss") != selector.issuer or selector.claim not in claim_fields:
+            return GroupMembership(group_ids=())
+        values = validated_group_claim_values(claims.get(selector.claim))
+        groups = dict.fromkeys(
+            target for value in values for target in overrides.targets_by_value.get(value, ())
+        )
+        return GroupMembership(
+            group_ids=tuple(sorted(groups)) if policy is LegacyGroupClaimPolicy.PERSONAL else tuple(groups)
+        )
 
 
 INHERITED_GROUP_MEMBERSHIP = GroupMembershipResolver(MembershipRuleAvailability.INHERITED)

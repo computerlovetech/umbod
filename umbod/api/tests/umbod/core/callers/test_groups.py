@@ -10,7 +10,7 @@ def _runtime_membership(values: Iterable[object]) -> GroupMembership:
     claims = {str(index): value for index, value in enumerate(values)}
     return INHERITED_GROUP_MEMBERSHIP.resolve(
         claims, tuple(claims), LegacyGroupClaimPolicy.RUNTIME,
-        AuthenticationProvenance.UPSTREAM_VERIFIED,
+        AuthenticationProvenance.LOCAL_SIMULATION,
     )
 
 

@@ -84,7 +84,7 @@ export class GroupsState {
     const body = { group_id: this._groupId, label: this._label, description: this._description };
     const parsed = this.editing ? updateGroupSchema.safeParse({ ...body, expected_revision: this.editing.revision }) : createGroupSchema.safeParse(body);
     if (!parsed.success) { this._error = parsed.error.issues.map((issue) => issue.message).join('. '); return; }
-    if (!this.editing && this.entries.some((group) => group.group_id === body.group_id)) { this._error = 'A group with this exact provider group ID already exists.'; return; }
+    if (!this.editing && this.entries.some((group) => group.group_id === body.group_id)) { this._error = 'A group with this exact Group ID already exists.'; return; }
     const generation = ++this.generation;
     this._pending = true;
     this._error = '';
@@ -105,7 +105,7 @@ export class GroupsState {
         const registered = groups.find((group) => group.group_id === parsed.data.group_id);
         if (!registered) throw new Error('Created group missing from catalogue');
         if (registered.label !== parsed.data.label || registered.description !== parsed.data.description) {
-          this._error = 'This provider group ID now exists with different metadata. Your draft is preserved; review the existing group before editing it.';
+          this._error = 'This Group ID now exists with different metadata. Your draft is preserved; review the existing group before editing it.';
           return;
         }
       }
@@ -157,7 +157,7 @@ export class GroupsState {
       this._error = 'Administration access is no longer available. Sign in with an authorized account.';
     } else if (error instanceof HttpError && error.status === 409) {
       this._conflict = operation === 'save' && this.isEditing;
-      this._error = operation === 'delete' ? 'This group is in use. Remove its connector, capability and filesystem references before deleting.' : this.isEditing ? 'This group changed elsewhere. Your draft is preserved. Reload the latest revision before retrying.' : 'A group with this exact provider group ID already exists.';
+      this._error = operation === 'delete' ? 'This group is in use. Remove its connector, capability and filesystem references before deleting.' : this.isEditing ? 'This group changed elsewhere. Your draft is preserved. Reload the latest revision before retrying.' : 'A group with this exact Group ID already exists.';
     } else if (error instanceof HttpError && error.status === 404) {
       this._missing = true;
       this._error = 'This group no longer exists. Your draft is preserved.';

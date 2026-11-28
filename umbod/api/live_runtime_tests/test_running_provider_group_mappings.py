@@ -116,8 +116,7 @@ async def test_provider_group_overrides_change_live_access_across_api_and_mcp_wo
         roots = prepare_membership_namespaces(http, primary_admin, test_id, (DIRECT_GROUP, mapped_group, ADMIN_GROUP))
         direct_root, mapped_root, admin_root = (roots[group] for group in (DIRECT_GROUP, mapped_group, ADMIN_GROUP))
         original = checked(secondary_admin.get(MAPPINGS))
-        assert original["source"] == "inherited_claim_default"
-        assert mapping(DIRECT_GROUP, DIRECT_GROUP) in original["mappings"]
+        assert original == {"source": "built_in_default", "mappings": []}
         assert checked(primary_admin.get(MAPPINGS)) == original
 
         member_mcps = [await mcp.enter_async_context(
@@ -133,25 +132,29 @@ async def test_provider_group_overrides_change_live_access_across_api_and_mcp_wo
         for client in (*member_mcps, public_admin):
             await wait_for_filesystem_tools(client, {"filesystem_browse"})
         member_workers = tuple(zip(member_apis, member_mcps, strict=True))
-        for rest, public_mcp in member_workers:
-            await assert_membership_access(rest, public_mcp, {direct_root}, {mapped_root, admin_root})
-        await assert_membership_access(primary_admin, public_admin, {admin_root}, {direct_root, mapped_root})
+        all_roots = set(roots.values())
+        administrator_discovery = {"request": {"operation": "list_connectors"}}
+        assert not (await administrator.call_tool("admin_discover", administrator_discovery)).is_error
+        denied_edit = member_apis[0].patch(
+            MAPPINGS, json={"operation": "set", "mappings": [mapping(DIRECT_GROUP, DIRECT_GROUP)]},
+        )
+        assert denied_edit.status_code == 403
+        for rest, public_mcp in (*member_workers, (primary_admin, public_admin)):
+            await assert_membership_access(rest, public_mcp, set(), all_roots)
 
         try:
             set_overrides(primary_admin, secondary_admin, [mapping(DIRECT_GROUP, mapped_group)])
             for rest, public_mcp in member_workers:
                 await assert_membership_access(rest, public_mcp, {mapped_root}, {direct_root, admin_root})
-            await assert_membership_access(primary_admin, public_admin, {admin_root}, {direct_root, mapped_root})
+            await assert_membership_access(primary_admin, public_admin, set(), all_roots)
 
-            set_overrides(secondary_admin, primary_admin, [mapping(ADMIN_GROUP, mapped_group)])
+            set_overrides(secondary_admin, primary_admin, [mapping(ADMIN_GROUP, ADMIN_GROUP)])
             for rest, public_mcp in member_workers:
-                await assert_membership_access(rest, public_mcp, {direct_root}, {mapped_root, admin_root})
-            await assert_membership_access(primary_admin, public_admin, {mapped_root}, {direct_root, admin_root})
-            result = await administrator.call_tool("admin_discover", {"request": {"operation": "list_connectors"}})
-            assert result.is_error is False
+                await assert_membership_access(rest, public_mcp, set(), all_roots)
+            await assert_membership_access(primary_admin, public_admin, {admin_root}, {direct_root, mapped_root})
         finally:
             restored = checked(secondary_admin.patch(MAPPINGS, json={"operation": "reset"}))
         assert restored == original == checked(primary_admin.get(MAPPINGS))
-        for rest, public_mcp in member_workers:
-            await assert_membership_access(rest, public_mcp, {direct_root}, {mapped_root, admin_root})
-        await assert_membership_access(primary_admin, public_admin, {admin_root}, {direct_root, mapped_root})
+        for rest, public_mcp in (*member_workers, (primary_admin, public_admin)):
+            await assert_membership_access(rest, public_mcp, set(), all_roots)
+        assert not (await administrator.call_tool("admin_discover", administrator_discovery)).is_error

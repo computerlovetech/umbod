@@ -28,7 +28,7 @@ These steps are the same whether Umbod is hosted for you or you host it yourself
 | Term | Meaning |
 | --- | --- |
 | Connector | A source of tools: an OpenAPI description, an MCP server, or a [custom plugin](extend/build-a-connector.md). |
-| Group | A group from your identity provider. Access is always granted to groups. |
+| Group | An Umbod group used to assign permissions. [Provider claim values must be mapped to Umbod groups](self-host/operate.md#map-provider-values-to-umbod-groups). |
 | Administrator | A member of the configured administrator group. Sees **Administration** in the workspace. |
 | Namespace | A file workspace: personal (**My files**) or shared with groups. |
 | MCP endpoint | The one URL agents connect to: `https://<your-umbod-host>/mcp`. |

@@ -29,17 +29,17 @@
         <AdminConfigurationField
           id="provider-group-id"
           name="group_id"
-          label="Provider group ID"
+          label="Group ID"
           value={state.groupId}
           readonly={state.isEditing}
           required
-          helperText="Use the exact group value supplied by your identity provider, including case, punctuation and spaces. The ID cannot be changed after creation."
+          helperText="The ID cannot be changed after creation."
           oninput={(event) => state.setGroupId(inputValue(event))}
         />
         {#if !state.isEditing}
           <section class="observed-groups" aria-labelledby="observed-groups-title">
             <h3 id="observed-groups-title">Groups observed from logins</h3>
-            <p>Select a group below or enter a provider group ID above.</p>
+            <p>Select a value to fill in the Group ID. This does not create a mapping.</p>
             {#if state.suggestions.options.length > 0}
               <ul>
                 {#each state.suggestions.options as value (value)}

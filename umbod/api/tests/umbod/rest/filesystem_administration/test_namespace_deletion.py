@@ -6,8 +6,6 @@ import pytest
 from umbod.config import AdminAuthConfig, AppConfig
 from umbod.core.callers import LOCAL_DEVELOPMENT_ISSUER
 from umbod.core.filesystem.namespaces import CreateSharedNamespace, NamespaceGroupAccess, SharedNamespaceView
-from umbod.core.groups.models import RegisterGroup
-from umbod.core.groups.stores.composition import create_group_management
 from umbod.infrastructure import create_filesystem_namespace_management
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.main import create_app
@@ -30,7 +28,8 @@ class LocalIssuerVerifier(AcceptedTestVerifier):
 def namespace_http(namespace_settings: AppConfig, request: pytest.FixtureRequest) -> Iterator[FilesystemHttp]:
     settings = namespace_settings.model_copy(update={
         "admin_authentication": AdminAuthConfig(mode="simulation", simulated_admin=getattr(request, "param", True)),
-        "mcp": namespace_settings.mcp.model_copy(update={"permission_group_claim": "filesystem_groups"}),
+        "oidc": namespace_settings.oidc.model_copy(update={"issuer_url": LOCAL_DEVELOPMENT_ISSUER}),
+        "mcp": namespace_settings.mcp.model_copy(update={"auth_mode": "oidc", "permission_group_claim": "filesystem_groups"}),
     })
     with _filesystem_client(create_app(settings, [], user_verifier=LocalIssuerVerifier())) as http:
         yield http
@@ -38,7 +37,6 @@ def namespace_http(namespace_settings: AppConfig, request: pytest.FixtureRequest
 
 def shared_for_user(http: FilesystemHttp, name: str, issuer: str = LOCAL_DEVELOPMENT_ISSUER) -> SharedNamespaceView:
     database = http.factories.persistence_runtime.database
-    http.client.portal.call(create_group_management(database).register_group, RegisterGroup(group_id="team"))
     management = create_filesystem_namespace_management(database=database, issuer=issuer)
     return http.client.portal.call(management.create, CreateSharedNamespace(
         name=name, groups=[NamespaceGroupAccess(group_id="team", access="read_write")],

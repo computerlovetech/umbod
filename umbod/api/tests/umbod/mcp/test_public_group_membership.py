@@ -1,20 +1,20 @@
-import json
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+import httpx2
 import jwt
 import pytest
 import pytest_asyncio
 from fastmcp import Context, FastMCP
 from fastmcp.server.auth import AccessToken
 from fastmcp.server.auth.providers.azure import AzureProvider
+from fastmcp.server.auth.providers.google import GoogleProvider, GoogleTokenVerifier
 from fastmcp.server.middleware import MiddlewareContext
 from mcp.server.auth.middleware.auth_context import auth_context_var
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 
 from tests.persistence_runtime import create_inmemory_runtime
 from umbod.config import AppConfig, load_app_config_without_env_file
-from umbod.config.system_settings import ConfiguredProviderGroupMappingsDefaults
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCaller
 from umbod.core.connectors.native.runtime import ConnectorRuntime
@@ -22,7 +22,6 @@ from umbod.core.groups import RegisterGroup
 from umbod.core.groups.stores.composition import create_group_management
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.core.persistence import PersistenceRuntime
-from umbod.core.system_settings import SettingsNotConfigured
 from umbod.core.system_settings.provider_group_mappings import ProviderGroupMapping, create_provider_group_mappings_service
 from umbod.mcp.auth.factory import MCPAuthProviderFactory
 from umbod.mcp.auth.membership import McpGroupMembership
@@ -58,7 +57,6 @@ def entra_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig
     }
     for name, value in environment.items():
         monkeypatch.setenv(name, value)
-    monkeypatch.delenv("UMBOD_PROVIDER_GROUP_OVERRIDES", raising=False)
     return load_app_config_without_env_file()
 
 
@@ -89,15 +87,13 @@ async def test_public_mcp_uses_one_live_snapshot_across_access_adapters(
     persistence: PersistenceRuntime, entra_settings: AppConfig,
 ) -> None:
     settings = entra_settings
-    settings_service = create_provider_group_mappings_service(
-        persistence.database, ConfiguredProviderGroupMappingsDefaults(settings), SettingsNotConfigured.UNSET,
-    )
+    settings_service = create_provider_group_mappings_service(persistence.database)
     groups = create_group_management(persistence.database)
     await groups.register_group(RegisterGroup(group_id="internal"))
-    await settings_service.replace("administrator", (_GROUP_RULE,))
     permissions = InMemoryGroupConnectorToolPermissions(group_claim_fields=(_PERMISSION_CLAIM, "roles"))
     permissions.grant_tool("internal", "connector", "read")
     permissions.grant_tool("external", "connector", "inherited")
+    permissions.grant_tool("unmatched-role", "connector", "other-claim")
     server = await build_test_server(settings, persistence, permissions)
     assert isinstance(server.auth, AzureProvider)
     membership = server.group_membership_resolver
@@ -105,7 +101,7 @@ async def test_public_mcp_uses_one_live_snapshot_across_access_adapters(
     assert server.middleware[0] is membership
     token = AccessToken(token="accepted", client_id="mcp-client", scopes=["read"], claims={
         "iss": _ISSUER, "sub": "member", "oid": "account", "tid": "tenant", "scp": "read",
-        _PERMISSION_CLAIM: ["external"], "roles": ["unmatched-role"],
+        _PERMISSION_CLAIM: ["external", "internal"], "roles": ["unmatched-role"],
     })
     marker = auth_context_var.set(AuthenticatedUser(token))
     try:
@@ -115,7 +111,9 @@ async def test_public_mcp_uses_one_live_snapshot_across_access_adapters(
 
             async def check_snapshot(_context: MiddlewareContext[None]) -> None:
                 assert filesystem.capture().groups.group_ids == ("internal",)
-                assert downstream.capture().allows("connector", "read")
+                captured = downstream.capture()
+                assert captured.allows("connector", "read")
+                assert not captured.allows("connector", "other-claim")
                 await groups.delete_group("internal")
                 assert capture_openapi_groups(server).group_ids == ("internal",)
                 assert get_allowed_connector_tool_refs().allows(ConnectorToolRef("connector", "read"))
@@ -123,21 +121,64 @@ async def test_public_mcp_uses_one_live_snapshot_across_access_adapters(
                 assert isinstance(personal, PersonalCaller)
                 assert personal.groups.group_ids == ("internal",)
 
-            async def check_stale_target(_context: MiddlewareContext[None]) -> None:
+            async def check_no_membership(_context: MiddlewareContext[None]) -> None:
                 assert filesystem.capture().groups.group_ids == ()
-                assert not downstream.capture().allows("connector", "inherited")
-
-            async def check_reset(_context: MiddlewareContext[None]) -> None:
-                assert filesystem.capture().groups.group_ids == ("external",)
-                assert downstream.capture().allows("connector", "inherited")
-                assert not downstream.capture().allows("connector", "read")
+                captured = downstream.capture()
+                assert not captured.allows("connector", "inherited")
+                assert not captured.allows("connector", "other-claim")
+                assert not captured.allows("connector", "read")
 
             context = MiddlewareContext(message=None, method="tools/list")
+            await membership.on_message(context, check_no_membership)
+            await settings_service.replace("administrator", (_GROUP_RULE,))
             await membership.on_message(context, check_snapshot)
-            await membership.on_message(context, check_stale_target)
+            await membership.on_message(context, check_no_membership)
             await settings_service.reset("administrator")
-            await membership.on_message(context, check_reset)
+            await membership.on_message(context, check_no_membership)
             assert filesystem.capture().groups.group_ids == ()
+    finally:
+        auth_context_var.reset(marker)
+
+
+@pytest.mark.asyncio
+async def test_google_normalized_claim_without_issuer_cannot_grant_groups(
+    persistence: PersistenceRuntime, entra_settings: AppConfig, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("UMBOD_AUTH", "google")
+    monkeypatch.setenv("UMBOD_OIDC_ISSUER_URL", "https://accounts.google.com")
+    monkeypatch.setenv("UMBOD_OIDC_REQUIRED_SCOPES", "openid")
+    monkeypatch.setenv("UMBOD_MCP_PERMISSION_CLAIM", "email")
+    settings = load_app_config_without_env_file()
+    email = "member@example.test"
+    await create_group_management(persistence.database).register_group(RegisterGroup(group_id="internal"))
+    await create_provider_group_mappings_service(persistence.database).replace(
+        "administrator", (ProviderGroupMapping(external_value=email, group_id="internal"),),
+    )
+    permissions = InMemoryGroupConnectorToolPermissions(group_claim_fields=("email",))
+    server = await build_test_server(settings, persistence, permissions)
+    assert isinstance(server.auth, GoogleProvider)
+
+    def google_response(request: httpx2.Request) -> httpx2.Response:
+        if request.url.host == "oauth2.googleapis.com":
+            return httpx2.Response(200, json={"aud": "mcp-client", "scope": "openid", "sub": "member", "email": email})
+        assert request.url.host == "www.googleapis.com"
+        return httpx2.Response(200, json={"email": email})
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(google_response)) as client:
+        token = await GoogleTokenVerifier(http_client=client, audience="mcp-client").verify_token("opaque")
+    assert token is not None
+    assert token.claims["email"] == email
+    assert "iss" not in token.claims
+
+    marker = auth_context_var.set(AuthenticatedUser(token))
+    try:
+        async with Context(server):
+            async def check_snapshot(_context: MiddlewareContext[None]) -> None:
+                assert capture_openapi_groups(server).group_ids == ()
+
+            await server.group_membership_resolver.on_message(
+                MiddlewareContext(message=None, method="tools/list"), check_snapshot,
+            )
     finally:
         auth_context_var.reset(marker)
 
@@ -155,7 +196,6 @@ async def test_public_mcp_without_upstream_oauth_never_reads_provider_rules(
         "", algorithm="none",
     ))
     monkeypatch.setenv("UMBOD_MCP_PERMISSION_CLAIM", "groups")
-    monkeypatch.setenv("UMBOD_PROVIDER_GROUP_OVERRIDES", json.dumps([_GROUP_RULE.model_dump()]))
     settings = load_app_config_without_env_file()
     permissions = InMemoryGroupConnectorToolPermissions(group_claim_fields=(settings.mcp.permission_group_claim,))
     server = await build_test_server(settings, persistence, permissions)

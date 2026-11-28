@@ -7,6 +7,7 @@ from fastmcp.server.auth.providers.google import GoogleProvider
 
 from umbod.logging import create_application_failure_signal
 from umbod.core.callers import AuthenticationProvenance, UnavailableSubject
+from umbod.core.callers.membership import GroupMembershipResolver, ProviderGroupOverrides, ProviderMembershipClaim
 from umbod.core.filesystem.authorization import ResolvedIdentity, VerifiedIdentityResolver
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.auth.local_test_auth import SingleTestUserOAuthProvider
@@ -36,7 +37,7 @@ def access_token() -> AccessToken:
         token="accepted", client_id="client", scopes=[],
         claims={
             "iss": "https://issuer", "sub": " exact-subject ",
-            "active": ["writers", "writers", 7], "fallback": ["wrong"],
+            "active": ["writers", "writers"], "fallback": ["wrong"],
         },
     )
 
@@ -48,36 +49,36 @@ async def test_snapshot_reads_one_token_and_preserves_verified_issuer_subject_gr
     source = Mock(return_value=access_token())
     monkeypatch.setattr("umbod.mcp.filesystem.caller.get_access_token", source)
     state = InMemoryGroupConnectorToolPermissions(group_claim_fields=("active",))
+    server = FastMCP(auth=upstream_provider)
+    server.group_membership_resolver = GroupMembershipResolver(
+        ProviderGroupOverrides(ProviderMembershipClaim("https://issuer", "active"), {"writers": ("mapped-writers",)})
+    )
     capture: FilesystemCallerCapture = CurrentFilesystemCallerCapture(
-        FastMCP(auth=upstream_provider), RuntimeFilesystemGroupClaimFields(state)
+        server, RuntimeFilesystemGroupClaimFields(state)
     )
     snapshot = capture.capture()
     identity = await VerifiedIdentityResolver().resolve(snapshot)
     assert isinstance(identity, ResolvedIdentity)
     assert identity.user.issuer == "https://issuer"
     assert identity.user.id == " exact-subject "
-    assert {group.id for group in identity.groups} == {"writers"}
+    assert {group.id for group in identity.groups} == {"mapped-writers"}
     assert snapshot.caller.authentication == AuthenticationProvenance.UPSTREAM_VERIFIED
     source.assert_called_once_with()
 
 
-def test_absent_runtime_state_uses_configured_claim(
-    monkeypatch: pytest.MonkeyPatch, upstream_provider: GoogleProvider,
-) -> None:
+def test_absent_runtime_state_uses_configured_claim_for_local_callers(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("umbod.mcp.filesystem.caller.get_access_token", access_token)
     capture: FilesystemCallerCapture = CurrentFilesystemCallerCapture(
-        FastMCP(auth=upstream_provider), StaticFilesystemGroupClaimFields("fallback")
+        FastMCP(), StaticFilesystemGroupClaimFields("fallback")
     )
     assert capture.capture().groups.group_ids == ("wrong",)
 
 
-def test_active_runtime_claim_fields_are_not_frozen_at_registration(
-    monkeypatch: pytest.MonkeyPatch, upstream_provider: GoogleProvider,
-) -> None:
+def test_active_runtime_claim_fields_are_not_frozen_at_registration_for_local_callers(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("umbod.mcp.filesystem.caller.get_access_token", access_token)
     state = InMemoryGroupConnectorToolPermissions(group_claim_fields=("active",))
     capture: FilesystemCallerCapture = CurrentFilesystemCallerCapture(
-        FastMCP(auth=upstream_provider), RuntimeFilesystemGroupClaimFields(state)
+        FastMCP(), RuntimeFilesystemGroupClaimFields(state)
     )
     state.group_claim_fields = ("fallback",)
     assert capture.capture().groups.group_ids == ("wrong",)
