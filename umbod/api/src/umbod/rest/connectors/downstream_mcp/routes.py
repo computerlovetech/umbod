@@ -55,6 +55,8 @@ from umbod.core.connectors.downstream_mcp.errors import (
 from umbod.core.connectors.downstream_mcp.management import (
     DownstreamConnectorCreator,
     DownstreamConnectorDeleter,
+    DownstreamConnectorInventoryItem,
+    DownstreamConnectorInventoryReader,
     DownstreamConnectorQueries,
     DownstreamConnectorUpdater,
 )
@@ -100,6 +102,7 @@ from umbod.rest.connectors.downstream_mcp.dependencies import (
     get_downstream_connector_catalog_lifecycle,
     get_downstream_connector_creator,
     get_downstream_connector_deleter,
+    get_downstream_connector_inventory_reader,
     get_downstream_connector_publisher,
     get_downstream_connector_queries,
     get_downstream_connector_updater,
@@ -168,6 +171,9 @@ ConfigurationStore = Annotated[
 ]
 Factories = Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)]
 Queries = Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)]
+InventoryReader = Annotated[
+    DownstreamConnectorInventoryReader, Depends(get_downstream_connector_inventory_reader)
+]
 Creator = Annotated[DownstreamConnectorCreator, Depends(get_downstream_connector_creator)]
 Updater = Annotated[DownstreamConnectorUpdater, Depends(get_downstream_connector_updater)]
 CatalogLifecycle = Annotated[
@@ -301,11 +307,9 @@ async def _response(
     )
 
 
-async def _summary_response(
-    queries: DownstreamConnectorQueries,
-    definition: ConnectorDefinition,
-) -> ConnectorSummaryResponse:
-    health_result = await queries.health(definition.connector_id)
+def _summary_response(item: DownstreamConnectorInventoryItem) -> ConnectorSummaryResponse:
+    definition = item.definition
+    health_result = item.health
     if isinstance(health_result, ConnectorHealthFound):
         health = health_result.health
         health_response = ConnectorHealthResponse(
@@ -315,31 +319,21 @@ async def _summary_response(
         )
     else:
         health_response = ConnectorHealthResponse(status="unknown")
-    catalog_result = await queries.catalog(definition.connector_id)
-    icon_url = (
-        catalog_result.snapshot.server_icons[0].src
-        if isinstance(catalog_result, ToolCatalogFound) and catalog_result.snapshot.server_icons
-        else ""
-    )
     return ConnectorSummaryResponse(
         connector_id=definition.connector_id,
         display_name=definition.display_name,
-        icon_url=icon_url,
+        icon_url=item.icon_url,
         auth_mode=definition.auth_type,
         authorization_mode="personal" if uses_personal_oauth(definition) else "shared",
-        publication_status=(
-            "published" if await queries.is_published(definition.connector_id) else "unpublished"
-        ),
+        publication_status="published" if item.published else "unpublished",
         health=health_response,
     )
 
 
 @router.get("", response_model=ConnectorListResponse)
-async def list_connectors(queries: Queries) -> ConnectorListResponse:
+async def list_connectors(inventory: InventoryReader) -> ConnectorListResponse:
     return ConnectorListResponse(
-        connectors=tuple(
-            [await _summary_response(queries, item) for item in (await queries.list()).definitions]
-        )
+        connectors=tuple(_summary_response(item) for item in await inventory.read())
     )
 
 

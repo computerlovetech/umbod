@@ -26,7 +26,14 @@ from umbod.core.activation import (
 )
 from umbod.core.connectors.downstream_mcp.activation import DownstreamConnectorActivation
 from umbod.core.connectors.downstream_mcp.catalog import DownstreamConnectorCatalogLifecycle, StoreBackedDownstreamCapabilityCatalog
-from umbod.core.connectors.downstream_mcp.management import DownstreamConnectorCreator, DownstreamConnectorDeleter, DownstreamConnectorPreparation, DownstreamConnectorQueries, DownstreamConnectorUpdater
+from umbod.core.connectors.downstream_mcp.management import (
+    DownstreamConnectorCreator,
+    DownstreamConnectorDeleter,
+    DownstreamConnectorInventoryReader,
+    DownstreamConnectorPreparation,
+    DownstreamConnectorQueries,
+    DownstreamConnectorUpdater,
+)
 from umbod.core.connectors.downstream_mcp.stores import ConnectorDefinitionStore, ConnectorHealthStore, EncryptedCredentialStore, ToolCatalogStore
 from umbod.core.connectors.downstream_mcp.probe import DownstreamMcpProbe
 from umbod.core.connectors.downstream_mcp.publishing import DownstreamConnectorPublisher
@@ -67,6 +74,16 @@ def get_personal_oauth_configuration_store(
 
 def get_definition_store(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)]) -> ConnectorDefinitionStore:
     return stores.definitions
+
+def get_downstream_connector_inventory_reader(
+    definitions: Annotated[ConnectorDefinitionStore, Depends(get_definition_store)],
+    publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)],
+    factories: Factories,
+) -> DownstreamConnectorInventoryReader:
+    return DownstreamConnectorInventoryReader(
+        definitions, factories.persistence_runtime.database, publishing,
+    )
+
 
 def get_credential_store(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)]) -> EncryptedCredentialStore:
     return stores.credentials

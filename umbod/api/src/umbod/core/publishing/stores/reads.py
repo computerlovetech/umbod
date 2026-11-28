@@ -1,3 +1,6 @@
+from typing import Protocol, runtime_checkable
+
+from umbod.core.persistence import Database
 from umbod.core.persistence.plan import ManyRead, ReadPlanOperations
 from umbod.core.persistence.query import AllFields, OneOf, Query, Unordered
 from umbod.core.publishing.stores.schema import (
@@ -7,6 +10,11 @@ from umbod.core.publishing.stores.schema import (
 )
 
 PUBLICATION_READ_BATCH_SIZE = 200
+
+
+@runtime_checkable
+class SupportsPlannedPublicationReads(Protocol):
+    def can_plan_publication_reads(self, database: Database) -> bool: ...
 
 
 def plan_publication_reads(

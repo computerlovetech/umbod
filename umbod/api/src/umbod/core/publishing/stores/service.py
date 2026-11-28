@@ -10,6 +10,7 @@ from umbod.core.publishing.stores.events import (
 from umbod.core.publishing.stores.schema import (
     PUBLICATION_STATE_CONNECTOR_ID,
     PUBLICATION_STATE_PROJECTION,
+    PUBLICATION_STATE_TABLE,
     PublicationStateKey,
     PublicationStateRecord,
     PublicationStateResult,
@@ -37,6 +38,9 @@ class ConnectorPublishingStoreService:
         self._database = database
         self._publication_states = publication_states
         self._publish_state_change_subscribers: list[PublishStateChangeSubscriber] = []
+
+    def can_plan_publication_reads(self, database: Database) -> bool:
+        return self._database is database and self._publication_states is PUBLICATION_STATE_TABLE
 
     async def is_published(self, connector_id: str) -> bool:
         state = await self._publication_state(connector_id)
