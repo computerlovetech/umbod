@@ -1,7 +1,7 @@
 from types import MappingProxyType
 
 from umbod.core.callers.membership import (
-    INHERITED_GROUP_MEMBERSHIP,
+    UNCONFIGURED_GROUP_MEMBERSHIP,
     UNAVAILABLE_GROUP_MEMBERSHIP,
     GroupMembershipResolver,
     ProviderGroupOverrides,
@@ -33,12 +33,12 @@ class ConfiguredGroupMembershipSource:
     async def capture(self) -> GroupMembershipResolver:
         provider_claim = self._provider_claim
         if provider_claim is SettingsNotConfigured.UNSET:
-            return INHERITED_GROUP_MEMBERSHIP
+            return UNCONFIGURED_GROUP_MEMBERSHIP
         try:
             async with self._database.read_session() as session:
                 mappings = await read_saved_provider_group_mappings(session)
                 if mappings is SettingsNotConfigured.UNSET or not mappings:
-                    return INHERITED_GROUP_MEMBERSHIP
+                    return UNCONFIGURED_GROUP_MEMBERSHIP
                 registered = await read_registered_group_ids(session)
         except Exception:
             return UNAVAILABLE_GROUP_MEMBERSHIP

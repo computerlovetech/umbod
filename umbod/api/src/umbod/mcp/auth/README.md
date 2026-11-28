@@ -14,5 +14,5 @@ description: Provider composition, explicit transport authentication, caller cap
 - [factory.py](./factory.py) — Configured provider construction.
 - [groups.py](./groups.py) — Capture administrator membership from token claims.
 - [local_test_auth.py](./local_test_auth.py) — Single-test-user OAuth provider.
-- [membership.py](./membership.py) — Capture one live mapping snapshot per MCP operation for synchronous authorization checks.
+- [membership.py](./membership.py) — Resolves and binds one verified caller snapshot per MCP message for group authorization.
 - [transport.py](./transport.py) — Explicit authenticated and unauthenticated transport choices.

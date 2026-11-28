@@ -2,6 +2,7 @@ from collections.abc import Mapping, Sequence
 from importlib import import_module
 from typing import Any
 
+from fastmcp import FastMCP
 from fastmcp.prompts import Prompt
 from fastmcp.resources import Resource
 from fastmcp.server.auth.auth import AccessToken
@@ -10,8 +11,6 @@ from fastmcp.tools import FunctionTool
 
 import pytest
 
-from umbod.core.callers import AuthenticationProvenance
-from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 
 
 def test_connector_tool_change_is_prevented_when_it_would_break_existing_mapping() -> None:
@@ -29,7 +28,7 @@ def test_connector_tool_change_is_prevented_when_it_would_break_existing_mapping
 def test_connector_tool_auth_check_allows_granted_group_tool() -> None:
     permissions = _new_permissions(group_claim_fields=["groups"])
     permissions.grant_tool("engineering", "github", "list_repositories")
-    check = _connector_tool_permission_check(permissions)
+    check = _connector_capability_permission_check(permissions)
 
     assert (
         check(
@@ -44,7 +43,7 @@ def test_connector_tool_auth_check_allows_granted_group_tool() -> None:
 def test_connector_tool_auth_check_denies_enabled_tool_without_group_permission() -> None:
     permissions = _new_permissions(group_claim_fields=["groups"])
     permissions.grant_tool("support", "github", "list_repositories")
-    check = _connector_tool_permission_check(permissions)
+    check = _connector_capability_permission_check(permissions)
 
     assert (
         check(
@@ -85,17 +84,10 @@ def _new_permissions(group_claim_fields: Sequence[str]) -> Any:
     return module.InMemoryGroupConnectorToolPermissions(group_claim_fields=group_claim_fields)
 
 
-def _connector_tool_permission_check(permissions: Any) -> Any:
-    module = import_module("umbod.mcp.authorization")
-    return module.connector_tool_permission_check(
-        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
-    )
-
-
 def _connector_capability_permission_check(permissions: Any) -> Any:
     module = import_module("umbod.mcp.authorization")
     return module.connector_capability_permission_check(
-        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+        permissions, FastMCP(),
     )
 
 

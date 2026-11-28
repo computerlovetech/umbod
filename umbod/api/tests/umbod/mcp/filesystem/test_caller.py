@@ -7,7 +7,6 @@ from fastmcp.server.auth.providers.google import GoogleProvider
 
 from umbod.logging import create_application_failure_signal
 from umbod.core.callers import AuthenticationProvenance, UnavailableSubject
-from umbod.core.callers.membership import GroupMembershipResolver, ProviderGroupOverrides, ProviderMembershipClaim
 from umbod.core.filesystem.authorization import ResolvedIdentity, VerifiedIdentityResolver
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.auth.local_test_auth import SingleTestUserOAuthProvider
@@ -43,16 +42,13 @@ def access_token() -> AccessToken:
 
 
 @pytest.mark.asyncio
-async def test_snapshot_reads_one_token_and_preserves_verified_issuer_subject_groups(
+async def test_verified_caller_without_message_snapshot_retains_identity_but_not_groups(
     monkeypatch: pytest.MonkeyPatch, upstream_provider: GoogleProvider,
 ) -> None:
     source = Mock(return_value=access_token())
     monkeypatch.setattr("umbod.mcp.filesystem.caller.get_access_token", source)
     state = InMemoryGroupConnectorToolPermissions(group_claim_fields=("active",))
     server = FastMCP(auth=upstream_provider)
-    server.group_membership_resolver = GroupMembershipResolver(
-        ProviderGroupOverrides(ProviderMembershipClaim("https://issuer", "active"), {"writers": ("mapped-writers",)})
-    )
     capture: FilesystemCallerCapture = CurrentFilesystemCallerCapture(
         server, RuntimeFilesystemGroupClaimFields(state)
     )
@@ -61,7 +57,7 @@ async def test_snapshot_reads_one_token_and_preserves_verified_issuer_subject_gr
     assert isinstance(identity, ResolvedIdentity)
     assert identity.user.issuer == "https://issuer"
     assert identity.user.id == " exact-subject "
-    assert {group.id for group in identity.groups} == {"mapped-writers"}
+    assert not identity.groups
     assert snapshot.caller.authentication == AuthenticationProvenance.UPSTREAM_VERIFIED
     source.assert_called_once_with()
 

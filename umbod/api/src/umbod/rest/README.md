@@ -11,6 +11,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 - [admin_overview/](./admin_overview/README.md) — Overview metadata summary.
 - [agent_behaviour/](./agent_behaviour/README.md) — Published behaviour configuration and administrator-only self-report inspection.
 - [authentication/](./authentication/) — Authentication and cookie safeguards.
+- [authentication/membership.py](./authentication/membership.py) — Shared request-scoped caller snapshot for group authorization.
 - [capability_descriptions/](./capability_descriptions/) — Description overrides.
 - [connectors/](./connectors/README.md) — Connector administration and personal delivery.
 - [dependencies.py](./dependencies.py) — Shared dependency providers.

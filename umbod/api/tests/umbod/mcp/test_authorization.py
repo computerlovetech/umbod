@@ -2,16 +2,14 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from fastmcp import FastMCP
 from fastmcp.server.auth import AccessToken, AuthContext
 from fastmcp.utilities.components import FastMCPComponent
 
-from umbod.core.callers import AuthenticationProvenance
-from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 from umbod.core.capabilities.domain import CapabilityKind
 from umbod.core.permissions import ConnectorCapabilityPermission, InMemoryGroupConnectorToolPermissions
 from umbod.mcp.authorization import (
     connector_capability_permission_check,
-    connector_tool_permission_check,
 )
 
 
@@ -43,7 +41,7 @@ def test_component_grants_are_rechecked_after_permission_replacement(
         component=component,
     )
     check = connector_capability_permission_check(
-        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+        permissions, FastMCP(),
     )
 
     assert check(context) is False
@@ -66,8 +64,8 @@ def test_tagged_component_with_malformed_claims_is_denied(claims: object) -> Non
         token=SimpleNamespace(claims=claims),
     ))
 
-    check = connector_tool_permission_check(
-        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+    check = connector_capability_permission_check(
+        permissions, FastMCP(),
     )
     assert check(context) is False
 
@@ -88,7 +86,7 @@ def test_components_without_valid_connector_identity_remain_allowed(
     )
 
     check = connector_capability_permission_check(
-        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+        permissions, FastMCP(),
     )
     assert check(context) is True
 
@@ -106,6 +104,6 @@ def test_component_operation_name_fallback_remains_supported() -> None:
     )
 
     check = connector_capability_permission_check(
-        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+        permissions, FastMCP(),
     )
     assert check(context) is True

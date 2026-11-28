@@ -2,16 +2,13 @@ from collections.abc import Iterable
 
 import pytest
 
-from umbod.core.callers import AuthenticationProvenance, GroupMembership, LegacyGroupClaimPolicy
-from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
+from umbod.core.callers import GroupMembership, LegacyGroupClaimPolicy
+from umbod.core.callers.groups import resolve_legacy_group_membership
 
 
 def _runtime_membership(values: Iterable[object]) -> GroupMembership:
     claims = {str(index): value for index, value in enumerate(values)}
-    return INHERITED_GROUP_MEMBERSHIP.resolve(
-        claims, tuple(claims), LegacyGroupClaimPolicy.RUNTIME,
-        AuthenticationProvenance.LOCAL_SIMULATION,
-    )
+    return resolve_legacy_group_membership(claims, tuple(claims), LegacyGroupClaimPolicy.RUNTIME)
 
 
 @pytest.mark.parametrize("values,expected", [

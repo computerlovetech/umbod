@@ -1,13 +1,11 @@
-from collections.abc import Mapping
 from typing import Protocol
 
-from fastmcp.server.dependencies import get_access_token, get_server
-from pydantic import BaseModel, ConfigDict
+from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_access_token
 
-from umbod.core.callers import AuthenticationProvenance, CallerContext, GroupMembership, LegacyGroupClaimPolicy
-from umbod.core.callers.membership import GroupMembershipResolution
+from umbod.core.callers import AuthenticationProvenance, CallerSnapshot, LegacyGroupClaimPolicy
 from umbod.core.permissions import ConnectorCapabilityPermission, InMemoryGroupConnectorToolPermissions
-from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
+from umbod.mcp.auth.membership import McpAccessTokenAvailability, capture_mcp_caller
 
 
 class DownstreamToolPermissionPolicy(Protocol):
@@ -20,15 +18,8 @@ class DownstreamToolPermissionPolicySource(Protocol):
     def capture(self) -> DownstreamToolPermissionPolicy: ...
 
 
-class DownstreamPermissionSnapshot(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    caller: CallerContext
-    groups: GroupMembership
-
-
 class CapturedGroupDownstreamToolPermissionPolicy:
-    def __init__(self, snapshot: DownstreamPermissionSnapshot, permissions: InMemoryGroupConnectorToolPermissions) -> None:
+    def __init__(self, snapshot: CallerSnapshot, permissions: InMemoryGroupConnectorToolPermissions) -> None:
         self._snapshot = snapshot
         self._permissions = permissions
 
@@ -46,29 +37,14 @@ class CapturedGroupDownstreamToolPermissionPolicy:
 
 
 class GroupDownstreamToolPermissionPolicy:
-    def __init__(
-        self, permissions: InMemoryGroupConnectorToolPermissions,
-        resolver: GroupMembershipResolution,
-    ) -> None:
+    def __init__(self, permissions: InMemoryGroupConnectorToolPermissions, server: FastMCP) -> None:
         self._permissions = permissions
-        self._resolver = resolver
+        self._server = server
 
     def capture(self) -> DownstreamToolPermissionPolicy:
-        token = get_access_token()
-        try:
-            server = get_server()
-        except RuntimeError:
-            server = None
-        authentication = authentication_provenance(getattr(server, "auth", None))
-        caller = caller_context_from_access_token(token, authentication)
-        observed_claims = getattr(token, "claims", {}) if token is not None else {}
-        claims = observed_claims if isinstance(observed_claims, Mapping) else {}
-        snapshot = DownstreamPermissionSnapshot(
-            caller=caller,
-            groups=self._resolver.resolve(
-                claims, self._permissions.group_claim_fields, LegacyGroupClaimPolicy.RUNTIME,
-                caller.authentication,
-            ),
+        snapshot = capture_mcp_caller(
+            self._server, get_access_token() or McpAccessTokenAvailability.UNAVAILABLE, self._permissions.group_claim_fields,
+            LegacyGroupClaimPolicy.RUNTIME,
         )
         return CapturedGroupDownstreamToolPermissionPolicy(snapshot, self._permissions)
 

@@ -8,7 +8,6 @@ from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.config import AppConfig
 from umbod.config.app import McpConfig, OidcConfig
 from umbod.config.group_membership import ConfiguredGroupMembershipSource
-from umbod.core.callers import AuthenticationProvenance, LegacyGroupClaimPolicy
 from umbod.core.callers.membership import UNAVAILABLE_GROUP_MEMBERSHIP, GroupMembershipResolver
 from umbod.core.groups import RegisterGroup
 from umbod.core.groups.stores.composition import create_group_management
@@ -81,11 +80,8 @@ def _oidc_config(claim: str = "groups") -> AppConfig:
 
 def _resolved_groups(resolver: GroupMembershipResolver) -> frozenset[str]:
     return frozenset(
-        resolver.resolve(
+        resolver.resolve_verified(
             {"iss": _ISSUER, "groups": ["staff", "unmatched", "team"], "roles": ["team"]},
-            ("groups",),
-            LegacyGroupClaimPolicy.RUNTIME,
-            AuthenticationProvenance.UPSTREAM_VERIFIED,
         ).group_ids
     )
 

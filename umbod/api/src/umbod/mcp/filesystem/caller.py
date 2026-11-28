@@ -2,8 +2,7 @@ from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_access_token
 
 from umbod.core.callers import CallerSnapshot, LegacyGroupClaimPolicy
-from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
-from umbod.mcp.auth.membership import server_group_membership_resolver
+from umbod.mcp.auth.membership import McpAccessTokenAvailability, capture_mcp_caller
 
 from .ports import FilesystemGroupClaimFields
 
@@ -18,12 +17,6 @@ class CurrentFilesystemCallerCapture:
         self._claim_fields = claim_fields
 
     def capture(self) -> CallerSnapshot:
-        token = get_access_token()
-        caller = caller_context_from_access_token(token, authentication_provenance(self._server.auth))
-        return CallerSnapshot(
-            caller=caller,
-            groups=server_group_membership_resolver(self._server).resolve(
-                token.claims if token else {}, self._claim_fields.claim_fields(),
-                LegacyGroupClaimPolicy.RUNTIME, caller.authentication,
-            ),
+        return capture_mcp_caller(
+            self._server, get_access_token() or McpAccessTokenAvailability.UNAVAILABLE, self._claim_fields.claim_fields(), LegacyGroupClaimPolicy.RUNTIME,
         )

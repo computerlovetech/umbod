@@ -1,5 +1,4 @@
 import asyncio
-from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -10,7 +9,6 @@ from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 
 from tests.umbod.mcp.test_personal_caller import _settings
 from umbod.core.callers import AuthenticationProvenance, UnavailableSubject
-from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCallerProvider
 from umbod.mcp.connectors.downstream_mcp import personal_runtime
 from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCaller, UnavailablePersonalCaller
@@ -20,7 +18,7 @@ from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCall
 @pytest.mark.asyncio
 async def test_runtime_context_reads_each_current_verified_token_and_groups() -> None:
     settings = _settings().model_copy(update={"mcp": _settings().mcp.model_copy(update={"permission_group_claim": "groups"})})
-    provider = McpPersonalCallerProvider(settings, INHERITED_GROUP_MEMBERSHIP)
+    provider = McpPersonalCallerProvider(settings, FastMCP())
     for subject, groups in (("alice", ["team", "team", "", " "]), ("bob", "second")):
         token = AccessToken(token="outer-token", client_id="client", scopes=[], claims={"sub": subject, "groups": groups})
         marker = auth_context_var.set(AuthenticatedUser(token))
@@ -39,7 +37,7 @@ async def test_runtime_context_reads_each_current_verified_token_and_groups() ->
 @pytest.mark.asyncio
 @pytest.mark.parametrize("claims", ({}, {"sub": "machine", "grant_type": "client_credentials"}, {"sub": "alice", "iss": "https://foreign/"}))
 async def test_bad_verified_identity_never_downgrades_to_shared(claims: dict[str, object]) -> None:
-    provider = McpPersonalCallerProvider(_settings(), INHERITED_GROUP_MEMBERSHIP)
+    provider = McpPersonalCallerProvider(_settings(), FastMCP())
     marker = auth_context_var.set(AuthenticatedUser(AccessToken(token="opaque", client_id="client", scopes=[], claims=claims)))
     try:
         assert isinstance(await provider.get_caller(), UnavailablePersonalCaller)
@@ -65,8 +63,7 @@ async def test_capture_reads_one_token_and_keeps_entra_owner_without_raw_subject
     token = AccessToken(token="opaque", client_id="client", scopes=[], claims={"oid": "object", "tid": "tenant", "scp": "access", "iss": "https://upstream/"})
     reader = Mock(return_value=token)
     monkeypatch.setattr(personal_runtime, "get_access_token", reader)
-    monkeypatch.setattr(personal_runtime, "get_server", lambda: SimpleNamespace(auth=object()))
-    provider: PersonalCallerProvider = McpPersonalCallerProvider(_settings("azure_entra_id"), INHERITED_GROUP_MEMBERSHIP)
+    provider: PersonalCallerProvider = McpPersonalCallerProvider(_settings("azure_entra_id"), FastMCP())
     captured = await provider.get_caller()
     assert isinstance(captured, PersonalCaller)
     assert isinstance(captured.caller.subject, UnavailableSubject)
@@ -77,7 +74,7 @@ async def test_capture_reads_one_token_and_keeps_entra_owner_without_raw_subject
 
 @pytest.mark.asyncio
 async def test_overlapping_captures_are_caller_local() -> None:
-    provider: PersonalCallerProvider = McpPersonalCallerProvider(_settings(), INHERITED_GROUP_MEMBERSHIP)
+    provider: PersonalCallerProvider = McpPersonalCallerProvider(_settings(), FastMCP())
 
     async def capture(subject: str) -> PersonalCaller:
         token = AccessToken(token="opaque", client_id="client", scopes=[], claims={"sub": subject, "groups": [subject]})

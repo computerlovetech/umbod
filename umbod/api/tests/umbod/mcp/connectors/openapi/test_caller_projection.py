@@ -32,7 +32,7 @@ def test_capture_openapi_groups_preserves_filtering_and_order(
     token = AccessToken(token="secret", client_id="client", scopes=[], claims={"groups": raw})
     monkeypatch.setattr(deps, "get_access_token", lambda: token)
 
-    groups = deps.capture_openapi_groups(SimpleNamespace(permission_group_claim="groups"))
+    groups = deps.capture_openapi_groups(SimpleNamespace(auth=None, permission_group_claim="groups"))
     token.claims["groups"] = ["replacement"]
 
     assert groups.group_ids == expected
@@ -76,6 +76,7 @@ async def test_retained_executor_captures_groups_before_awaits_and_isolates_over
             return RecordingExecutionService()
 
     server = SimpleNamespace(
+        auth=None,
         permission_group_claim="groups",
         openapi_connector_store_factory=SimpleNamespace(create=create_store),
         group_permission_reader_factory=SimpleNamespace(create=AsyncMock(return_value=object())),

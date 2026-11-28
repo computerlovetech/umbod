@@ -11,7 +11,7 @@ description: "Operator settings, validation and conversion into runtime applicat
 - [build.py](./build.py) — Operator-to-runtime assembly, S3 backend selection, and local content directory normalization.
 - [defaults.py](./defaults.py) — Configuration defaults.
 - [derive.py](./derive.py) — Configuration loading.
-- [group_membership.py](./group_membership.py) — Verified OAuth membership snapshots from administrator-saved mappings and configured issuer and claim selectors.
+- [group_membership.py](./group_membership.py) — Loads provider mapping rules and registered Umbod group IDs for caller resolution.
 - [identity_policy.py](./identity_policy.py) — Shared local identity eligibility and filesystem managed-issuer selection.
 - [inspection.py](./inspection.py) — Redacted inspection.
 - [operator.py](./operator.py) — Operator settings, validated preview byte limits, public collector URLs and fail-closed filesystem backend combinations.

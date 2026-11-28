@@ -1,51 +1,40 @@
 from collections.abc import Callable, Mapping
 from typing import Any, cast
 
+from fastmcp import FastMCP
 from fastmcp.server.auth import AuthContext
 
-from umbod.core.callers import AuthenticationProvenance, LegacyGroupClaimPolicy
-from umbod.core.callers.membership import GroupMembershipResolution
+from umbod.core.callers import LegacyGroupClaimPolicy
 from umbod.core.capabilities.domain import CapabilityKind
 from umbod.core.permissions import (
     ConnectorCapabilityPermission,
     ConnectorCapabilityRef,
     InMemoryGroupConnectorToolPermissions,
 )
+from umbod.mcp.auth.membership import capture_mcp_caller
 
 
 def connector_capability_permission_check(
     permissions: InMemoryGroupConnectorToolPermissions,
-    resolver: GroupMembershipResolution,
-    authentication: AuthenticationProvenance,
+    server: FastMCP,
 ) -> Callable[[AuthContext], bool]:
     def check(context: AuthContext) -> bool:
         ref = _capability_ref_from_context(context)
         if ref is None:
             return True
-        token = context.token
-        claims = getattr(token, "claims", {}) if token is not None else {}
-        if not isinstance(claims, Mapping):
+        access_token = context.token
+        if access_token is None:
             return False
+        caller = capture_mcp_caller(
+            server, access_token, permissions.group_claim_fields, LegacyGroupClaimPolicy.RUNTIME,
+        )
         return ConnectorCapabilityPermission(
             connector_id=ref.connector_id,
             capability_kind=ref.capability_kind,
             capability_key=ref.capability_key,
-        ) in permissions.allowed_capabilities(
-            resolver.resolve(
-                claims, permissions.group_claim_fields, LegacyGroupClaimPolicy.RUNTIME,
-                authentication if token is not None else AuthenticationProvenance.UNAVAILABLE,
-            )
-        )
+        ) in permissions.allowed_capabilities(caller.groups)
 
     return check
-
-
-def connector_tool_permission_check(
-    permissions: InMemoryGroupConnectorToolPermissions,
-    resolver: GroupMembershipResolution,
-    authentication: AuthenticationProvenance,
-) -> Callable[[AuthContext], bool]:
-    return connector_capability_permission_check(permissions, resolver, authentication)
 
 
 def _capability_ref_from_context(context: AuthContext) -> ConnectorCapabilityRef | None:

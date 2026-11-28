@@ -1,5 +1,5 @@
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import AbstractAsyncContextManager
 from pathlib import Path
 from time import time
@@ -15,11 +15,12 @@ from starlette.routing import Mount
 
 from tests.persistence_runtime import create_inmemory_runtime
 from umbod.config import load_app_config_without_env_file
-from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSnapshot, DeclaredIssuer, SubjectIdentity
+from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSnapshot, DeclaredIssuer, GroupMembership, SubjectIdentity
 from umbod.core.callers.membership import GroupMembershipResolver
 from umbod.core.connectors.downstream_mcp.personal.connections import PersonalCaller
 from umbod.core.persistence import ReadSession
 from umbod.rest.authentication.deps import get_caller_context
+from umbod.rest.authentication.membership import RequestCallerSnapshot
 from umbod.rest.authentication.verifiers import ProductionJwksJwtVerifier
 from umbod.rest.connectors.downstream_mcp.personal_connections.dependencies import get_personal_caller
 from umbod.rest.factories import ConnectorApiDependencyFactories
@@ -52,7 +53,12 @@ def _project_callers(
     filesystem: Annotated[CallerSnapshot, Depends(get_filesystem_caller)],
     personal: Annotated[PersonalCaller, Depends(get_personal_caller)],
     catalogue: Annotated[CatalogueCaller, Depends(get_catalogue_caller)],
+    snapshot: RequestCallerSnapshot,
 ) -> CapturedCallers:
+    if isinstance(snapshot, CallerSnapshot):
+        assert filesystem is snapshot
+        assert personal.caller is catalogue.caller is snapshot.caller
+        assert personal.groups is catalogue.groups is snapshot.groups
     return CapturedCallers(filesystem=filesystem, personal=personal, catalogue=catalogue)
 
 
@@ -224,23 +230,43 @@ def test_empty_save_and_reset_both_clear_verified_membership(
     assert _projection(client, user_headers).group_ids == ((),) * 3
 
 
-def test_rest_caller_dependencies_share_one_membership_capture_per_request(
-    client: TestClient, factories: ConnectorApiDependencyFactories, user_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch,
+def test_verified_rest_callers_share_one_membership_resolution_per_request(
+    client: TestClient, factories: ConnectorApiDependencyFactories, admin_headers: dict[str, str],
+    signing_key: rsa.RSAPrivateKey, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    mapped_groups = ("design", "operations")
+    for group_id in reversed(mapped_groups):
+        assert client.post("/api/admin/groups", json={"group_id": group_id}, headers=admin_headers).status_code == 204
+    response = client.patch(_MAPPINGS, headers=admin_headers, json={
+        "operation": "set",
+        "mappings": [{"external_value": group_id.upper(), "group_id": group_id} for group_id in reversed(mapped_groups)],
+    })
+    assert response.status_code == 200, response.text
+    user_headers = _headers(signing_key, _SUBJECT, {_PERMISSION_CLAIM: ["OPERATIONS", _LOCAL_GROUP, "DESIGN", "DESIGN"]})
     source = factories.group_membership_source
     capture = source.capture
+    resolve_verified = GroupMembershipResolver.resolve_verified
     captured: list[GroupMembershipResolver] = []
+    resolved: list[GroupMembershipResolver] = []
 
     async def observe_capture() -> GroupMembershipResolver:
         resolver = await capture()
         captured.append(resolver)
         return resolver
 
-    monkeypatch.setattr(source, "capture", observe_capture)
-    for _ in range(2):
-        _projection(client, user_headers)
+    def observe_resolution(resolver: GroupMembershipResolver, claims: Mapping[str, object]) -> GroupMembership:
+        resolved.append(resolver)
+        return resolve_verified(resolver, claims)
 
-    assert len(captured) == 2
+    monkeypatch.setattr(source, "capture", observe_capture)
+    monkeypatch.setattr(GroupMembershipResolver, "resolve_verified", observe_resolution)
+
+    assert client.get("/api/admin/openapi.json", headers=admin_headers).status_code == 200
+    assert not captured and not resolved
+    for request_count in (1, 2):
+        assert _projection(client, user_headers).group_ids == (mapped_groups,) * 3
+        assert len(captured) == len(resolved) == request_count
+        assert resolved[-1] is captured[-1]
 
 
 def test_nonverified_caller_uses_legacy_membership_without_reading_mappings(

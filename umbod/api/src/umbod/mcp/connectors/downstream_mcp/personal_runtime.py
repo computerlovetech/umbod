@@ -3,19 +3,20 @@ from datetime import datetime
 from typing import Any
 
 import mcp.types as mt
+from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.server.middleware.authorization import _requested_version
 from fastmcp.tools import Tool, ToolResult
 
 from fastmcp.server.auth import AuthContext
-from fastmcp.server.dependencies import get_access_token, get_server
+from fastmcp.server.dependencies import get_access_token
 
 from umbod.config.app import AppConfig
 from umbod.core.connectors.downstream_mcp.adapters.identity import authenticated_personal_mcp_claims, personal_identity_facts
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
-from umbod.core.callers import AuthenticationProvenance, LegacyGroupClaimPolicy
-from umbod.core.callers.membership import GroupMembershipResolution
+from umbod.core.callers import AuthenticationProvenance, GroupMembership, LegacyGroupClaimPolicy
+from umbod.core.callers.groups import resolve_legacy_group_membership
 from umbod.core.connectors.downstream_mcp.personal.connections import (
     PersonalCaller,
     PersonalCallerProvider,
@@ -36,39 +37,38 @@ from umbod.mcp.signals.diagnostics import invocation_failure
 
 from .personal_recovery import personal_authorization_failure, personal_inventory_failure, validate_recovery_origin
 from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
+from umbod.mcp.auth.membership import verified_mcp_caller
 
 from .namespaces import PersonalToolNameMatcher, PersonalToolNamespace
 from .tool_invocation import AuthorizedPersonalTool
 
 
 class McpPersonalCallerProvider:
-    def __init__(self, settings: AppConfig, resolver: GroupMembershipResolution) -> None:
+    def __init__(self, settings: AppConfig, server: FastMCP) -> None:
         self._settings = settings
+        self._server = server
         self._policy = personal_identity_policy_from_app_config(settings)
-        self._resolver = resolver
 
     async def get_caller(self) -> PersonalCaller | UnavailablePersonalCaller:
         token = get_access_token()
-        try:
-            server = get_server()
-        except RuntimeError:
-            server = None
-        authentication = authentication_provenance(getattr(server, "auth", None))
-        caller = caller_context_from_access_token(token, authentication)
-        if caller.authentication == AuthenticationProvenance.UNAVAILABLE or token is None or not isinstance(token.claims, Mapping):
+        authentication = authentication_provenance(self._server.auth)
+        if authentication is AuthenticationProvenance.UNAVAILABLE or token is None or not isinstance(token.claims, Mapping):
             return UnavailablePersonalCaller(kind="unavailable")
         claims = authenticated_personal_mcp_claims(self._settings, self._policy, token.claims)
         resolution = canonical_principal(self._policy, personal_identity_facts(claims))
         if not isinstance(resolution, ResolvedPersonalIdentity):
             return UnavailablePersonalCaller(kind="unavailable")
-        return PersonalCaller(
-            caller=caller, principal=resolution.principal,
-            groups=self._resolver.resolve(
-                claims,
-                (self._settings.mcp.permission_group_claim,), LegacyGroupClaimPolicy.PERSONAL,
-                caller.authentication,
-            ),
-        )
+        if authentication is AuthenticationProvenance.UPSTREAM_VERIFIED:
+            snapshot = verified_mcp_caller(self._server, token)
+            if snapshot is not None:
+                return PersonalCaller(caller=snapshot.caller, principal=resolution.principal, groups=snapshot.groups)
+            groups = GroupMembership(group_ids=())
+        else:
+            groups = resolve_legacy_group_membership(
+                claims, (self._settings.mcp.permission_group_claim,), LegacyGroupClaimPolicy.PERSONAL,
+            )
+        caller = caller_context_from_access_token(token, authentication)
+        return PersonalCaller(caller=caller, principal=resolution.principal, groups=groups)
 
 
 class McpPersonalToolRuntime:

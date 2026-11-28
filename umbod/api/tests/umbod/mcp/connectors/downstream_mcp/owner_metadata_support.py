@@ -18,7 +18,6 @@ from tests.umbod.mcp.connectors.downstream_mcp.personal_runtime_support import E
 from tests.umbod.mcp.connectors.downstream_mcp.test_personal_execution_pipeline import InvocationLog, provider_for
 from tests.umbod.mcp.test_personal_caller import _settings
 from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
-from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalConnectionKey, SetPersonalConnectionEnabled
 from umbod.core.connectors.downstream_mcp.personal.oauth.grants.models import authorize_personal_grant
 from umbod.core.connectors.downstream_mcp.personal.tools.runtime_models import PersonalToolInventory
@@ -51,8 +50,8 @@ async def metadata_server(case: RuntimeCase, exposure: str) -> FastMCP:
     await _discover(execution, await _install_bob(case), "integer")
     settings = _settings(namespace="trusted")
     settings = settings.model_copy(update={"mcp": settings.mcp.model_copy(update={"permission_group_claim": "groups"})})
-    runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings, INHERITED_GROUP_MEMBERSHIP), case.bundle.personal_tool_access, execution.transport, lambda: case.query.now, "https://umbod.example")
-    provider = await provider_for(replace(execution, runtime=runtime, contexts=McpPersonalCallerProvider(settings, INHERITED_GROUP_MEMBERSHIP)), PermitAllConnectorInvocationPolicy(), InvocationLog())
+    runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings, FastMCP()), case.bundle.personal_tool_access, execution.transport, lambda: case.query.now, "https://umbod.example")
+    provider = await provider_for(replace(execution, runtime=runtime, contexts=McpPersonalCallerProvider(settings, FastMCP())), PermitAllConnectorInvocationPolicy(), InvocationLog())
     public = FastMCP("owner-metadata", middleware=[PersonalDiscoveryMiddleware(provider), AuthMiddleware(auth=personal_tool_permission_check(lambda context: True)), PersonalToolReservationMiddleware(provider)])
     public.downstream_mcp_tool_provider = provider
     if exposure == "flat":

@@ -74,6 +74,7 @@ async def test_discovery_captures_openapi_groups_before_native_discovery_await(
         return reader
 
     server = SimpleNamespace(
+        auth=None,
         permission_group_claim="groups",
         include_openapi_in_connector_search=True,
         openapi_discovery_catalog=projection,

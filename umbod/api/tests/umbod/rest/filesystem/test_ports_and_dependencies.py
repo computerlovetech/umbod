@@ -6,7 +6,6 @@ import pytest
 from fastapi import Depends, Request
 
 from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSnapshot, DeclaredIssuer, SubjectIdentity
-from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 from umbod.core.filesystem import FilesystemCreation, InvalidName, NameCollision, NodeMetadata, StorageFailure, WrongNodeKind
 from umbod.core.filesystem.authorization import PermissionDenied
 from umbod.core.filesystem.browsing import FilesystemBrowsing
@@ -14,6 +13,7 @@ from umbod.core.filesystem.browsing.exploration import FilesystemBrowser
 from umbod.core.filesystem.uploads import UploadService
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_caller_context, get_verified_access_claims
+from umbod.rest.authentication.membership import VerifiedCallerSnapshotStatus
 from umbod.rest.filesystem import deps
 
 from .conftest import FilesystemHttp
@@ -134,7 +134,7 @@ def test_capture_preserves_shared_group_projection(
     ), "verified_access_claims": claims}})
     captured = deps.get_filesystem_caller(
         get_caller_context(request), get_verified_access_claims(request), filesystem_http.factories,
-        INHERITED_GROUP_MEMBERSHIP,
+        VerifiedCallerSnapshotStatus.NOT_APPLICABLE,
     )
     assert captured.groups.group_ids == expected
     assert captured.caller.authentication == AuthenticationProvenance.LOCAL_TEST

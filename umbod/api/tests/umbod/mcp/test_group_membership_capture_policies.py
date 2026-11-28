@@ -1,18 +1,10 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 import pytest
 
-from umbod.core.callers import AuthenticationProvenance, GroupMembership, LegacyGroupClaimPolicy
-from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
+from umbod.core.callers import LegacyGroupClaimPolicy
+from umbod.core.callers.groups import resolve_legacy_group_membership as _legacy_membership
 from umbod.mcp.auth.groups import capture_mcp_administrator_groups
-
-
-def _legacy_membership(
-    claims: Mapping[str, object], claim_fields: Sequence[str], policy: LegacyGroupClaimPolicy,
-) -> GroupMembership:
-    return INHERITED_GROUP_MEMBERSHIP.resolve(
-        claims, claim_fields, policy, AuthenticationProvenance.LOCAL_SIMULATION,
-    )
 
 
 @pytest.mark.parametrize("value,expected", [

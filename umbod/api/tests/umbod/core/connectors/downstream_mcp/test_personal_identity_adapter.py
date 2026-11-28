@@ -1,7 +1,7 @@
 import pytest
 
-from umbod.core.callers import AuthenticationProvenance, LegacyGroupClaimPolicy
-from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
+from umbod.core.callers import LegacyGroupClaimPolicy
+from umbod.core.callers.groups import resolve_legacy_group_membership
 from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
 from umbod.core.connectors.downstream_mcp.personal.connections.identity_models import AbsentIssuer, DeclaredIssuer, MalformedIssuer
 
@@ -40,8 +40,5 @@ def test_empty_string_issuer_is_declared_not_absent() -> None:
     (None, ()),
 ])
 def test_personal_membership_normalization_is_strict_and_preserves_strings(value: object, expected: tuple[str, ...]) -> None:
-    membership = INHERITED_GROUP_MEMBERSHIP.resolve(
-        {"groups": value}, ("groups",), LegacyGroupClaimPolicy.PERSONAL,
-        AuthenticationProvenance.LOCAL_SIMULATION,
-    )
+    membership = resolve_legacy_group_membership({"groups": value}, ("groups",), LegacyGroupClaimPolicy.PERSONAL)
     assert membership.group_ids == expected

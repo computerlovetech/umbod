@@ -1,14 +1,9 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Protocol
 
-from .groups import (
-    LegacyGroupClaimPolicy,
-    resolve_legacy_group_membership,
-    validated_group_claim_values,
-)
-from .models import AuthenticationProvenance, GroupMembership
+from .groups import validated_group_claim_values
+from .models import GroupMembership
 
 
 @dataclass(frozen=True)
@@ -23,18 +18,8 @@ class ProviderGroupOverrides:
     targets_by_value: Mapping[str, tuple[str, ...]]
 
 
-class GroupMembershipResolution(Protocol):
-    def resolve(
-        self,
-        claims: Mapping[str, object],
-        claim_fields: Sequence[str],
-        policy: LegacyGroupClaimPolicy,
-        authentication: AuthenticationProvenance,
-    ) -> GroupMembership: ...
-
-
 class MembershipRuleAvailability(Enum):
-    INHERITED = auto()
+    NOT_CONFIGURED = auto()
     UNAVAILABLE = auto()
 
 
@@ -42,29 +27,17 @@ class MembershipRuleAvailability(Enum):
 class GroupMembershipResolver:
     overrides: ProviderGroupOverrides | MembershipRuleAvailability
 
-    def resolve(
-        self,
-        claims: Mapping[str, object],
-        claim_fields: Sequence[str],
-        policy: LegacyGroupClaimPolicy,
-        authentication: AuthenticationProvenance,
-    ) -> GroupMembership:
-        if authentication != AuthenticationProvenance.UPSTREAM_VERIFIED:
-            return resolve_legacy_group_membership(claims, claim_fields, policy)
+    def resolve_verified(self, claims: Mapping[str, object]) -> GroupMembership:
         overrides = self.overrides
         if not isinstance(overrides, ProviderGroupOverrides):
             return GroupMembership(group_ids=())
         selector = overrides.provider_claim
-        if claims.get("iss") != selector.issuer or selector.claim not in claim_fields:
+        if claims.get("iss") != selector.issuer:
             return GroupMembership(group_ids=())
         values = validated_group_claim_values(claims.get(selector.claim))
-        groups = dict.fromkeys(
-            target for value in values for target in overrides.targets_by_value.get(value, ())
-        )
-        return GroupMembership(
-            group_ids=tuple(sorted(groups)) if policy is LegacyGroupClaimPolicy.PERSONAL else tuple(groups)
-        )
+        groups = {target for value in values for target in overrides.targets_by_value.get(value, ())}
+        return GroupMembership(group_ids=tuple(sorted(groups)))
 
 
-INHERITED_GROUP_MEMBERSHIP = GroupMembershipResolver(MembershipRuleAvailability.INHERITED)
+UNCONFIGURED_GROUP_MEMBERSHIP = GroupMembershipResolver(MembershipRuleAvailability.NOT_CONFIGURED)
 UNAVAILABLE_GROUP_MEMBERSHIP = GroupMembershipResolver(MembershipRuleAvailability.UNAVAILABLE)
