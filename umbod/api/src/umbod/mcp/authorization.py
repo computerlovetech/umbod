@@ -3,17 +3,20 @@ from typing import Any, cast
 
 from fastmcp.server.auth import AuthContext
 
+from umbod.core.callers import AuthenticationProvenance, LegacyGroupClaimPolicy
+from umbod.core.callers.membership import GroupMembershipResolution
 from umbod.core.capabilities.domain import CapabilityKind
 from umbod.core.permissions import (
     ConnectorCapabilityPermission,
     ConnectorCapabilityRef,
     InMemoryGroupConnectorToolPermissions,
 )
-from umbod.mcp.auth.groups import capture_runtime_permission_groups
 
 
 def connector_capability_permission_check(
     permissions: InMemoryGroupConnectorToolPermissions,
+    resolver: GroupMembershipResolution,
+    authentication: AuthenticationProvenance,
 ) -> Callable[[AuthContext], bool]:
     def check(context: AuthContext) -> bool:
         ref = _capability_ref_from_context(context)
@@ -28,7 +31,10 @@ def connector_capability_permission_check(
             capability_kind=ref.capability_kind,
             capability_key=ref.capability_key,
         ) in permissions.allowed_capabilities(
-            capture_runtime_permission_groups(claims, permissions.group_claim_fields)
+            resolver.resolve(
+                claims, permissions.group_claim_fields, LegacyGroupClaimPolicy.RUNTIME,
+                authentication if token is not None else AuthenticationProvenance.UNAVAILABLE,
+            )
         )
 
     return check
@@ -36,8 +42,10 @@ def connector_capability_permission_check(
 
 def connector_tool_permission_check(
     permissions: InMemoryGroupConnectorToolPermissions,
+    resolver: GroupMembershipResolution,
+    authentication: AuthenticationProvenance,
 ) -> Callable[[AuthContext], bool]:
-    return connector_capability_permission_check(permissions)
+    return connector_capability_permission_check(permissions, resolver, authentication)
 
 
 def _capability_ref_from_context(context: AuthContext) -> ConnectorCapabilityRef | None:

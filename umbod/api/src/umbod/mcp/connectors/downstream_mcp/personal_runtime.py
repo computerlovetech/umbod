@@ -12,9 +12,10 @@ from fastmcp.server.auth import AuthContext
 from fastmcp.server.dependencies import get_access_token, get_server
 
 from umbod.config.app import AppConfig
-from umbod.core.connectors.downstream_mcp.adapters.identity import authenticated_personal_mcp_claims, personal_identity_facts, personal_group_membership
+from umbod.core.connectors.downstream_mcp.adapters.identity import authenticated_personal_mcp_claims, personal_identity_facts
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
-from umbod.core.callers import AuthenticationProvenance
+from umbod.core.callers import AuthenticationProvenance, LegacyGroupClaimPolicy
+from umbod.core.callers.membership import GroupMembershipResolution
 from umbod.core.connectors.downstream_mcp.personal.connections import (
     PersonalCaller,
     PersonalCallerProvider,
@@ -41,19 +42,18 @@ from .tool_invocation import AuthorizedPersonalTool
 
 
 class McpPersonalCallerProvider:
-    def __init__(self, settings: AppConfig) -> None:
+    def __init__(self, settings: AppConfig, resolver: GroupMembershipResolution) -> None:
         self._settings = settings
         self._policy = personal_identity_policy_from_app_config(settings)
+        self._resolver = resolver
 
     async def get_caller(self) -> PersonalCaller | UnavailablePersonalCaller:
         token = get_access_token()
-        authentication = AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED
         try:
-            provider = getattr(get_server(), "auth", None)
-            if provider is not None:
-                authentication = authentication_provenance(provider)
+            server = get_server()
         except RuntimeError:
-            pass
+            server = None
+        authentication = authentication_provenance(getattr(server, "auth", None))
         caller = caller_context_from_access_token(token, authentication)
         if caller.authentication == AuthenticationProvenance.UNAVAILABLE or token is None or not isinstance(token.claims, Mapping):
             return UnavailablePersonalCaller(kind="unavailable")
@@ -63,7 +63,11 @@ class McpPersonalCallerProvider:
             return UnavailablePersonalCaller(kind="unavailable")
         return PersonalCaller(
             caller=caller, principal=resolution.principal,
-            groups=personal_group_membership(claims.get(self._settings.mcp.permission_group_claim)),
+            groups=self._resolver.resolve(
+                claims,
+                (self._settings.mcp.permission_group_claim,), LegacyGroupClaimPolicy.PERSONAL,
+                caller.authentication,
+            ),
         )
 
 

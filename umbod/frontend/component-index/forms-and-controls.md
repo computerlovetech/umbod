@@ -23,7 +23,7 @@ description: Buttons, fields, selection controls, form containers, and their sha
 - [Checkbox](../src/lib/components/shared/Checkbox.svelte) — Controlled labelled native checkbox; use for selections and approvals with parent-owned updates and native input attributes.
 - [AdminToggle](../src/lib/components/admin/shared/AdminToggle.svelte) — Controlled switch or submit-button switch; use for activation settings while the parent owns updates.
 - [AdminToggleSetting](../src/lib/components/admin/shared/AdminToggleSetting.svelte) — Settings card with a described toggle, visible On/Off state, and optional metadata and notices.
-- [AdminSettingsActions](../src/lib/components/admin/shared/AdminSettingsActions.svelte) — Save and discard row for staged settings; callers own drafts, publishing, and conflict resolution.
+- [AdminSettingsActions](../src/lib/components/admin/shared/AdminSettingsActions.svelte) — Save and discard row for staged settings; callers own drafts, conflict resolution, and additional save constraints.
 - [AdminFileUpload](../src/lib/components/admin/shared/AdminFileUpload.svelte) — Single-file picker/drop field with size and type checks; use for file selection, noting its fixed JSON marker.
 - [Disclosure](../src/lib/components/shared/Disclosure.svelte) — Keyboard-accessible inline disclosure with retained content, reduced-motion-aware transitions, and local or caller-controlled expansion.
 - [QueryPanel](../src/lib/components/shared/workspace/QueryPanel.svelte) — Collapsible query editor; callers own parameters, reset, submission and loading.

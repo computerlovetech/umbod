@@ -5,6 +5,8 @@ import pytest
 from fastmcp.server.auth import AccessToken, AuthContext
 from fastmcp.utilities.components import FastMCPComponent
 
+from umbod.core.callers import AuthenticationProvenance
+from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 from umbod.core.capabilities.domain import CapabilityKind
 from umbod.core.permissions import ConnectorCapabilityPermission, InMemoryGroupConnectorToolPermissions
 from umbod.mcp.authorization import (
@@ -40,7 +42,9 @@ def test_component_grants_are_rechecked_after_permission_replacement(
         ),
         component=component,
     )
-    check = connector_capability_permission_check(permissions)
+    check = connector_capability_permission_check(
+        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+    )
 
     assert check(context) is False
     permissions.replace_group_permissions({}, {"engineering": [ConnectorCapabilityPermission(
@@ -62,7 +66,10 @@ def test_tagged_component_with_malformed_claims_is_denied(claims: object) -> Non
         token=SimpleNamespace(claims=claims),
     ))
 
-    assert connector_tool_permission_check(permissions)(context) is False
+    check = connector_tool_permission_check(
+        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+    )
+    assert check(context) is False
 
 
 @pytest.mark.parametrize("metadata", [
@@ -80,7 +87,10 @@ def test_components_without_valid_connector_identity_remain_allowed(
         component=cast(FastMCPComponent, MetadataOnlyComponent(metadata)),
     )
 
-    assert connector_capability_permission_check(permissions)(context) is True
+    check = connector_capability_permission_check(
+        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+    )
+    assert check(context) is True
 
 
 def test_component_operation_name_fallback_remains_supported() -> None:
@@ -95,4 +105,7 @@ def test_component_operation_name_fallback_remains_supported() -> None:
         })),
     )
 
-    assert connector_capability_permission_check(permissions)(context) is True
+    check = connector_capability_permission_check(
+        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+    )
+    assert check(context) is True

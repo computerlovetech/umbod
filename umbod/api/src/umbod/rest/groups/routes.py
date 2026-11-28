@@ -8,7 +8,7 @@ from umbod.core.groups import (
     RegisterGroupMetadata, UpdateGroupMetadata, GroupNotFound, GroupRevisionConflict,
 )
 from umbod.core.groups.models import GroupLabel, GroupDescription
-from .deps import get_group_management
+from .deps import get_group_management, require_deletable_group_id, require_deletable_group_request
 
 
 class GroupListResponse(BaseModel):
@@ -91,17 +91,21 @@ async def update_group(
 
 @router.delete("", status_code=204)
 async def delete_group_request(
-    request: GroupIdentifier,
+    request: Annotated[GroupIdentifier, Depends(require_deletable_group_request)],
     management: Annotated[GroupManagementService, Depends(get_group_management)],
 ) -> Response:
-    return await delete_group(request.group_id, management)
+    return await _delete_group(request.group_id, management)
 
 
 @router.delete("/{group_id:path}", status_code=204)
 async def delete_group(
-    group_id: str,
+    group_id: Annotated[str, Depends(require_deletable_group_id)],
     management: Annotated[GroupManagementService, Depends(get_group_management)],
 ) -> Response:
+    return await _delete_group(group_id, management)
+
+
+async def _delete_group(group_id: str, management: GroupManagementService) -> Response:
     try:
         await management.delete_group(group_id)
     except GroupInUse as error:

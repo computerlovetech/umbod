@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from umbod.config.identity_policy import filesystem_managed_issuer
 from umbod.core.filesystem.sharing import FilesystemSharing
 from umbod.infrastructure import create_filesystem_sharing
-from umbod.core.callers import CallerContext, CallerSnapshot, group_membership_from_values
+from umbod.core.callers import CallerContext, CallerSnapshot, LegacyGroupClaimPolicy
 from umbod.core.filesystem import ContentDriver, FilesystemCreation, Principal, PrincipalType
 from umbod.core.filesystem.content import ContentService, FilesystemContent
 from umbod.core.filesystem.deletion import DeletionService, FilesystemDeletion
@@ -29,6 +29,7 @@ from umbod.infrastructure import (
 from umbod.rest.authentication.local import LOCAL_DEVELOPMENT_ISSUER, local_rest_identity_enabled
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_caller_context, get_verified_access_claims
+from umbod.rest.authentication.membership import RequestGroupMembershipResolver
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 
@@ -46,12 +47,14 @@ def get_filesystem_caller(
     caller: Annotated[CallerContext, Depends(get_caller_context)],
     claims: Annotated[JwtClaims, Depends(get_verified_access_claims)],
     factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+    group_membership_resolver: RequestGroupMembershipResolver,
 ) -> CallerSnapshot:
     return CallerSnapshot(
         caller=caller,
-        groups=group_membership_from_values((
-            claims.claims.get(factories.settings.mcp.permission_group_claim),
-        )),
+        groups=group_membership_resolver.resolve(
+            claims.claims, (factories.settings.mcp.permission_group_claim,),
+            LegacyGroupClaimPolicy.RUNTIME, caller.authentication,
+        ),
     )
 
 

@@ -290,6 +290,7 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
             upload_max_bytes=operator.filesystem_upload_max_bytes,
             preview_max_bytes=operator.filesystem_preview_max_bytes,
         ),
+        provider_group_overrides=operator.provider_group_overrides,
         openapi_connectors=OpenApiConnectorConfig(
             json_import_max_bytes=operator.openapi_json_import_max_bytes,
             url_retrieval_timeout_seconds=operator.openapi_url_retrieval_timeout_seconds,

@@ -4,12 +4,20 @@ from typing import Annotated, Literal
 from fastapi import Depends, HTTPException, Request
 
 from umbod.config import AppConfig
-from umbod.config.system_settings import ConfiguredSystemSettingsDefaults
+from umbod.config.system_settings import (
+    ConfiguredProviderGroupMappingsDefaults,
+    ConfiguredSystemSettingsDefaults,
+    configured_provider_membership_claim,
+)
 from umbod.core.persistence import PersistenceReadiness
 from umbod.core.system_settings import (
     SettingsStorageUnavailable,
     SystemSettingsService,
     create_system_settings_service_with_defaults,
+)
+from umbod.core.system_settings.provider_group_mappings import (
+    ProviderGroupMappingsService,
+    create_provider_group_mappings_service,
 )
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import (
@@ -37,9 +45,9 @@ def require_settings_administrator(
 
 
 @dataclass(frozen=True)
-class AuthorizedSystemSettings:
+class AuthorizedSettings[Service]:
     actor: AdministratorRole
-    service: SystemSettingsService
+    service: Service
     readiness: PersistenceReadiness
 
     async def ensure_ready(self) -> None:
@@ -55,12 +63,31 @@ def get_authorized_system_settings(
     factories: Annotated[
         ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)
     ],
-) -> AuthorizedSystemSettings:
+) -> AuthorizedSettings[SystemSettingsService]:
     runtime = factories.persistence_runtime
-    return AuthorizedSystemSettings(
+    return AuthorizedSettings(
         actor=actor,
         service=create_system_settings_service_with_defaults(
             runtime.database, defaults=ConfiguredSystemSettingsDefaults(config)
+        ),
+        readiness=runtime.readiness,
+    )
+
+
+def get_authorized_provider_group_mappings(
+    actor: Annotated[AdministratorRole, Depends(require_settings_administrator)],
+    config: Annotated[AppConfig, Depends(get_app_config)],
+    factories: Annotated[
+        ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)
+    ],
+) -> AuthorizedSettings[ProviderGroupMappingsService]:
+    runtime = factories.persistence_runtime
+    return AuthorizedSettings(
+        actor=actor,
+        service=create_provider_group_mappings_service(
+            runtime.database,
+            defaults=ConfiguredProviderGroupMappingsDefaults(config),
+            provider_claim=configured_provider_membership_claim(config),
         ),
         readiness=runtime.readiness,
     )

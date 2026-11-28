@@ -313,7 +313,9 @@ def _create_lifespan(
     analytics_runtime: TelemetryAnalyticsRuntime,
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[dict[str, SigningKeyResolver]]]:
 
-    return _create_configured_lifespan(metrics_server, persistence_runtime, settings, True, analytics_runtime, True, True)
+    return _create_configured_lifespan(
+        metrics_server, persistence_runtime, settings, True, analytics_runtime, True, True,
+    )
 
 
 def _create_configured_lifespan(
@@ -466,7 +468,10 @@ def _assemble_application(
     )
     app = LifespanRootApiAppFactory(
         app_settings,
-        lifespan=_create_configured_lifespan(metrics_server, persistence_runtime, app_settings, app_settings.rest.metrics_enabled, analytics_runtime, manage_analytics, manage_persistence),
+        lifespan=_create_configured_lifespan(
+            metrics_server, persistence_runtime, app_settings, app_settings.rest.metrics_enabled,
+            analytics_runtime, manage_analytics, manage_persistence,
+        ),
     ).create()
     verifier_factory = (
         SuppliedJwtVerifierFactory(create_app_arguments.admin_verifier)

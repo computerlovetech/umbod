@@ -10,6 +10,8 @@ from fastmcp.tools import FunctionTool
 
 import pytest
 
+from umbod.core.callers import AuthenticationProvenance
+from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 
 
 def test_connector_tool_change_is_prevented_when_it_would_break_existing_mapping() -> None:
@@ -85,12 +87,16 @@ def _new_permissions(group_claim_fields: Sequence[str]) -> Any:
 
 def _connector_tool_permission_check(permissions: Any) -> Any:
     module = import_module("umbod.mcp.authorization")
-    return module.connector_tool_permission_check(permissions)
+    return module.connector_tool_permission_check(
+        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+    )
 
 
 def _connector_capability_permission_check(permissions: Any) -> Any:
     module = import_module("umbod.mcp.authorization")
-    return module.connector_capability_permission_check(permissions)
+    return module.connector_capability_permission_check(
+        permissions, INHERITED_GROUP_MEMBERSHIP, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+    )
 
 
 def _connector_tool(connector_id: str, operation_name: str) -> FunctionTool:

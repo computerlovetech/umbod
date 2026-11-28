@@ -6,15 +6,16 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from umbod.core.system_settings import (
     EffectiveSystemSettings,
     SettingsSource,
+    SystemSettingsService,
     UpdateSystemSettings,
 )
 
-from .dependencies import AuthorizedSystemSettings, get_authorized_system_settings
+from .dependencies import AuthorizedSettings, get_authorized_system_settings
 from .route_policy import SystemSettingsRoute
 
 router = APIRouter(prefix="/filesystem", route_class=SystemSettingsRoute)
 SettingsAccess = Annotated[
-    AuthorizedSystemSettings, Depends(get_authorized_system_settings)
+    AuthorizedSettings[SystemSettingsService], Depends(get_authorized_system_settings)
 ]
 
 

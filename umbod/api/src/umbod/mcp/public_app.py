@@ -42,6 +42,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse
 from starlette.routing import Mount, Route
 from starlette.types import ASGIApp, Receive, Scope, Send
+from umbod.config.group_membership import ConfiguredGroupMembershipSource
 from umbod.core.connectors.native.bootstrap import DefaultConnectorRuntimeFactory
 from umbod.core.invocation import ConnectorInvocationPolicy, StoredConnectorInvocationPolicy
 from umbod.core.connectors.native.registry import ConnectorDefinitionFilter, InMemoryConnectorRegistry
@@ -57,6 +58,8 @@ from umbod.mcp.agent_behaviour.reservations import ensure_connector_tool_name_av
 from umbod.mcp.http_transport import MAX_MCP_REQUEST_BODY_BYTES, create_mcp_http_app
 from umbod.mcp.administrator.composition import register_configured_administrator_tools
 from umbod.mcp.auth.transport import AuthenticatedMcpTransport, McpTransportAuthentication, UnauthenticatedMcpTransport, configured_mcp_transport_authentication, fastmcp_authentication_provider
+from umbod.mcp.auth.caller import authentication_provenance
+from umbod.mcp.auth.membership import McpGroupMembership
 from umbod.mcp.auth.consent_screen import install_umbod_consent_screen
 from umbod.mcp.auth.factory import MCPAuthProvider
 from umbod.mcp.auth.debug_middleware import MCPAuthDebugMiddleware
@@ -149,6 +152,11 @@ async def build_mcp(settings: MCPAppSettings, auth_provider: MCPAuthProvider | N
 async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authentication: McpTransportAuthentication, runtime: ConnectorRuntime, runtime_state: tuple[RuntimeStateArgument, ...], openapi_adapters: OpenApiRuntimeAdapters, persistence_runtime: PersistenceRuntime, *, telemetry: McpTelemetryDependencies, downstream_client_factory: DownstreamClientFactory) -> FastMCP:
     auth_provider = fastmcp_authentication_provider(authentication)
     (requested_tool_state, group_permission_runtime_state) = _resolve_runtime_state(runtime_state)
+    provenance = authentication_provenance(auth_provider)
+    resolver = McpGroupMembership(
+        ConfiguredGroupMembershipSource(settings, persistence_runtime.database), provenance,
+    )
+    await persistence_runtime.readiness.ensure_ready()
     connector_tool_runtime_state_store = requested_tool_state if requested_tool_state is not None else _default_connector_tool_runtime_state_store(runtime)
     audit_recorder = telemetry.audit_recorder
     metrics_recorder = telemetry.metrics_recorder
@@ -158,7 +166,9 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authenticati
     publisher = McpInvocationPublisher(signals)
     middleware: list[Middleware] = [McpCapabilityCompletionMiddleware(signals.capability_completed, McpAuditIdentityAdapter(), PublishingSignalFailureHandler(telemetry.application_failures), time.monotonic, time.time_ns), McpResponseMetadataMiddleware(), McpProtocolMetricsMiddleware(metrics_recorder, clock=time.monotonic), McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
     if group_permission_runtime_state is not None:
-        auth_check = personal_tool_permission_check(connector_tool_permission_check(group_permission_runtime_state))
+        auth_check = personal_tool_permission_check(
+            connector_tool_permission_check(group_permission_runtime_state, resolver, provenance),
+        )
         if settings.mcp.auth_debug_enabled:
             middleware.append(MCPAuthDebugMiddleware(auth=auth_check, permission_group_claim=settings.mcp.permission_group_claim))
         else:
@@ -177,8 +187,8 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authenticati
     mcp.invocation_signals = signals
     mcp.execution_pipelines = SignalToolExecutionPipelineFactory(signals, invocation_policy)
     mcp.metrics_recorder = metrics_recorder
-    await persistence_runtime.readiness.ensure_ready()
     mcp.persistence_runtime = persistence_runtime
+    mcp.group_membership_resolver = resolver
     mcp.group_connector_tool_permissions = group_permission_runtime_state
     mcp.openapi_connector_store_factory = ConfiguredOpenApiConnectorStoreFactory(persistence_runtime.database)
     mcp.openapi_configuration_store = await create_encrypted_connector_configuration_store(persistence_runtime.database)
@@ -237,10 +247,12 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authenticati
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, signals, mcp.execution_pipelines, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes)
     mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.execution_pipelines, telemetry.application_failures)
     signals.tool_inventory_observed.send(await read_openapi_tool_inventory(await mcp.openapi_connector_store_factory.create()))
-    downstream_permission_policy = UnrestrictedDownstreamToolPermissionPolicy() if group_permission_runtime_state is None else GroupDownstreamToolPermissionPolicy(group_permission_runtime_state)
+    downstream_permission_policy = UnrestrictedDownstreamToolPermissionPolicy() if group_permission_runtime_state is None else GroupDownstreamToolPermissionPolicy(group_permission_runtime_state, resolver)
     await _register_downstream_mcp_provider(mcp, settings, downstream_permission_policy, persistence_runtime.database, invocation_policy, runtime, downstream_client_factory=downstream_client_factory)
     register_agent_instructions(mcp)
+    mcp.middleware.insert(0, resolver)
     return mcp
+
 
 @dataclass(frozen=True)
 class RuntimePublicToolIdentitySource:
@@ -265,7 +277,7 @@ async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettin
     discovery_runtime = create_downstream_discovery_runtime(DownstreamRuntimeStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, descriptions=mcp.capability_description_overrides))
     await discovery_runtime.reconcile()
     mcp.downstream_mcp_discovery_runtime = discovery_runtime
-    callers = McpPersonalCallerProvider(settings)
+    callers = McpPersonalCallerProvider(settings, mcp.group_membership_resolver)
     personal_discovery = PersonalDiscoveryOperations(discovery_runtime, callers, stores.personal_tool_discovery, mcp.group_connector_tool_permissions if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled else InMemoryGroupConnectorToolPermissions(group_claim_fields=()), utc_clock, permission_policy)
     personal_runtime: PersonalToolRuntime = DisabledPersonalToolRuntime()
     if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:

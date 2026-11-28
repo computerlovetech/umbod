@@ -27,6 +27,7 @@ services:
       - traefik.http.services.umbod-browser-api.loadbalancer.server.port=8000
     environment:
       - *filesystem-preview-limit
+      - UMBOD_PROVIDER_GROUP_OVERRIDES
       - UMBOD_PROFILE=${UMBOD_PROFILE:-local}
       - UMBOD_AUTH=${UMBOD_AUTH:-dev}
       - UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED=${UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED:-false}
@@ -120,6 +121,7 @@ services:
       - traefik.http.services.umbod-mcp.loadbalancer.server.port=8011
     environment:
       - *filesystem-preview-limit
+      - UMBOD_PROVIDER_GROUP_OVERRIDES
       - UMBOD_PROFILE=${UMBOD_PROFILE:-local}
       - UMBOD_AUTH=${UMBOD_AUTH:-dev}
       - UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED=${UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED:-false}

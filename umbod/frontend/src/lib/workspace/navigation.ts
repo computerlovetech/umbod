@@ -59,6 +59,7 @@ export const agentBehaviourFindingsHref = '/admin/insights/agent-behaviour';
 export const systemSettingsHref = '/admin/system-settings';
 export const agentDiagnosticsHref = '/admin/agent-diagnostics';
 export const agentDiagnosticsReportingHref = `${systemSettingsHref}?section=agent-diagnostics`;
+export const providerGroupMappingsHref = `${systemSettingsHref}?section=provider-group-mappings`;
 
 export function legacyAgentDiagnosticsTarget(url: URL): string {
   const params = new URLSearchParams(url.search);

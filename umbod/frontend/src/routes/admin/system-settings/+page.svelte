@@ -8,7 +8,7 @@
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
-  const filesystemSettings = adminApi().filesystemSettings;
+  const { filesystemSettings, providerGroupMappings, groups } = adminApi();
   const diagnosticsConfiguration = agentBehaviourApi().configuration;
 </script>
 
@@ -19,7 +19,7 @@
     {#snippet actions()}<span class="scope">Instance-wide</span>{/snippet}
     {#if data.accountIdentity.kind === 'visible'}
       {#key data.accountIdentity.hiddenValues.id}
-        <SystemSettingsContent query={page.url.searchParams} {filesystemSettings} {diagnosticsConfiguration} />
+        <SystemSettingsContent query={page.url.searchParams} {filesystemSettings} {providerGroupMappings} {groups} {diagnosticsConfiguration} />
       {/key}
     {:else}
       <p class="admin-message admin-message--error" role="alert">Administration access is no longer available. Reload or sign in again.</p>

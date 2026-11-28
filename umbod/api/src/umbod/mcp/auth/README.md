@@ -12,6 +12,7 @@ description: Provider composition, explicit transport authentication, caller cap
 - [consent_screen.py](./consent_screen.py) — Consent presentation and FastMCP UI integration.
 - [debug_middleware.py](./debug_middleware.py) — Allowlisted authentication-presence diagnostics.
 - [factory.py](./factory.py) — Configured provider construction.
-- [groups.py](./groups.py) — Capture permission groups from token claims.
+- [groups.py](./groups.py) — Capture administrator membership from token claims.
 - [local_test_auth.py](./local_test_auth.py) — Single-test-user OAuth provider.
+- [membership.py](./membership.py) — Capture one live mapping snapshot per MCP operation for synchronous authorization checks.
 - [transport.py](./transport.py) — Explicit authenticated and unauthenticated transport choices.

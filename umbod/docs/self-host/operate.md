@@ -51,6 +51,16 @@ Umbod does not migrate the database between incompatible versions. Rehearse an u
 - **Telemetry:** remove any public `/v1/*` route and point exporters at the [private collector](telemetry.md).
 - **Files outside a namespace** are no longer visible. Their contents are not deleted. Export them before you upgrade.
 
+## Map provider values to Umbod groups
+
+By default, values from `UMBOD_MCP_PERMISSION_CLAIM` match Umbod group IDs by name. In **System settings → Group mappings**, enter a provider value and select a registered Umbod group to replace that match. Unmapped values still match by name. Administrator membership is configured separately.
+
+Umbod uses the configured OAuth issuer and membership claim for all mappings. Review saved mappings before changing either setting.
+
+For deployment defaults, set `UMBOD_PROVIDER_GROUP_OVERRIDES` to a JSON array of mappings with `external_value` and `group_id`. Set the same value for the API and public MCP workers. In Helm, use `core.api.env.UMBOD_PROVIDER_GROUP_OVERRIDES` and `core.mcp.env.UMBOD_PROVIDER_GROUP_OVERRIDES`; in Compose, set it in `.env` before recreating both services.
+
+Saving a list replaces the deployment defaults. Saving an empty list keeps only inherited matches. **Reset to default** restores the deployment defaults. Saved changes and resets apply on subsequent requests without a restart.
+
 ## Administrator MCP
 
 Administrators can manage Umbod from an agent through three tools: `admin_discover`, `admin_inspect`, and `admin_apply`. They are served on a separate, private listener.

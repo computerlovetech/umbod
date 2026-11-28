@@ -2,6 +2,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from umbod.rest.groups.deps import require_deletable_group_id
+
 from umbod.rest.mcp_permissions.dependencies import (
     get_admin_group_permission_management,
     get_assignable_permission_catalog,
@@ -81,7 +83,7 @@ async def register_permission_group(
 
 @router.delete("/groups/{group_id}", response_model_exclude_defaults=True)
 async def delete_permission_group(
-    group_id: str,
+    group_id: Annotated[str, Depends(require_deletable_group_id)],
     management: Annotated[
         AdminGroupPermissionManagement, Depends(get_admin_group_permission_management)
     ],
