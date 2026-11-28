@@ -12,14 +12,13 @@ from umbod.core.persistence import (
     Equals,
     AllFields,
     UpsertCommand,
-    InsertCommand,
 )
 from umbod.core.groups.models import (
     Group, RegisterGroupMetadata, UpdateGroupMetadata, GroupNotFound, GroupRevisionConflict,
 )
 from umbod.core.groups.ports import GroupCatalogueSession, GroupUsage
 from .schema import GROUP_TABLE, GROUP_ID, PermissionGroupRecord, PermissionGroupKey
-from .registration import register_group_in_session
+from .registration import register_group_in_session, register_group_metadata_in_session
 
 
 class DatabaseGroupCatalogue:
@@ -35,8 +34,7 @@ class DatabaseGroupCatalogue:
                 GROUP_TABLE, Query(NoFilter(), AllFields(), Unordered())
             )
         return tuple(
-            Group.model_validate(row.model_dump())
-            for row in sorted(rows, key=lambda row: row.group_id)
+            row.to_group() for row in sorted(rows, key=lambda row: row.group_id)
         )
 
     @asynccontextmanager
@@ -56,10 +54,7 @@ class DatabaseGroupCatalogueSession:
         await register_group_in_session(self._session, group_id)
 
     async def register_metadata(self, request: RegisterGroupMetadata) -> None:
-        await self._session.insert(
-            GROUP_TABLE,
-            InsertCommand(row=PermissionGroupRecord(**request.model_dump(), revision=1)),
-        )
+        await register_group_metadata_in_session(self._session, request)
 
     async def update_metadata(self, group_id: str, request: UpdateGroupMetadata) -> Group:
         current = await self._session.find_one(
@@ -71,13 +66,13 @@ class DatabaseGroupCatalogueSession:
             raise GroupRevisionConflict("Group metadata revision is stale")
         updated = PermissionGroupRecord(
             group_id=group_id, label=request.label, description=request.description,
-            revision=current.revision + 1,
+            revision=current.revision + 1, instance_id=current.instance_id,
         )
         await self._session.upsert(
             GROUP_TABLE,
             UpsertCommand(key=PermissionGroupKey(group_id=group_id), row=updated),
         )
-        return Group.model_validate(updated.model_dump())
+        return updated.to_group()
 
     async def delete(self, group_id: str) -> None:
         await self._session.delete(GROUP_TABLE, DeleteQuery(Equals(GROUP_ID, group_id)))

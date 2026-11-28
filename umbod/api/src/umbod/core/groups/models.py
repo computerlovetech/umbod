@@ -1,6 +1,13 @@
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, AfterValidator, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    AfterValidator,
+    StringConstraints,
+    field_validator,
+)
 
 
 def require_nonblank_label(value: str) -> str:
@@ -9,15 +16,27 @@ def require_nonblank_label(value: str) -> str:
     return value.strip()
 
 
-GroupLabel = Annotated[str, Field(max_length=200), AfterValidator(require_nonblank_label)]
+GroupLabel = Annotated[
+    str, Field(max_length=200), AfterValidator(require_nonblank_label)
+]
 GroupDescription = Annotated[str, Field(max_length=2000)]
 GroupRevision = Annotated[int, Field(strict=True, gt=0)]
+GroupInstanceId = Annotated[
+    str,
+    StringConstraints(
+        strict=True, min_length=32, max_length=32, pattern=r"^[0-9a-f]{32}$"
+    ),
+]
 
 
 class GroupIdentifier(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     group_id: str
+
+
+class GroupInstance(GroupIdentifier):
+    instance_id: GroupInstanceId
 
 
 class Group(GroupIdentifier):

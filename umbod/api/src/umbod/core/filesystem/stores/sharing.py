@@ -27,7 +27,7 @@ class SessionRegisteredGroups:
             GROUP_TABLE,
             Query(filter=NoFilter(), projection=AllFields(), ordering=Unordered()),
         )
-        return tuple(Group.model_validate(record.model_dump()) for record in records)
+        return tuple(record.to_group() for record in records)
 
     async def registered_group_ids(self) -> frozenset[str]:
         records = await self._session.find_many(

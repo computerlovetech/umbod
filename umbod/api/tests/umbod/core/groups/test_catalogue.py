@@ -10,6 +10,7 @@ from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.groups import (
     GroupCatalogue,
     GroupInUse,
+    GroupInstanceLookup,
     GroupManagementService,
     RegisterGroup,
     RegisterGroupMetadata,
@@ -22,6 +23,7 @@ from umbod.core.groups.stores.composition import (
     create_group_management,
     shared_group_usage,
 )
+from umbod.core.groups.stores.reads import DatabaseGroupInstanceLookup
 from umbod.core.groups.stores.service import DatabaseGroupCatalogue
 from umbod.core.persistence import Database, TransactionMode
 from umbod.core.filesystem.models import (
@@ -114,7 +116,10 @@ async def test_all_node_empty_or_recursive_grants_block_deletion(
         permissions=set(),
         recursive=recursive,
     )
+    instances: GroupInstanceLookup = DatabaseGroupInstanceLookup(database)
     await policies.add_grant(grant)
+    original = await instances.find_group_instance("shared")
+    assert original is not None
     with pytest.raises(GroupInUse):
         await management.delete_group("shared")
     assert await policies.list_grants(grant.node_id) == [grant]
@@ -123,7 +128,10 @@ async def test_all_node_empty_or_recursive_grants_block_deletion(
         "shared",
     )
     await management.delete_group("shared")
+    assert await instances.find_group_instance("shared") is None
     await policies.add_grant(grant)
+    replacement = await instances.find_group_instance("shared")
+    assert replacement is not None and replacement.instance_id != original.instance_id
     assert tuple(group.group_id for group in await management.list_groups()) == (
         "shared",
     )
@@ -325,6 +333,30 @@ async def test_metadata_updates_preserve_identity_and_duplicate_registration(cat
     with pytest.raises(GroupRevisionConflict):
         await management.update_group_metadata("provider/team", UpdateGroupMetadata(label="Stale", description="", expected_revision=1))
     assert await management.list_groups() == (updated,)
+
+
+@pytest.mark.asyncio
+async def test_instance_survives_metadata_update_and_duplicate_registration(database: Database) -> None:
+    group_id = " Provider/Team "
+    management = create_group_management(database)
+    instances: GroupInstanceLookup = DatabaseGroupInstanceLookup(database)
+    await management.register_group_metadata(RegisterGroupMetadata(group_id=group_id, label="Original", description=""))
+    original = await instances.find_group_instance(group_id)
+    assert original is not None and original.group_id == group_id
+    assert await instances.find_group_instance(group_id.strip()) is None
+
+    updated = await management.update_group_metadata(
+        group_id, UpdateGroupMetadata(label="Edited", description="Preserved", expected_revision=1),
+    )
+    assert await instances.find_group_instance(group_id) == original
+    await management.register_group(RegisterGroup(group_id=group_id))
+    await management.register_group_metadata(RegisterGroupMetadata(group_id=group_id, label="Ignored", description=""))
+
+    assert await instances.find_group_instance(group_id) == original
+    assert [group.model_dump() for group in await management.list_groups()] == [
+        {"group_id": group_id, "label": "Edited", "description": "Preserved", "revision": 2},
+    ]
+    assert "instance_id" not in updated.model_dump()
 
 
 @pytest.mark.asyncio

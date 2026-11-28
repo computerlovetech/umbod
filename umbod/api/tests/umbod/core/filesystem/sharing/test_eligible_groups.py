@@ -100,7 +100,7 @@ async def test_only_registered_nonblank_unblocked_recipients_are_returned(contex
             node_id=context.node.id, principal=principal("orphan"), permissions={Permission.READ}, recursive=False,
         ))
         await session.insert(GROUP_TABLE, InsertCommand(row=PermissionGroupRecord(
-            group_id="", label="Legacy blank", description="", revision=1,
+            group_id="", label="Legacy blank", description="", revision=1, instance_id=uuid4().hex,
         )))
     recipients: set[str] = set()
     for query in ("foreign", "user", "system", "editable", "recursive", "empty", "orphan", "Legacy blank"):

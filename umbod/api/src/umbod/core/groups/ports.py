@@ -1,7 +1,11 @@
 from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 
-from .models import Group, RegisterGroupMetadata, UpdateGroupMetadata
+from .models import Group, GroupInstance, RegisterGroupMetadata, UpdateGroupMetadata
+
+
+class GroupInstanceLookup(Protocol):
+    async def find_group_instance(self, group_id: str) -> GroupInstance | None: ...
 
 
 class GroupUsage(Protocol):
@@ -13,7 +17,9 @@ class GroupCatalogueSession(GroupUsage, Protocol):
 
     async def register_metadata(self, request: RegisterGroupMetadata) -> None: ...
 
-    async def update_metadata(self, group_id: str, request: UpdateGroupMetadata) -> Group: ...
+    async def update_metadata(
+        self, group_id: str, request: UpdateGroupMetadata
+    ) -> Group: ...
 
     async def delete(self, group_id: str) -> None: ...
 

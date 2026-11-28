@@ -1,13 +1,29 @@
 from .models import (
-    Group, GroupIdentifier, GroupInUse, RegisterGroup, RegisterGroupMetadata,
-    UpdateGroupMetadata, GroupNotFound, GroupRevisionConflict,
+    Group,
+    GroupIdentifier,
+    GroupInUse,
+    GroupInstance,
+    GroupInstanceId,
+    RegisterGroup,
+    RegisterGroupMetadata,
+    UpdateGroupMetadata,
+    GroupNotFound,
+    GroupRevisionConflict,
 )
-from .ports import GroupCatalogue, GroupCatalogueSession, GroupUsage
+from .ports import (
+    GroupCatalogue,
+    GroupCatalogueSession,
+    GroupInstanceLookup,
+    GroupUsage,
+)
 from .service import GroupManagementService
 
 __all__ = [
     "Group",
     "GroupIdentifier",
+    "GroupInstance",
+    "GroupInstanceId",
+    "GroupInstanceLookup",
     "RegisterGroupMetadata",
     "UpdateGroupMetadata",
     "GroupNotFound",

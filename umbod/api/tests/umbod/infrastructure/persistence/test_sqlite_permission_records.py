@@ -1,6 +1,7 @@
 import sqlite3
 from contextlib import closing
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -34,12 +35,16 @@ from umbod.core.persistence import (
 async def test_sqlite_group_and_permission_records_survive_runtime_recreation(tmp_path: Path) -> None:
     path = tmp_path / "permissions.sqlite3"
     groups = (
-        PermissionGroupRecord(group_id="empty-group", label="Empty ☃", description="", revision=1),
+        PermissionGroupRecord(
+            group_id="empty-group", label="Empty ☃", description="", revision=1, instance_id=uuid4().hex,
+        ),
         PermissionGroupRecord(
             group_id="engineering", label="Engineering 雪",
-            description='Team "description"\n\\path', revision=2,
+            description='Team "description"\n\\path', revision=2, instance_id=uuid4().hex,
         ),
-        PermissionGroupRecord(group_id="other-team", label="Other", description="Neighbor", revision=3),
+        PermissionGroupRecord(
+            group_id="other-team", label="Other", description="Neighbor", revision=3, instance_id=uuid4().hex,
+        ),
     )
     permissions = tuple(
         GroupCapabilityPermissionRecord(
@@ -110,7 +115,7 @@ async def test_sqlite_group_and_permission_records_survive_runtime_recreation(tm
 
     with closing(sqlite3.connect(path)) as connection, connection:
         raw_groups = connection.execute(
-            "SELECT group_id, label, description, revision, typeof(revision) "
+            "SELECT group_id, label, description, revision, typeof(revision), instance_id, typeof(instance_id) "
             "FROM mcp_permission_groups ORDER BY group_id"
         ).fetchall()
         raw_permissions = connection.execute(
@@ -125,7 +130,7 @@ async def test_sqlite_group_and_permission_records_survive_runtime_recreation(tm
             "PRAGMA table_info(mcp_group_connector_permissions)"
         ).fetchall()
     assert raw_groups == [
-        (group.group_id, group.label, group.description, group.revision, "integer")
+        (group.group_id, group.label, group.description, group.revision, "integer", group.instance_id, "text")
         for group in groups
     ]
     assert set(raw_permissions) == {

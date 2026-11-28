@@ -49,7 +49,7 @@ from umbod.core.permissions.stores.schema import (
     CAPABILITY_PERMISSION_TABLE,
     CONNECTOR_PERMISSION_TABLE,
 )
-from umbod.core.groups.stores.schema import GROUP_TABLE
+from umbod.core.groups.stores.schema import GROUP_INSTANCE_RESERVATION_TABLE, GROUP_TABLE
 from umbod.core.identity_directory.schema import DIRECTORY_TABLES
 from umbod.core.personal_access_tokens.install_claim_schema import INSTALL_CLAIM_TABLES
 from umbod.core.personal_access_tokens.schema import PERSONAL_ACCESS_TOKEN_TABLES
@@ -79,6 +79,7 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     CONNECTOR_INVOCATION_POLICY_TABLE,
     APPROVAL_NONCE_TABLE,
     GROUP_TABLE,
+    GROUP_INSTANCE_RESERVATION_TABLE,
     *DIRECTORY_TABLES,
     *PERSONAL_ACCESS_TOKEN_TABLES,
     *INSTALL_CLAIM_TABLES,
