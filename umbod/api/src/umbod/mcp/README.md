@@ -23,6 +23,9 @@ description: "MCP application composition, capability exposure, authentication a
 - [messaging/](./messaging/README.md) — Event replay and runtime synchronization.
 - [metrics/](./metrics/README.md) — Invocation and protocol metrics.
 - [middleware/](./middleware/README.md) — Protocol middleware.
+- [portable_drafts.py](./portable_drafts.py) — Private draft authoring, offline validation, and administrator-only submission of an owned revision.
+- [portable_draft_contracts.py](./portable_draft_contracts.py) — Draft and submission command schemas, receipts, and model-readable validation reports.
+- [portable_draft_names.py](./portable_draft_names.py) — Reserved private names for portable authoring and submission.
 - [proxies.py](./proxies.py) — Deferred runtime bindings.
 - [http_transport.py](./http_transport.py) — Startup-scoped compatibility adapter for bounded HTTP bodies, preserving FastMCP authentication and sessions.
 - [public_app.py](./public_app.py) — Public application assembly, shared administrator eligibility, and explicit persistence lifecycle ownership.

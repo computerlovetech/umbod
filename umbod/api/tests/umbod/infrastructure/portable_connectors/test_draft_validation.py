@@ -196,6 +196,18 @@ async def test_validation_uses_saved_revision_and_never_invokes_handlers(
     assert report.profile_id.startswith("portable-monty-")
 
 
+async def test_catalog_configuration_probe_is_valid_without_running_its_handlers(
+    author_drafts: PortableConnectorDrafts, validation: PortableDraftValidation,
+) -> None:
+    source = (_FIXTURES / "configuration_probe.py").read_text(encoding="utf-8")
+
+    report = await _validate(author_drafts, validation, source)
+
+    assert report.outcome.status == "valid"
+    assert report.outcome.checks.handler_execution == "not_checked"
+    assert not report.outcome.diagnostics
+
+
 async def test_validation_has_no_http_binding(
     author_drafts: PortableConnectorDrafts, validation: PortableDraftValidation, connector_source: str,
 ) -> None:

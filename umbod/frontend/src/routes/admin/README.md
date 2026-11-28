@@ -13,6 +13,7 @@ description: Capability-checked administration layout, workspaces and compatibil
 # Workspaces
 
 - [Insights and diagnostic patterns](./(agent-insights)/insights/README.md) — Behaviour findings, log analytics and the standalone pattern editor.
+- [Portable connector configuration](./(connector-workspace)/portable-connectors/+page.svelte) — Deep links to configure submitted portable connectors in the shared inventory.
 - [Groups](./groups/README.md) — Central administrator group catalogue route.
 - [Shared namespaces](./namespaces/+page.svelte) — Administration inventory for creating, editing, and deleting shared namespaces.
 - [Agent tokens](./agent-tokens/+page.svelte) — Administrator inventory for issuing, rotating, and revoking public MCP agent tokens.

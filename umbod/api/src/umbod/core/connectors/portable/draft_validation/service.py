@@ -3,7 +3,7 @@ from uuid import UUID
 
 from umbod.core.callers import CallerContext
 
-from ..drafts import PortableConnectorDrafts
+from ..drafts import DraftRevision, PortableConnectorDrafts
 from .models import DraftValidationReport
 from .ports import DraftSourceValidator, DraftValidationUnavailable
 
@@ -22,8 +22,12 @@ class PortableDraftValidation:
         self, caller: CallerContext, draft_id: UUID, revision_id: UUID
     ) -> DraftValidationReport:
         revision = await self._drafts.read_revision(caller, draft_id, revision_id)
+        return await self.validate_saved_revision(revision)
+
+    async def validate_saved_revision(self, revision: DraftRevision) -> DraftValidationReport:
         if self._slots.locked():
             raise DraftValidationUnavailable("The draft validator is busy")
         async with self._slots:
             outcome = await self._validator.validate(revision.source)
-        return DraftValidationReport(draft_id, revision_id, self._validator.profile_id, outcome)
+        receipt = revision.receipt
+        return DraftValidationReport(receipt.draft_id, receipt.revision_id, self._validator.profile_id, outcome)

@@ -72,6 +72,7 @@ from umbod.rest.settings import APISettings
 from umbod.rest.install import router as install_router
 from umbod.rest.system import router as system_router
 from umbod.rest.system_settings.routes import router as system_settings_router
+from umbod.rest.connectors.portable import router as portable_connector_router
 from umbod.rest.system.routes import health
 from umbod.rest.system.schemas import HealthResponse
 from umbod.rest.telemetry_analytics import personal_router as personal_telemetry_analytics_router
@@ -201,6 +202,7 @@ def _mount_admin_app(
     admin_router.include_router(instance_configuration_router)
     admin_router.include_router(filesystem_administration_router)
     admin_router.include_router(system_settings_router)
+    admin_router.include_router(portable_connector_router)
     admin_app = SubApiAppFactory(title="umbod-admin-api", router=admin_router).create()
     admin_app.dependency_overrides.update(oauth_dependencies)
     admin_routes = tuple(admin_router.routes)
@@ -220,6 +222,8 @@ def _mount_admin_app(
         response = await call_next(request)
         if (
             request.url.path.startswith("/api/admin/telemetry/")
+            or request.url.path == "/api/admin/portable-connectors"
+            or request.url.path.startswith("/api/admin/portable-connectors/")
             or "/agent-behaviour" in request.url.path
             or "/personal-oauth/setup" in request.url.path
         ):

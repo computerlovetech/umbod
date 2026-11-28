@@ -187,7 +187,7 @@ for attempt in $(seq 1 30); do
 done
 
 python3 "${script_directory}/bootstrap.py"
-(cd "${app_directory}/api" && uv run --locked pytest live_runtime_tests --ignore=live_runtime_tests/test_running_personal_usage.py --ignore=live_runtime_tests/test_running_personal_mcp_execution.py --ignore=live_runtime_tests/test_running_personal_oauth_setup.py --ignore=live_runtime_tests/test_running_personal_oauth_policy.py --ignore=live_runtime_tests/test_running_personal_tools_policy.py --ignore=live_runtime_tests/test_running_user_catalogue.py --ignore=live_runtime_tests/test_running_user_profile.py --ignore=live_runtime_tests/test_running_filesystem.py --ignore=live_runtime_tests/test_running_filesystem_uploads.py --ignore=live_runtime_tests/test_running_filesystem_homes.py --ignore=live_runtime_tests/test_running_filesystem_s3.py --ignore=live_runtime_tests/test_running_provider_group_mappings.py)
+(cd "${app_directory}/api" && uv run --locked pytest live_runtime_tests --ignore=live_runtime_tests/test_running_personal_usage.py --ignore=live_runtime_tests/test_running_personal_mcp_execution.py --ignore=live_runtime_tests/test_running_personal_oauth_setup.py --ignore=live_runtime_tests/test_running_personal_oauth_policy.py --ignore=live_runtime_tests/test_running_personal_tools_policy.py --ignore=live_runtime_tests/test_running_user_catalogue.py --ignore=live_runtime_tests/test_running_user_profile.py --ignore=live_runtime_tests/test_running_filesystem.py --ignore=live_runtime_tests/test_running_filesystem_uploads.py --ignore=live_runtime_tests/test_running_filesystem_homes.py --ignore=live_runtime_tests/test_running_filesystem_s3.py --ignore=live_runtime_tests/test_running_provider_group_mappings.py --ignore=live_runtime_tests/test_running_portable_connector_drafts.py)
 kubectl --context "${kube_context}" logs deployment/umbod-core --container api \
     | python3 "${script_directory}/check_telemetry_logs.py"
 kubectl --context "${kube_context}" exec -i deployment/umbod-core --container api -- python - \
@@ -238,7 +238,7 @@ for attempt in $(seq 1 60); do
     fi
     sleep 1
 done
-(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_provider_group_mappings.py live_runtime_tests/test_running_agent_tokens.py)
+(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_provider_group_mappings.py live_runtime_tests/test_running_portable_connector_drafts.py live_runtime_tests/test_running_agent_tokens.py)
 (cd "${app_directory}/api" && uv run --locked python -c '
 import os
 import runpy

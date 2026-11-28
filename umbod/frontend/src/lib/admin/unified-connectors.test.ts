@@ -2,7 +2,8 @@ import { describe, expect, test } from 'vitest';
 import { type ConnectorApiItem } from './connectors.js';
 import { HttpError, SchemaValidationError } from './infrastructure/transport.js';
 import { summaryFixture } from './personal-mcp-servers/fixtures.test-support.js';
-import { loadUnifiedConnectorInventory } from './unified-connectors.js';
+import { connectorWorkspaceHref, loadUnifiedConnectorInventory } from './unified-connectors.js';
+import { submittedConnector } from './portable-connectors/fixtures.test-support.js';
 
 type InventoryApi = Parameters<typeof loadUnifiedConnectorInventory>[0];
 
@@ -15,6 +16,7 @@ function inventoryApi(overrides: Partial<InventoryApi>): InventoryApi {
     connectors: { connectors: { list: async () => ({ connectors: [] }) } },
     openApiConnectors: { connectors: { list: async () => ({ connectors: [] }) } },
     downstreamMcpConnectors: { list: async () => ({ connectors: [] }) },
+    portableConnectors: { list: async () => ({ connectors: [] }) },
     ...overrides
   };
 }
@@ -58,6 +60,27 @@ describe('loadUnifiedConnectorInventory', () => {
     const { inventory } = await loadUnifiedConnectorInventory(api);
     expect(inventory.unavailableKinds).toEqual(['openapi', 'mcp']);
     expect(inventory.unifiedRows.map((row) => row.name)).toEqual(['Native']);
+  });
+
+  test('lists a submitted connector before configuration and links directly to its form', async (): Promise<void> => {
+    const api = inventoryApi({ portableConnectors: { list: async () => ({ connectors: [submittedConnector] }) } });
+    const { inventory } = await loadUnifiedConnectorInventory(api);
+    expect(inventory.unifiedRows).toEqual([{
+      kind: 'portable', id: submittedConnector.connector_id, name: submittedConnector.name,
+      description: submittedConnector.description, status: 'Inactive', configured: false
+    }]);
+    const [row] = inventory.unifiedRows;
+    expect(connectorWorkspaceHref(row, 'tools')).toBe(`/admin/portable-connectors?connector=${submittedConnector.connector_id}`);
+  });
+
+  test('a portable connector lookup failure leaves the available kinds intact', async (): Promise<void> => {
+    const api = inventoryApi({
+      connectors: { connectors: { list: async () => ({ connectors: [nativeConnector('native', 'Native', 'published')] }) } },
+      portableConnectors: { list: async () => { throw new HttpError(503, 'Unavailable', {}); } }
+    });
+    const { inventory } = await loadUnifiedConnectorInventory(api);
+    expect(inventory.unavailableKinds).toEqual(['portable']);
+    expect(inventory.unifiedRows.map((row) => row.kind)).toEqual(['native']);
   });
 
   test('propagates unexpected inventory errors', async (): Promise<void> => {

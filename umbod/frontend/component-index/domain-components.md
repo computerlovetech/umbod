@@ -37,7 +37,8 @@ description: Dashboard charts, insights, file previews, connector and tool prese
 
 ## Connector and catalogue presentation
 
-- [AddConnector](../src/lib/components/admin/connectors/AddConnector.svelte) — Persistent connector setup trigger and type picker; the active connector route supplies setup eligibility and opens its own form.
+- [AddConnector](../src/lib/components/admin/connectors/AddConnector.svelte) — Persistent setup picker; routes supply creation actions for other kinds, while Portable opens an existing submission’s configuration.
+- [ConnectorKindBadge](../src/lib/components/admin/connectors/ConnectorKindBadge.svelte) — Compact connector-kind label for sidebar rows and detail headers; use separately from lifecycle and configuration status.
 - [ConnectorIcon](../src/lib/components/admin/connectors/ConnectorIcon.svelte) — Decorative image or initials in standard sizes; use for connector identity, with accessible naming supplied elsewhere.
 - [ConnectorSidebarList](../src/lib/components/admin/connectors/ConnectorSidebarList.svelte) — Controlled connector rows with optional linked peers; use to combine local selection and navigation in one sidebar.
 - [UnifiedConnectorWorkspace](../src/lib/components/admin/connectors/UnifiedConnectorWorkspace.svelte) — Shared admin connector layout; use for mixed inventories with route-owned selection, details, and actions.

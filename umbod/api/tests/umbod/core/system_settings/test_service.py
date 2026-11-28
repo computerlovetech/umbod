@@ -16,6 +16,7 @@ from umbod.core.system_settings import (
     SettingsSource,
     SettingsStorageUnavailable,
     SystemSettings,
+    UpdatePortableConnectorSettings,
     UpdateSystemSettings,
     create_system_settings_service,
     create_system_settings_service_with_defaults,
@@ -160,6 +161,12 @@ async def test_management_rejects_non_administrators_before_storage_access(
         )
     with pytest.raises(SettingsPermissionDenied):
         await service.reset_mcp_file_deletion_approval(role)
+    with pytest.raises(SettingsPermissionDenied):
+        await service.get_portable_connectors_enabled(role)
+    with pytest.raises(SettingsPermissionDenied):
+        await service.set_portable_connectors_enabled(
+            role, UpdatePortableConnectorSettings(portable_connectors_enabled=True)
+        )
 
 
 @pytest.mark.asyncio

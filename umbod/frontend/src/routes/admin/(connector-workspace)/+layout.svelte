@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from '$app/state';
   import AdminShell from '#lib/components/admin/AdminShell.svelte';
   import SubpageContainer from '#lib/components/shared/workspace/SubpageContainer.svelte';
   import AddConnector from '#lib/components/admin/connectors/AddConnector.svelte';
@@ -14,7 +15,7 @@
 <AdminShell activeItem="connectors" accountIdentity={data.accountIdentity ?? { kind: 'hidden' }} contentWidth="wide">
   <SubpageContainer headingId="mcp-workspace-heading" title="Connectors">
     {#snippet actions()}
-      <AddConnector state={addConnector} />
+      <AddConnector state={addConnector} unifiedRows={page.data.unifiedRows} unavailableKinds={page.data.unavailableKinds} />
     {/snippet}
     {@render children()}
   </SubpageContainer>

@@ -5,29 +5,46 @@ import type { AdminApi } from './infrastructure/admin-api.js';
 import { isOperationalError, SchemaValidationError } from './infrastructure/transport.js';
 import { loadOpenApiConnectorList } from './openapi-connectors-api.js';
 import type { OpenApiConnectorListItem, OpenApiConnectorListPageData } from './openapi-connectors.js';
+import type { PortableConnectorSummary } from './portable-connectors/domain/schemas.js';
+import type { PortableConnectors } from './portable-connectors/port.js';
 
-export type UnifiedConnectorKind = 'native' | 'openapi' | 'mcp';
+export type ExistingSetupKind = 'native' | 'openapi' | 'mcp';
+export type UnifiedConnectorKind = ExistingSetupKind | 'portable';
 
 export const connectorWorkspacePaths: Readonly<Record<UnifiedConnectorKind, string>> = {
   native: '/admin/connectors',
   openapi: '/admin/openapi-connectors',
-  mcp: '/admin/downstream-mcp-connectors'
+  mcp: '/admin/downstream-mcp-connectors',
+  portable: '/admin/portable-connectors'
 };
 
 export function connectorWorkspaceHref(row: Pick<UnifiedConnectorRow, 'kind' | 'id'>, requestedCapability: string | null): string {
   const query = new URLSearchParams({ connector: row.id });
   const capability = connectorCapabilities.find((value) => value === requestedCapability);
-  if (capability) query.set('capability', capability);
+  if (capability && row.kind !== 'portable') query.set('capability', capability);
   return `${connectorWorkspacePaths[row.kind]}?${query}`;
 }
 
-export type UnifiedConnectorRow = Readonly<{
-  kind: UnifiedConnectorKind;
-  id: string;
-  name: string;
-  status: string;
-  iconDataUrl?: string;
+type ConnectorRowIdentity = { id: string; name: string; iconDataUrl?: string };
+
+export type PortableConnectorRow = Readonly<ConnectorRowIdentity & {
+  kind: 'portable';
+  description: string;
+  status: 'Inactive';
+  configured: boolean;
 }>;
+
+export type UnifiedConnectorRow = Readonly<ConnectorRowIdentity & { kind: ExistingSetupKind; status: string }> | PortableConnectorRow;
+
+export function portableDuplicateReference(row: PortableConnectorRow, inventory: readonly UnifiedConnectorRow[]): string | undefined {
+  return inventory.some((other) => other.kind === 'portable' && other.id !== row.id && other.name === row.name)
+    ? row.id.slice(-8)
+    : undefined;
+}
+
+export function portableConfigurationStatus(configured: boolean): string {
+  return configured ? 'Configured' : 'Not configured';
+}
 
 export type UnifiedConnectorInventory = {
   unifiedRows: readonly UnifiedConnectorRow[];
@@ -39,6 +56,7 @@ type InventoryApi = {
   connectors: { connectors: Pick<AdminApi['connectors']['connectors'], 'list'> };
   openApiConnectors: { connectors: Pick<AdminApi['openApiConnectors']['connectors'], 'list'> };
   downstreamMcpConnectors: Pick<AdminApi['downstreamMcpConnectors'], 'list'>;
+  portableConnectors: Pick<PortableConnectors, 'list'>;
 };
 
 type ConnectorInventory<Item> =
@@ -77,21 +95,32 @@ export async function loadUnifiedConnectorInventory(api: InventoryApi): Promise<
   mcp: ConnectorInventory<DownstreamMcpConnectorSummary>;
   inventory: UnifiedConnectorInventory;
 }> {
-  const [native, openapi, mcp] = await Promise.all([
+  const [native, openapi, mcp, portable] = await Promise.all([
     readInventory(async () => (await api.connectors.connectors.list()).connectors.map(mapConnectorApiItem)),
     readOpenApiInventory(api.openApiConnectors),
-    readInventory(async () => (await api.downstreamMcpConnectors.list()).connectors)
+    readInventory(async () => (await api.downstreamMcpConnectors.list()).connectors),
+    readInventory(async () => (await api.portableConnectors.list()).connectors)
   ]);
   const unavailableKinds: UnifiedConnectorKind[] = [];
   if (native.status === 'failed') unavailableKinds.push('native');
   if (openapi.status === 'failed') unavailableKinds.push('openapi');
   if (mcp.status === 'failed') unavailableKinds.push('mcp');
+  if (portable.status === 'failed') unavailableKinds.push('portable');
   const unifiedRows = [
     ...native.connectors.filter((connector) => connector.isConfigured).map(nativeRow),
     ...(openapi.status === 'ready' ? openapi.connectors.map(openApiRow) : []),
-    ...mcp.connectors.map(mcpRow)
+    ...mcp.connectors.map(mcpRow),
+    ...portable.connectors.map(portableRow)
   ].sort(compareConnectorNames);
   return { native, openapi, mcp, inventory: { unifiedRows, unavailableKinds, nativeAvailable: native.connectors.some((connector) => !connector.isConfigured) } };
+}
+
+export function portableRow({ connector_id, name, description, configured }: PortableConnectorSummary): PortableConnectorRow {
+  return { kind: 'portable', id: connector_id, name, description, status: 'Inactive', configured };
+}
+
+export function isPortableRow(row: UnifiedConnectorRow): row is PortableConnectorRow {
+  return row.kind === 'portable';
 }
 
 function nativeRow({ id, name, publicationStatus, iconDataUrl }: ConnectorListItem): UnifiedConnectorRow {

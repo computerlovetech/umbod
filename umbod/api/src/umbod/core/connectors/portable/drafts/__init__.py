@@ -7,7 +7,7 @@ from .errors import (
     InvalidDraftSource,
 )
 from .models import DraftReceipt, DraftRevision
-from .service import MAX_DRAFT_SOURCE_BYTES, PortableConnectorDrafts
+from .service import MAX_DRAFT_SOURCE_BYTES, PortableConnectorDrafts, require_draft_author
 from .store import DatabaseDraftStore
 
 __all__ = [
@@ -22,4 +22,5 @@ __all__ = [
     "DraftWriteUnconfirmed",
     "InvalidDraftSource",
     "PortableConnectorDrafts",
+    "require_draft_author",
 ]

@@ -18,7 +18,9 @@ from umbod.mcp.logging import (
     McpAuditCorrelation,
     McpAuditIdentitySource,
 )
+from umbod.mcp.portable_draft_names import PORTABLE_DRAFT_TOOL_NAMES
 from umbod.mcp.signals import (
+    McpInvocationActor,
     McpInvocationContext,
     McpInvocationCorrelation,
     McpToolIdentity,
@@ -95,9 +97,10 @@ class McpAuditMiddleware(Middleware):
         call_next: CallNext[mt.CallToolRequestParams, ToolResult],
     ) -> ToolResult:
         correlation = _new_correlation()
+        private = context.message.name in PORTABLE_DRAFT_TOOL_NAMES
         token = set_mcp_invocation_context(
             McpInvocationContext(
-                actor=self._identity_source.invocation_actor(context.fastmcp_context),
+                actor=McpInvocationActor() if private else self._identity_source.invocation_actor(context.fastmcp_context),
                 correlation=McpInvocationCorrelation(
                     trace_id=correlation.trace_id, span_id=correlation.span_id
                 ),
@@ -125,6 +128,8 @@ class McpAuditMiddleware(Middleware):
                 )
             return result
         except AuthorizationError:
+            if private:
+                raise
             self._recorder.record_tool_invocation_denied(
                 self._identity_source.identity_from_request(context.fastmcp_context),
                 self._recorder.tool_target(_tool_identity(context.message)),

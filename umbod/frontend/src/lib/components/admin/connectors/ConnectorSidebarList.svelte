@@ -1,9 +1,10 @@
 <script lang="ts" generics="Item extends { id: string; name: string; iconDataUrl?: string }">
   import Button from '#lib/components/admin/shared/Button.svelte';
   import type { Snippet } from 'svelte';
+  import ConnectorKindBadge from './ConnectorKindBadge.svelte';
   import ConnectorIcon from './ConnectorIcon.svelte';
 
-  type LinkItem = { href: string; name: string; iconDataUrl?: string; label: string };
+  type LinkItem = { href: string; name: string; iconDataUrl?: string; badge?: string; label: string };
 
   type Props = {
     items: readonly Item[];
@@ -45,6 +46,7 @@
             <ConnectorIcon label={row.link.name} dataUrl={row.link.iconDataUrl} />
             <span class="connector-copy">
               <span class="connector-name">{row.link.name}</span>
+              {#if row.link.badge}<ConnectorKindBadge label={row.link.badge} />{/if}
               <span class="connector-meta">{row.link.label}</span>
             </span>
           </a>

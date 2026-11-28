@@ -70,6 +70,11 @@ def get_authorized_system_settings(
     )
 
 
+SystemSettingsAccess = Annotated[
+    AuthorizedSettings[SystemSettingsService], Depends(get_authorized_system_settings)
+]
+
+
 def get_authorized_provider_group_mappings(
     actor: Annotated[AdministratorRole, Depends(require_settings_administrator)],
     factories: Annotated[

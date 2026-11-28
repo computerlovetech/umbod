@@ -1,18 +1,20 @@
 <script module lang="ts">
-  export type SystemSettingsSection = 'filesystem' | 'provider-group-mappings' | 'agent-diagnostics';
+  export type SystemSettingsSection = 'filesystem' | 'provider-group-mappings' | 'agent-diagnostics' | 'portable-connectors';
 </script>
 
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { agentDiagnosticsReportingHref, providerGroupMappingsHref, systemSettingsHref } from '#lib/workspace/navigation.js';
+  import { agentDiagnosticsReportingHref, portableConnectorSettingsHref, providerGroupMappingsHref, systemSettingsHref } from '#lib/workspace/navigation.js';
   import AdminSplitWorkspace from '../shared/AdminSplitWorkspace.svelte';
   import AdminSettingsActions from '../shared/AdminSettingsActions.svelte';
   import AdminToggleSetting from '../shared/AdminToggleSetting.svelte';
   import Button from '../shared/Button.svelte';
   import type { FilesystemSettingsState } from './filesystem-settings-state.svelte';
+  import type { PortableConnectorSettingsState } from './portable-connector-settings-state.svelte';
 
-  let { state, section, diagnosticsAllowed, diagnostics, providerMappings }: {
+  let { state, portableConnectors, section, diagnosticsAllowed, diagnostics, providerMappings }: {
     state: FilesystemSettingsState;
+    portableConnectors: PortableConnectorSettingsState;
     section: SystemSettingsSection;
     diagnosticsAllowed: boolean;
     diagnostics: Snippet;
@@ -22,7 +24,8 @@
   const detailLabels: Record<SystemSettingsSection, string> = {
     filesystem: 'Filesystem settings',
     'provider-group-mappings': 'Group mapping settings',
-    'agent-diagnostics': 'Agent diagnostics settings'
+    'agent-diagnostics': 'Agent diagnostics settings',
+    'portable-connectors': 'Portable connector settings'
   };
 </script>
 
@@ -38,6 +41,10 @@
   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h7m-7 10h7m3-10 5 5-5 5m-3-5h8" /></svg>
 {/snippet}
 
+{#snippet portableConnectorsIcon()}
+  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-2-14-4 16" /></svg>
+{/snippet}
+
 {#snippet sectionLink(href: string, title: string, count: number, current: 'page' | 'location' | undefined, icon: Snippet)}
   <li>
     <a class="section-row" {href} aria-current={current}>
@@ -47,7 +54,7 @@
   </li>
 {/snippet}
 
-<AdminSplitWorkspace ariaLabel="System settings workspace" sidebarLabel="Settings sections" sidebarHeading="Settings sections" count={1 + Number(state.canNavigateToProtectedSettings) + Number(diagnosticsAllowed)} detailLabel={detailLabels[section]}>
+<AdminSplitWorkspace ariaLabel="System settings workspace" sidebarLabel="Settings sections" sidebarHeading="Settings sections" count={1 + Number(state.canNavigateToProtectedSettings) + Number(diagnosticsAllowed) + Number(portableConnectors.allowed)} detailLabel={detailLabels[section]}>
   {#snippet sidebar()}
     <nav aria-label="Available sections">
       <ul class="sections">
@@ -57,6 +64,9 @@
         {/if}
         {#if diagnosticsAllowed}
           {@render sectionLink(agentDiagnosticsReportingHref, 'Agent diagnostics', 2, section === 'agent-diagnostics' ? 'location' : undefined, diagnosticsIcon)}
+        {/if}
+        {#if portableConnectors.allowed}
+          {@render sectionLink(portableConnectorSettingsHref, 'Portable connectors', 1, section === 'portable-connectors' ? 'location' : undefined, portableConnectorsIcon)}
         {/if}
       </ul>
     </nav>
@@ -69,6 +79,9 @@
     {:else if section === 'provider-group-mappings'}
       {@render detailHeader('Group mappings', 'Provider values grant group access only through saved mappings.', providerMappingsIcon)}
       {@render providerMappings()}
+    {:else if section === 'portable-connectors'}
+      {@render detailHeader('Portable connectors', 'Instance-wide controls for portable connector drafts.', portableConnectorsIcon)}
+      {@render portableConnectorSettings()}
     {:else}
       {@render detailHeader('Filesystem', 'Controls for file operations on this instance.', folderIcon)}
       {@render filesystem()}
@@ -111,6 +124,22 @@
       </AdminToggleSetting>
       <AdminSettingsActions busy={state.busy} dirty={state.dirty} onDiscard={state.discard} onSave={state.save} />
     {/if}
+{/snippet}
+
+{#snippet portableConnectorSettings()}
+  {#if portableConnectors.loading}
+    <p role="status">Loading portable connector settings…</p>
+  {/if}
+  {#if portableConnectors.failure}
+    <p class="notice" role="alert">{portableConnectors.failure}</p>
+  {/if}
+  {#if portableConnectors.canRetry}
+    <Button variant="secondary" onclick={portableConnectors.load}>Try again</Button>
+  {/if}
+  {#if portableConnectors.ready}
+    <AdminToggleSetting title="Enable portable connectors" description="Let authenticated MCP authors create, revise, and validate their own drafts. Drafts are not published or run as tools." checked={portableConnectors.checked} disabled={portableConnectors.busy} onChange={portableConnectors.change} />
+    <AdminSettingsActions busy={portableConnectors.busy} dirty={portableConnectors.dirty} onDiscard={portableConnectors.discard} onSave={portableConnectors.save} />
+  {/if}
 {/snippet}
 
 {#snippet approvalDetails()}

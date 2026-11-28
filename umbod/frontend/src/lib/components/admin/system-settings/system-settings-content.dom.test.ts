@@ -6,6 +6,7 @@ import type { GroupCatalogue } from '#lib/admin/groups/port.js';
 import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { FilesystemSettings } from '#lib/admin/system-settings/domain/filesystem-settings.js';
 import type { FilesystemSettingsAdministration } from '#lib/admin/system-settings/filesystem-settings-port.js';
+import type { PortableConnectorSettingsAdministration } from '#lib/admin/system-settings/portable-connector-settings-port.js';
 import type { ProviderGroupMappings } from '#lib/admin/system-settings/domain/provider-group-mappings.js';
 import type { ProviderGroupMappingsAdministration } from '#lib/admin/system-settings/provider-group-mappings-port.js';
 import { deferred, InMemoryAgentBehaviourApi } from '#lib/agent-behaviour/in-memory.test-support.js';
@@ -21,6 +22,7 @@ const origin = 'http://localhost:3010';
 const settingsPath = '/admin/system-settings';
 const reportingPath = `${settingsPath}?section=agent-diagnostics`;
 const mappingsPath = `${settingsPath}?section=provider-group-mappings`;
+const portableConnectorsPath = `${settingsPath}?section=portable-connectors`;
 const patternsPath = '/admin/agent-diagnostics';
 
 let component: ReturnType<typeof mount> | undefined;
@@ -54,13 +56,13 @@ const builtInMappings: ProviderGroupMappings = { mappings: [], source: 'built_in
 function mountSettings(api: InMemoryAgentBehaviourApi, path: string, get: FilesystemSettingsAdministration['get'] = async () => filesystemValue, mappings: MappingsDependencies = {
   providerGroupMappings: { get: async () => builtInMappings, update: async () => builtInMappings },
   groups: { list: async () => [] }
-}): (nextPath: string) => void {
+}, portableConnectorSettings: PortableConnectorSettingsAdministration = { get: async () => ({ enabled: false }), update: async (body) => body }): (nextPath: string) => void {
   const current = writable(new URL(path, origin).searchParams);
   const query = fromStore(current);
   const filesystemSettings: FilesystemSettingsAdministration = { get, update: async () => filesystemValue };
   component = mount(SystemSettingsContent, {
     target: document.body,
-    props: { get query(): URLSearchParams { return query.current; }, filesystemSettings, ...mappings, diagnosticsConfiguration: api.configuration }
+    props: { get query(): URLSearchParams { return query.current; }, filesystemSettings, portableConnectorSettings, ...mappings, diagnosticsConfiguration: api.configuration }
   });
   return (nextPath: string): void => current.set(new URL(nextPath, origin).searchParams);
 }
@@ -139,6 +141,70 @@ test('loads diagnostics once on first visit and preserves both drafts across sec
   expect(openInstructions().value).toBe('Draft collection instructions');
   expect(button('Save changes').disabled).toBe(false);
   expect(get).toHaveBeenCalledTimes(1);
+});
+
+test('loads the portable connectors section on demand and saves both on and off explicitly', async (): Promise<void> => {
+  const get = vi.fn<PortableConnectorSettingsAdministration['get']>().mockResolvedValue({ enabled: false });
+  const update = vi.fn<PortableConnectorSettingsAdministration['update']>().mockImplementation(async (body) => body);
+  const navigate = mountSettings(configuredDiagnostics(), settingsPath, undefined, undefined, { get, update });
+  const link = element<HTMLAnchorElement>(`a[href="${portableConnectorsPath}"]`);
+  expect(get).not.toHaveBeenCalled();
+
+  navigate(link.getAttribute('href') ?? settingsPath);
+  const toggle = await vi.waitFor(() => element<HTMLInputElement>('input[aria-label="Enable portable connectors"]'));
+  expect(link.getAttribute('aria-current')).toBe('location');
+  expect(toggle.checked).toBe(false);
+  expect(document.body.textContent).toContain('Drafts are not published or run as tools.');
+
+  toggle.click();
+  await tick();
+  expect(update).not.toHaveBeenCalled();
+  button('Discard changes').click();
+  await tick();
+  expect(toggle.checked).toBe(false);
+
+  for (const enabled of [true, false]) {
+    toggle.click();
+    await tick();
+    button('Save changes').click();
+    await vi.waitFor(() => expect(button('Save changes').disabled).toBe(true));
+    expect(toggle.checked).toBe(enabled);
+    expect(update).toHaveBeenLastCalledWith({ enabled }, expect.any(AbortSignal));
+  }
+  expect(update).toHaveBeenCalledTimes(2);
+});
+
+test('does not show Off while loading portable connector settings has failed', async (): Promise<void> => {
+  const get = vi.fn<PortableConnectorSettingsAdministration['get']>()
+    .mockRejectedValueOnce(new HttpError(503, 'Service unavailable', null))
+    .mockResolvedValue({ enabled: true });
+  mountSettings(configuredDiagnostics(), portableConnectorsPath, undefined, undefined, {
+    get, update: async (body) => body
+  });
+  const selector = 'input[aria-label="Enable portable connectors"]';
+  await vi.waitFor(() => expect(element('[role="alert"]').textContent).toContain('Could not load portable connector settings.'));
+  expect(document.querySelector(selector)).toBeNull();
+
+  button('Try again').click();
+  await vi.waitFor(() => expect(element<HTMLInputElement>(selector).checked).toBe(true));
+});
+
+test('retains the portable connector draft after a failed save so it can be retried or discarded', async (): Promise<void> => {
+  const update = vi.fn<PortableConnectorSettingsAdministration['update']>().mockRejectedValue(new HttpError(503, 'Service unavailable', null));
+  mountSettings(configuredDiagnostics(), portableConnectorsPath, undefined, undefined, {
+    get: async () => ({ enabled: false }), update
+  });
+  const toggle = await vi.waitFor(() => element<HTMLInputElement>('input[aria-label="Enable portable connectors"]'));
+  toggle.click();
+  await tick();
+  button('Save changes').click();
+
+  await vi.waitFor(() => expect(element('[role="alert"]').textContent).toContain('Could not confirm that your changes were saved.'));
+  expect(toggle.checked).toBe(true);
+  expect(button('Save changes').disabled).toBe(false);
+  button('Discard changes').click();
+  await tick();
+  expect(toggle.checked).toBe(false);
 });
 
 test('opens instructions on demand and keeps the draft when the editor is closed', async (): Promise<void> => {

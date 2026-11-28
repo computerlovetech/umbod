@@ -10,6 +10,7 @@ description: Actor-owned administration views and shared administration controls
 - [Agent behaviour](./agent-behaviour/README.md) — Definition forms and self-reported diagnostic report inspection.
 - [Log analytics](./analytics/README.md) — Administrator query form and results table.
 - [MCP connectors](./downstream-mcp-connectors/README.md) — Shared and personal MCP workspaces and capability controls.
+- [Portable connectors](./portable-connectors/PortableConnectorWorkspace.svelte) — Inactive portable connector inventory and configuration editor.
 - [Personal MCP administration](./personal-mcp-servers/README.md) — Policy editing and pre-publication OAuth setup.
 - [Group management](./groups/README.md) — Central administrator group catalogue forms.
 - [Agent tokens](./agent-tokens/README.md) — Agent token inventory and lifecycle dialogs.

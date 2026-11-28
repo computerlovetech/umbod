@@ -2,9 +2,10 @@ from umbod.core.persistence import Database
 
 from .errors import SettingsPermissionDenied, SettingsStorageUnavailable
 from .models import (
-    EffectiveSystemSettings,
+    EffectiveFilesystemSettings,
     SettingsSource,
     SystemSettings,
+    UpdatePortableConnectorSettings,
     UpdateSystemSettings,
 )
 from .ports import SettingsNotConfigured, SystemSettingsReader, SystemSettingsWriter
@@ -12,7 +13,7 @@ from .service import SystemSettingsService
 from .store import DatabaseSystemSettingsStore
 
 __all__ = [
-    "EffectiveSystemSettings",
+    "EffectiveFilesystemSettings",
     "SettingsNotConfigured",
     "SettingsPermissionDenied",
     "SettingsSource",
@@ -21,6 +22,7 @@ __all__ = [
     "SystemSettingsReader",
     "SystemSettingsService",
     "SystemSettingsWriter",
+    "UpdatePortableConnectorSettings",
     "UpdateSystemSettings",
     "create_system_settings_service",
     "create_system_settings_service_with_defaults",

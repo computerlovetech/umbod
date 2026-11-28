@@ -6,12 +6,16 @@ from pydantic import BaseModel, ConfigDict, StrictBool
 DEFAULT_REQUIRE_MCP_FILE_DELETION_APPROVAL: Final[bool] = True
 
 
-class SystemSettings(BaseModel):
+class FilesystemSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     require_mcp_file_deletion_approval: StrictBool = (
         DEFAULT_REQUIRE_MCP_FILE_DELETION_APPROVAL
     )
+
+
+class SystemSettings(FilesystemSettings):
+    portable_connectors_enabled: StrictBool = False
 
 
 class SettingsSource(StrEnum):
@@ -20,10 +24,10 @@ class SettingsSource(StrEnum):
     BUILT_IN_DEFAULT = "built_in_default"
 
 
-class EffectiveSystemSettings(BaseModel):
+class EffectiveFilesystemSettings(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    settings: SystemSettings
+    settings: FilesystemSettings
     source: SettingsSource
 
 
@@ -31,3 +35,9 @@ class UpdateSystemSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     require_mcp_file_deletion_approval: StrictBool
+
+
+class UpdatePortableConnectorSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    portable_connectors_enabled: StrictBool

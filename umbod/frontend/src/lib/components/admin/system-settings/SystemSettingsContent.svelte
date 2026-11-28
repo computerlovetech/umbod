@@ -4,28 +4,34 @@
   import type { GroupCatalogue } from '#lib/admin/groups/port.js';
   import type { ProviderGroupMappingsAdministration } from '#lib/admin/system-settings/provider-group-mappings-port.js';
   import type { FilesystemSettingsAdministration } from '#lib/admin/system-settings/filesystem-settings-port.js';
+  import type { PortableConnectorSettingsAdministration } from '#lib/admin/system-settings/portable-connector-settings-port.js';
   import type { ConfigurationPort } from '#lib/agent-behaviour/api.js';
   import { ConfigurationState } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
   import ConfigurationEditor from '../agent-behaviour/ConfigurationEditor.svelte';
   import ProviderGroupMappingsEditor from './ProviderGroupMappingsEditor.svelte';
   import SystemSettingsWorkspace, { type SystemSettingsSection } from './SystemSettingsWorkspace.svelte';
   import { FilesystemSettingsState } from './filesystem-settings-state.svelte';
+  import { PortableConnectorSettingsState } from './portable-connector-settings-state.svelte';
   import { ProviderGroupMappingsState } from './provider-group-mappings-state.svelte';
 
-  let { query, filesystemSettings, providerGroupMappings, groups, diagnosticsConfiguration }: {
+  let { query, filesystemSettings, portableConnectorSettings, providerGroupMappings, groups, diagnosticsConfiguration }: {
     query: Pick<URLSearchParams, 'get'>;
     filesystemSettings: FilesystemSettingsAdministration;
+    portableConnectorSettings: PortableConnectorSettingsAdministration;
     providerGroupMappings: ProviderGroupMappingsAdministration;
     groups: Pick<GroupCatalogue, 'list'>;
     diagnosticsConfiguration: ConfigurationPort;
   } = $props();
 
   const filesystem = new FilesystemSettingsState(untrack(() => filesystemSettings));
+  const portableConnectors = new PortableConnectorSettingsState(untrack(() => portableConnectorSettings));
   const mappings = untrack(() => new ProviderGroupMappingsState(providerGroupMappings, groups));
   const configuration = new ConfigurationState(untrack(() => diagnosticsConfiguration));
   const section = $derived.by((): SystemSettingsSection => {
     const requested = query.get('section');
-    return requested === 'agent-diagnostics' || requested === 'provider-group-mappings' ? requested : 'filesystem';
+    return requested === 'agent-diagnostics' || requested === 'provider-group-mappings' || requested === 'portable-connectors'
+      ? requested
+      : 'filesystem';
   });
   let diagnosticsStarted = false;
 
@@ -37,12 +43,13 @@
 
   $effect(() => {
     if (section === 'provider-group-mappings') untrack(mappings.start);
+    if (section === 'portable-connectors') untrack(() => { void portableConnectors.load(); });
   });
 
   beforeNavigate(({ from, to, type, willUnload, shallow, cancel }): void => {
     if (shallow || (!willUnload && from?.route.id && from.route.id === to?.route.id)) return;
-    if (!configuration.dirty && !mappings.dirty) return;
-    const message = mappings.dirty
+    if (!configuration.dirty && !mappings.dirty && !portableConnectors.dirty) return;
+    const message = mappings.dirty || portableConnectors.dirty
       ? 'Leave System settings and lose your unsaved changes?'
       : 'Leave System settings and lose your unsaved reporting changes?';
     if (type === 'leave' || !window.confirm(message)) cancel();
@@ -52,13 +59,14 @@
     void filesystem.load();
     return (): void => {
       filesystem.dispose();
+      portableConnectors.dispose();
       mappings.dispose();
       configuration.dispose();
     };
   });
 </script>
 
-<SystemSettingsWorkspace state={filesystem} {section} diagnosticsAllowed={configuration.allowed}>
+<SystemSettingsWorkspace state={filesystem} {portableConnectors} {section} diagnosticsAllowed={configuration.allowed}>
   {#snippet providerMappings()}
     <ProviderGroupMappingsEditor state={mappings} />
   {/snippet}

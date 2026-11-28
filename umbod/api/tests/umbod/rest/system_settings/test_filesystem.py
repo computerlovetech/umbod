@@ -1,7 +1,4 @@
-import json
-from collections.abc import Iterator
 from contextlib import closing
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,51 +11,12 @@ from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.main import create_app, create_app_with_dependency_factories
 from umbod.rest.settings import APISettings
 
+from .conftest import jwt_headers
+
 _SETTINGS_PATH = "/api/admin/system-settings/filesystem"
 _FIELD = "require_mcp_file_deletion_approval"
 _SET_FALSE = {_FIELD: {"operation": "set", "value": False}}
 _RESET = {_FIELD: {"operation": "reset"}}
-
-
-@pytest.fixture
-def availability(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    path = tmp_path / "availability.json"
-    path.write_text(json.dumps({"connectors": []}), encoding="utf-8")
-    monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(path))
-
-
-def _jwt_headers(subject: str, membership: str) -> dict[str, str]:
-    token = json.dumps(
-        {
-            "signature": "trusted",
-            "claims": {"sub": subject, "groups": [membership]},
-        }
-    )
-    return {"Authorization": f"Bearer {token}"}
-
-
-@pytest.fixture
-def jwt_settings(availability: None) -> APISettings:
-    return APISettings(
-        rest={"metrics_enabled": False},
-        admin_authentication={
-            "mode": "jwt",
-            "environment": "development",
-            "jwt_header_name": "Authorization",
-        },
-        endpoints={"site_base_url": "https://site.example.com"},
-    )
-
-
-@pytest.fixture
-def admin_headers() -> dict[str, str]:
-    return _jwt_headers("administrator", "umbod-admins")
-
-
-@pytest.fixture
-def client(jwt_settings: APISettings) -> Iterator[TestClient]:
-    with TestClient(create_app(jwt_settings, [])) as transport:
-        yield transport
 
 
 def test_get_returns_uncached_built_in_default(
@@ -77,7 +35,7 @@ def test_explicit_false_is_shared_across_clients(
     updated = client.patch(_SETTINGS_PATH, json=_SET_FALSE, headers=admin_headers)
     with closing(TestClient(client.app)) as other:
         fetched = other.get(
-            _SETTINGS_PATH, headers=_jwt_headers("second-admin", "umbod-admins")
+            _SETTINGS_PATH, headers=jwt_headers("second-admin", "umbod-admins")
         )
 
     assert updated.status_code == fetched.status_code == 200
@@ -247,7 +205,7 @@ def test_access_denials_do_not_reach_settings_storage(
     headers = {"X-Umbod-Role": "administrator"}
     if access != "anonymous":
         headers.update(
-            _jwt_headers(
+            jwt_headers(
                 "caller", "umbod-users" if access == "non-admin" else "umbod-admins"
             )
         )

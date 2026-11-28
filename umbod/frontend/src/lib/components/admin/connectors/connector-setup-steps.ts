@@ -3,7 +3,8 @@ export const connectorSetupTypeStep = 'Type';
 export const connectorSetupBranchSteps = {
   native: ['Choose connector', 'Configure', 'Check & save'],
   openapi: ['Specification', 'API server', 'Configure'],
-  mcp: ['Source', 'Endpoint', 'Access', 'Configure']
+  mcp: ['Source', 'Endpoint', 'Access', 'Configure'],
+  portable: ['Choose connector', 'Configure']
 } as const;
 
 export function connectorSetupSteps(

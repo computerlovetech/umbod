@@ -2,7 +2,7 @@
   import { refreshAll } from '$app/navigation';
   import { page } from '$app/state';
   import type { Snippet } from 'svelte';
-  import { connectorWorkspaceHref, type UnifiedConnectorKind, type UnifiedConnectorRow } from '#lib/admin/unified-connectors.js';
+  import { connectorWorkspaceHref, portableConfigurationStatus, portableDuplicateReference, type UnifiedConnectorKind, type UnifiedConnectorRow } from '#lib/admin/unified-connectors.js';
   import { useToast } from '#lib/components/feedback/index.js';
   import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
   import { FormPendingState } from '#lib/components/admin/shared/form-pending-state.svelte.js';
@@ -25,14 +25,20 @@
 
   let { kind, items, unifiedRows, unavailableKinds = [], selectedId, detailLabel, onselect, metadata, actions, detail }: Props = $props();
 
-  const labels = { native: 'Native', openapi: 'OpenAPI', mcp: 'MCP' } satisfies Record<UnifiedConnectorKind, string>;
+  const labels = { native: 'Native', openapi: 'OpenAPI', mcp: 'MCP', portable: 'Portable' } satisfies Record<UnifiedConnectorKind, string>;
   const capability = $derived((page.shallow?.url ?? page.url).searchParams.get('capability'));
-  const linkedItems = $derived(unifiedRows?.filter((row) => row.kind !== kind).map((row) => ({
-    href: connectorWorkspaceHref(row, capability),
-    name: row.name,
-    iconDataUrl: row.iconDataUrl,
-    label: `${labels[row.kind]} · ${row.status}`
-  })));
+  const linkedItems = $derived(unifiedRows?.filter((row) => row.kind !== kind).map((row) => {
+    const reference = row.kind === 'portable' ? portableDuplicateReference(row, unifiedRows ?? []) : undefined;
+    return {
+      href: connectorWorkspaceHref(row, capability),
+      name: row.name,
+      iconDataUrl: row.iconDataUrl,
+      badge: row.kind === 'portable' ? labels.portable : undefined,
+      label: row.kind === 'portable'
+        ? `${row.status} · ${portableConfigurationStatus(row.configured)}${reference ? ` · ${reference}` : ''}`
+        : `${labels[row.kind]} · ${row.status}`
+    };
+  }));
   const count = $derived(items.length + (linkedItems?.length ?? 0));
   const unavailableLabels = $derived(unavailableKinds.map((unavailableKind) => labels[unavailableKind]).join(', '));
   const retry = new FormPendingState();

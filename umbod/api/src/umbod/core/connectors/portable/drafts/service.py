@@ -15,7 +15,7 @@ class PortableConnectorDrafts:
         self._store = store
 
     async def create(self, caller: CallerContext, source: str) -> DraftReceipt:
-        author = _authenticated_author(caller)
+        author = require_draft_author(caller)
         revision = _new_revision(uuid4(), source)
         await self._store.create(author, revision)
         return revision.receipt
@@ -23,16 +23,16 @@ class PortableConnectorDrafts:
     async def save_revision(
         self, caller: CallerContext, draft_id: UUID, expected_revision_id: UUID, source: str
     ) -> DraftReceipt:
-        author = _authenticated_author(caller)
+        author = require_draft_author(caller)
         revision = _new_revision(draft_id, source)
         await self._store.append(author, expected_revision_id, revision)
         return revision.receipt
 
     async def read_revision(self, caller: CallerContext, draft_id: UUID, revision_id: UUID) -> DraftRevision:
-        return await self._store.read(_authenticated_author(caller), draft_id, revision_id)
+        return await self._store.read(require_draft_author(caller), draft_id, revision_id)
 
 
-def _authenticated_author(caller: CallerContext) -> DraftAuthor:
+def require_draft_author(caller: CallerContext) -> DraftAuthor:
     subject = caller.subject
     if (
         caller.authentication not in (

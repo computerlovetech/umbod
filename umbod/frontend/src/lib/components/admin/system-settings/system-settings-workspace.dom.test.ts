@@ -6,6 +6,7 @@ import { AuthenticationRequiredError } from '#lib/admin/infrastructure/transport
 import { deferred } from '#lib/files/fixtures.test-support.js';
 import SystemSettingsWorkspace from './SystemSettingsWorkspace.svelte';
 import { FilesystemSettingsState } from './filesystem-settings-state.svelte';
+import { PortableConnectorSettingsState } from './portable-connector-settings-state.svelte';
 
 type ApprovalSource = FilesystemSettings['require_mcp_file_deletion_approval']['source'];
 
@@ -28,7 +29,8 @@ function mountWith(api: FilesystemSettingsAdministration): Promise<void> {
   state = new FilesystemSettingsState(api);
   const diagnostics = createRawSnippet(() => ({ render: (): string => '<h2>Agent diagnostics</h2>' }));
   const providerMappings = createRawSnippet(() => ({ render: (): string => '<p>Provider mappings editor</p>' }));
-  component = mount(SystemSettingsWorkspace, { target: document.body, props: { state, section: 'filesystem', diagnosticsAllowed: true, diagnostics, providerMappings } });
+  const portableConnectors = new PortableConnectorSettingsState({ get: async () => ({ enabled: false }), update: async (body) => body });
+  component = mount(SystemSettingsWorkspace, { target: document.body, props: { state, portableConnectors, section: 'filesystem', diagnosticsAllowed: true, diagnostics, providerMappings } });
   return state.load();
 }
 
@@ -49,7 +51,9 @@ test('lists all settings sections and displays only Filesystem by default', asyn
   await tick();
 
   const sidebar = document.querySelector('aside[aria-label="Settings sections"]');
-  expect(sidebar?.querySelectorAll('li')).toHaveLength(3);
+  expect(sidebar?.querySelectorAll('li')).toHaveLength(4);
+  expect(sidebar?.querySelector('a[href="/admin/system-settings?section=portable-connectors"]')?.textContent).toMatch(/Portable connectors\s*1 setting/);
+  expect(document.querySelector('input[aria-label="Enable portable connectors"]')).toBeNull();
   expect(sidebar?.querySelector('a[aria-current="page"]')?.textContent).toMatch(/Filesystem\s*1 setting/);
   expect(sidebar?.querySelector('a[href="/admin/system-settings?section=agent-diagnostics"]')?.textContent).toMatch(/Agent diagnostics\s*2 settings/);
   expect(sidebar?.querySelector('a[href="/admin/system-settings?section=provider-group-mappings"]')?.textContent).toMatch(/Group mappings\s*1 setting/);

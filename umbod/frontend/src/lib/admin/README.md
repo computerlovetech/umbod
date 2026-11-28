@@ -44,6 +44,7 @@ description: "Administration contracts, browser clients and feature state for co
 - [openapi-connectors-api.ts](./openapi-connectors-api.ts) — OpenAPI administration HTTP adapter.
 - [openapi-connectors-api.spec.ts](./openapi-connectors-api.spec.ts) — OpenAPI API tests.
 - [openapi-setup.ts](./openapi-setup.ts) — OpenAPI setup contracts.
+- [Portable connectors](./portable-connectors/http-route.ts) — Validated inventory and configuration replacement for existing portable submissions.
 - [selected-detail-facade.ts](./selected-detail-facade.ts) — Workspace detail selection and failures.
 - [selected-detail-facade.test.ts](./selected-detail-facade.test.ts) — Selected detail tests.
 - [tool-activation-capability.ts](./tool-activation-capability.ts) — Tool activation save port.

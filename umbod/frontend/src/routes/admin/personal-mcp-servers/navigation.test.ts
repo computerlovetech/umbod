@@ -7,7 +7,8 @@ const api = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), tools: vi.fn(), pro
 vi.mock('#lib/admin/infrastructure/admin-api.js', () => ({ adminApi: () => ({
   downstreamMcpConnectors: api,
   connectors: { connectors: { list: async (): Promise<{ connectors: [] }> => ({ connectors: [] }) } },
-  openApiConnectors: { connectors: { list: async (): Promise<{ connectors: [] }> => ({ connectors: [] }) } }
+  openApiConnectors: { connectors: { list: async (): Promise<{ connectors: [] }> => ({ connectors: [] }) } },
+  portableConnectors: { list: async (): Promise<{ connectors: [] }> => ({ connectors: [] }) }
 }) }));
 beforeEach(() => vi.clearAllMocks());
 

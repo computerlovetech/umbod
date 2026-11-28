@@ -26,10 +26,12 @@ from umbod.core.connectors.portable.draft_validation import (
     ValidationChecks,
     ValidationOutcome,
 )
-from umbod.core.connectors.portable.draft_validation.models import CheckStatus, DiagnosticStage, ValidationStatus
+from umbod.core.connectors.portable.draft_validation.models import (
+    CheckStatus, DiagnosticStage, ValidatedManifestSnapshot, ValidatedSource, ValidationStatus,
+)
 from umbod.core.connectors.portable.drafts import MAX_DRAFT_SOURCE_BYTES
 from .draft_imports import inspect_handler_imports, module_on_import_line
-from .draft_manifest_worker import INVALID_MANIFEST_EXIT_CODE
+from .draft_manifest_worker import INVALID_MANIFEST_EXIT_CODE, MAX_MANIFEST_FRAME_BYTES
 from .sandbox import PORTABLE_LIMITS, bootstrap_portable_sdk
 
 _SOURCE_FEED = "<python-input-1>"
@@ -160,7 +162,8 @@ class MontyDraftSourceValidator:
             payload = dumps(raw_manifest, allow_nan=False).encode("ascii")
         except (TypeError, ValueError):
             return progress.invalid(_invalid_manifest())
-        if not await _validate_manifest_frame(payload):
+        snapshot = await _validate_manifest_frame(payload)
+        if snapshot is None:
             return progress.invalid(_invalid_manifest())
         progress.manifest = "passed"
         if get_running_loop().time() >= expires_at:
@@ -172,8 +175,12 @@ class MontyDraftSourceValidator:
             await bootstrap_portable_sdk(session, self._mount)
             progress.analysing_source = True
             warnings, truncated = await inspect_handler_imports(session, source)
-        return progress.result(
-            "valid", warnings, handler_imports="warnings" if warnings or truncated else "passed", truncated=truncated
+        return ValidatedSource(
+            status="valid",
+            checks=ValidationChecks(progress.load, progress.manifest, "warnings" if warnings or truncated else "passed", "not_checked"),
+            diagnostics=warnings,
+            diagnostics_truncated=truncated,
+            manifest=snapshot,
         )
 
 
@@ -185,14 +192,14 @@ def _profile_id(mount: MountDir) -> str:
     return f"portable-monty-{__version__}-{digest.hexdigest()}-rules-{_VALIDATION_RULES_VERSION}"
 
 
-async def _validate_manifest_frame(payload: bytes) -> bool:
+async def _validate_manifest_frame(payload: bytes) -> ValidatedManifestSnapshot | None:
     worker = await create_subprocess_exec(
         executable, "-c",
         "from umbod.infrastructure.portable_connectors.draft_manifest_worker import main; raise SystemExit(main())",
-        stdin=PIPE, stdout=DEVNULL, stderr=DEVNULL,
+        stdin=PIPE, stdout=PIPE, stderr=DEVNULL,
     )
     try:
-        await worker.communicate(payload)
+        frame, _ = await worker.communicate(payload)
     except CancelledError:
         try:
             worker.kill()
@@ -200,10 +207,10 @@ async def _validate_manifest_frame(payload: bytes) -> bool:
             pass
         await worker.wait()
         raise
-    if worker.returncode == 0:
-        return True
+    if worker.returncode == 0 and len(frame) <= MAX_MANIFEST_FRAME_BYTES:
+        return ValidatedManifestSnapshot.model_validate_json(frame)
     if worker.returncode == INVALID_MANIFEST_EXIT_CODE:
-        return False
+        return None
     raise DraftValidationUnavailable("The draft validator is unavailable")
 
 

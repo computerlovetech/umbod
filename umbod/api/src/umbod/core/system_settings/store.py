@@ -14,7 +14,7 @@ from umbod.core.persistence import (
 )
 
 from .errors import SettingsStorageUnavailable
-from .models import SystemSettings, UpdateSystemSettings
+from .models import SystemSettings, UpdatePortableConnectorSettings, UpdateSystemSettings
 from .ports import SettingsNotConfigured
 from .schema import (
     SYSTEM_SETTINGS_KEY,
@@ -51,17 +51,15 @@ class DatabaseSystemSettingsStore:
         try:
             async with self._database.read_session() as session:
                 row = await _read_settings_row(session)
-                if (
-                    row is None
-                    or "require_mcp_file_deletion_approval"
-                    not in row.settings.model_fields_set
-                ):
+                if row is None or not row.settings.model_fields_set:
                     return SettingsNotConfigured.UNSET
                 return row.settings
         except Exception:
             raise SettingsStorageUnavailable() from None
 
-    async def update(self, command: UpdateSystemSettings) -> SystemSettings:
+    async def update(
+        self, command: UpdateSystemSettings | UpdatePortableConnectorSettings
+    ) -> SystemSettings:
         try:
             async with self._database.session(
                 mode=TransactionMode.SERIALIZED_WRITE

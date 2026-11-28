@@ -1,6 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 type ValidationStatus = Literal["valid", "invalid", "inconclusive"]
@@ -38,6 +40,21 @@ class ValidationOutcome:
     checks: ValidationChecks
     diagnostics: tuple[DraftDiagnostic, ...]
     diagnostics_truncated: bool
+
+
+class ValidatedManifestSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    manifest_version: Literal[1, 2]
+    connector_id: str
+    display_name: str
+    description: str
+    configuration_schema_json: str = Field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedSource(ValidationOutcome):
+    manifest: ValidatedManifestSnapshot = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)

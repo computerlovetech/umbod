@@ -1,13 +1,15 @@
 from fastmcp.exceptions import ToolError
 
 from umbod.core.capabilities.tools.names import mangle_public_tool_name
+from umbod.mcp.portable_draft_names import PORTABLE_DRAFT_TOOL_NAMES
 
 
 DIAGNOSTIC_TOOL_NAME = "report_diagnostic"
+_RESERVED_BUILTIN_TOOL_NAMES = PORTABLE_DRAFT_TOOL_NAMES | {DIAGNOSTIC_TOOL_NAME}
 
 
 def connector_tool_name_available(prefix: str, operation: str) -> bool:
-    return operation != DIAGNOSTIC_TOOL_NAME and mangle_public_tool_name(prefix, operation) != DIAGNOSTIC_TOOL_NAME
+    return not _RESERVED_BUILTIN_TOOL_NAMES.intersection({operation, mangle_public_tool_name(prefix, operation)})
 
 
 def ensure_connector_tool_name_available(prefix: str, operation: str) -> None:

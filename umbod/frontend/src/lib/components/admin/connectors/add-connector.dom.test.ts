@@ -1,6 +1,8 @@
 import { goto } from '$app/navigation';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { submittedConnector } from '#lib/admin/portable-connectors/fixtures.test-support.js';
+import { portableRow } from '#lib/admin/unified-connectors.js';
 import AddConnector from './AddConnector.svelte';
 import { AddConnectorState } from './add-connector-state.svelte.js';
 
@@ -99,4 +101,48 @@ test('keeps the selected type and re-enables Next when navigation fails', async 
   expect(button('OpenAPI specification').getAttribute('aria-pressed')).toBe('true');
   expect(button('Close').disabled).toBe(false);
   expect(toastError).toHaveBeenCalledTimes(1);
+});
+
+async function choosePortable(rows: readonly ReturnType<typeof portableRow>[]): Promise<void> {
+  const state = new AddConnectorState();
+  state.registerSetup({ kind: 'mcp', nativeAvailable: () => false, nativeUnavailable: () => false, disabled: () => false, create: vi.fn() });
+  component = mount(AddConnector, { target: document.body, props: { state, unifiedRows: rows } });
+  await tick();
+  button('Add connector').click();
+  await tick();
+  const portable = button('Portable connector');
+  expect(portable.textContent).toContain('Configure a portable connector that’s already been submitted.');
+  expect(portable.disabled).toBe(false);
+  portable.click();
+  await tick();
+  button('Next').click();
+  await tick();
+  expect(goto).not.toHaveBeenCalled();
+  expect(pickerDialog()?.textContent).toContain('Choose a submitted portable connector');
+}
+
+test('opens the existing configuration route from the portable submission picker', async (): Promise<void> => {
+  await choosePortable([portableRow(submittedConnector)]);
+  expect(pickerDialog()?.textContent).not.toMatch(/Source|Publish|Activate|Check & save|Credentials/i);
+  const submission = document.querySelector<HTMLButtonElement>('[aria-label="Submitted portable connectors"] button');
+  if (!submission) throw new Error('Missing submitted connector');
+  expect(submission.textContent).toContain(submittedConnector.name);
+  const navigationComplete = Promise.withResolvers<void>();
+  vi.mocked(goto).mockReturnValue(navigationComplete.promise);
+  submission.click();
+  await tick();
+  expect(goto).toHaveBeenCalledExactlyOnceWith(`/admin/portable-connectors?connector=${submittedConnector.connector_id}`, { reset: false });
+  expect(submission.disabled).toBe(true);
+  navigationComplete.resolve();
+  await vi.waitFor(() => expect(pickerDialog()).toBeNull());
+});
+
+test('offers no create action when no portable connectors have been submitted', async (): Promise<void> => {
+  await choosePortable([]);
+  expect(pickerDialog()?.textContent).toContain('No portable connectors have been submitted yet.');
+  expect(pickerDialog()?.querySelectorAll('button')).toHaveLength(2);
+  button('Back').click();
+  await tick();
+  expect(button('Portable connector').getAttribute('aria-pressed')).toBe('true');
+  expect(goto).not.toHaveBeenCalled();
 });

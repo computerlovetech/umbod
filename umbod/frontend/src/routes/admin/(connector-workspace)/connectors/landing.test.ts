@@ -2,11 +2,13 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { ConnectorApiItem } from '#lib/admin/connectors.js';
 import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import { summaryFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
+import { submittedConnector } from '#lib/admin/portable-connectors/fixtures.test-support.js';
 import { load } from './+page';
+import { load as loadPortable } from '../portable-connectors/+page';
 
 type LoadEvent = Parameters<typeof load>[0];
 
-const api = vi.hoisted(() => ({ native: vi.fn(), openapi: vi.fn(), mcp: vi.fn(), getNative: vi.fn() }));
+const api = vi.hoisted(() => ({ native: vi.fn(), openapi: vi.fn(), mcp: vi.fn(), portable: vi.fn(), getNative: vi.fn() }));
 vi.mock('#lib/admin/infrastructure/admin-api.js', () => ({ adminApi: () => ({
   connectors: {
     connectors: { list: api.native, get: api.getNative, getConfiguration: vi.fn() },
@@ -15,7 +17,8 @@ vi.mock('#lib/admin/infrastructure/admin-api.js', () => ({ adminApi: () => ({
     resources: { list: vi.fn() }
   },
   openApiConnectors: { connectors: { list: api.openapi } },
-  downstreamMcpConnectors: { list: api.mcp }
+  downstreamMcpConnectors: { list: api.mcp },
+  portableConnectors: { list: async (): Promise<{ connectors: typeof submittedConnector[] }> => api.portable() ?? { connectors: [] } }
 }) }));
 
 afterEach(() => vi.resetAllMocks());
@@ -63,6 +66,19 @@ describe('connector workspace landing', () => {
     api.mcp.mockResolvedValue({ connectors: [summaryFixture()] });
 
     await expect(loadLanding('?setup=native')).resolves.toMatchObject({ nativeAvailable: true, unifiedRows: [{ kind: 'mcp' }] });
+    expect(api.getNative).not.toHaveBeenCalled();
+  });
+
+  test('lands on the configuration route when only a portable submission is present', async (): Promise<void> => {
+    api.native.mockResolvedValue({ connectors: [] });
+    api.openapi.mockResolvedValue({ connectors: [] });
+    api.mcp.mockResolvedValue({ connectors: [] });
+    api.portable.mockResolvedValue({ connectors: [submittedConnector] });
+
+    const location = `/admin/portable-connectors?connector=${submittedConnector.connector_id}`;
+    await expect(loadLanding()).rejects.toMatchObject({ status: 307, location });
+    await expect(loadPortable({ url: new URL(location, 'https://umbod.test'), fetch: vi.fn() } as unknown as Parameters<typeof loadPortable>[0]))
+      .resolves.toMatchObject({ selected: { id: submittedConnector.connector_id, kind: 'portable', configured: false } });
     expect(api.getNative).not.toHaveBeenCalled();
   });
 

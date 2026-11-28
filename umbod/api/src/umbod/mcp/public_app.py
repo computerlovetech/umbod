@@ -56,6 +56,8 @@ from umbod_sdk.connectors.discovery import load_connector_plugins
 from umbod.mcp.agent_instructions import register_agent_instructions
 from umbod.mcp.agent_behaviour.composition import register_configured_agent_behaviour
 from umbod.mcp.agent_behaviour.reservations import ensure_connector_tool_name_available
+from umbod.mcp.administrator.authorization import current_administrator_is_authorized
+from umbod.mcp.portable_drafts import PortableDraftValidationRuntime, register_portable_drafts
 from umbod.mcp.http_transport import MAX_MCP_REQUEST_BODY_BYTES, create_mcp_http_app
 from umbod.mcp.administrator.composition import register_configured_administrator_tools
 from umbod.mcp.auth.transport import AuthenticatedMcpTransport, McpTransportAuthentication, UnauthenticatedMcpTransport, configured_mcp_transport_authentication, fastmcp_authentication_provider
@@ -164,6 +166,12 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authenticati
     signals = create_mcp_signals(invocation_log_sink, metrics_recorder, audit_recorder, telemetry.application_failures)
     usage_runtime = create_mcp_usage_runtime(settings, persistence_runtime.database, signals, telemetry.application_failures)
     publisher = McpInvocationPublisher(signals)
+    draft_validation = PortableDraftValidationRuntime(persistence_runtime.database)
+
+    @asynccontextmanager
+    async def lifespan(server: FastMCP) -> AsyncIterator[dict[str, object]]:
+        async with usage_runtime.lifespan(server), draft_validation.lifespan(auth_provider is not None):
+            yield {}
 
     middleware: list[Middleware] = [McpCapabilityCompletionMiddleware(signals.capability_completed, McpAuditIdentityAdapter(), PublishingSignalFailureHandler(telemetry.application_failures), time.monotonic, time.time_ns), McpResponseMetadataMiddleware(), McpProtocolMetricsMiddleware(metrics_recorder, clock=time.monotonic), McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
     approval_state_key = settings.connector_security.approval_state_key
@@ -171,7 +179,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authenticati
         if settings.admin_authentication.environment == 'production':
             raise ValueError('Connector approval state key is required in production')
         approval_state_key = secrets.token_urlsafe(48)
-    mcp = FastMCP(name=settings.runtime.app_name, version=UMBOD_RELEASE, auth=auth_provider, middleware=middleware, lifespan=usage_runtime.lifespan, request_state_security=RequestStateSecurity(keys=[approval_state_key], ttl=300.0, audience=f'{settings.runtime.app_name}:connector-approval'))
+    mcp = FastMCP(name=settings.runtime.app_name, version=UMBOD_RELEASE, auth=auth_provider, middleware=middleware, lifespan=lifespan, request_state_security=RequestStateSecurity(keys=[approval_state_key], ttl=300.0, audience=f'{settings.runtime.app_name}:connector-approval'))
     agent_auth_enabled = isinstance(auth_provider, PublicAgentMultiAuth)
     instance_permissions = create_group_instance_permission_reader(persistence_runtime.database)
     caller_snapshots = McpCallerSnapshotMiddleware(mcp, ConfiguredGroupMembershipSource(settings, persistence_runtime.database), instance_permissions)
@@ -246,6 +254,17 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authenticati
         mcp, McpObservedToolRegistrar(mcp, publisher), persistence_runtime.database,
         allow_local=settings.admin_authentication.environment != 'production',
     )
+    if auth_provider is not None:
+        register_portable_drafts(
+            mcp, McpObservedToolRegistrar(mcp, publisher), persistence_runtime.database,
+            partial(create_system_settings_service_with_defaults, persistence_runtime.database, defaults=ConfiguredSystemSettingsDefaults(settings)),
+            draft_validation,
+            partial(
+                current_administrator_is_authorized,
+                settings.admin_authentication.membership_claim,
+                settings.admin_authentication.required_membership,
+            ),
+        )
     await initialize_openapi_discovery(mcp)
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, signals, mcp.execution_pipelines, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes)
     mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.execution_pipelines, telemetry.application_failures)

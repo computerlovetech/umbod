@@ -1,4 +1,5 @@
 import { FilesystemSettingsRoute } from '../system-settings/filesystem-settings-route';
+import { PortableConnectorSettingsRoute } from '../system-settings/portable-connector-settings-route';
 import { ProviderGroupMappingsRoute } from '../system-settings/provider-group-mappings-route';
 import { NamespacesRoute } from '../filesystem/namespaces-route';
 import { AgentTokensRoute } from '../agent-tokens/http-route';
@@ -11,6 +12,8 @@ import { PersonalOAuthSetupRoute } from '../personal-mcp-servers/setup-route';
 import { CapabilityDescriptionsRoute } from '../capability-descriptions-api';
 import { ConnectorsApi } from '../connectors-api';
 import { DownstreamMcpConnectorsRoute } from '../downstream-mcp-connectors-api';
+import { PortableConnectorsRoute } from '../portable-connectors/http-route';
+import type { PortableConnectors } from '../portable-connectors/port';
 import { GroupPermissionsApi } from '../group-permissions-api';
 import { HttpInstanceConfigurationRoute } from '../instance-configuration-api';
 import { OpenApiConnectorsApi } from '../openapi-connectors-api';
@@ -22,6 +25,7 @@ import { browserTransport, type Transport } from './transport';
 export class AdminApi {
   readonly namespaces: NamespacesRoute;
   readonly filesystemSettings: FilesystemSettingsRoute;
+  readonly portableConnectorSettings: PortableConnectorSettingsRoute;
   readonly providerGroupMappings: ProviderGroupMappingsRoute;
   readonly agentTokens: AgentTokens;
   readonly analytics: AnalyticsRoute;
@@ -34,12 +38,14 @@ export class AdminApi {
   readonly groupPermissions: GroupPermissionsApi;
   readonly instanceConfiguration: HttpInstanceConfigurationRoute;
   readonly downstreamMcpConnectors: DownstreamMcpConnectorsRoute;
+  readonly portableConnectors: PortableConnectors;
   readonly openApiConnectors: OpenApiConnectorsApi;
   readonly mcpEndpointSetup: McpEndpointSetup;
 
   constructor(transport: Transport) {
     this.namespaces = new NamespacesRoute(transport);
     this.filesystemSettings = new FilesystemSettingsRoute(transport);
+    this.portableConnectorSettings = new PortableConnectorSettingsRoute(transport);
     this.providerGroupMappings = new ProviderGroupMappingsRoute(transport);
     this.agentTokens = new AgentTokensRoute(transport);
     this.analytics = new AnalyticsRoute(transport);
@@ -52,6 +58,7 @@ export class AdminApi {
     this.groupPermissions = new GroupPermissionsApi(transport, this.groups);
     this.instanceConfiguration = new HttpInstanceConfigurationRoute(transport);
     this.downstreamMcpConnectors = new DownstreamMcpConnectorsRoute(transport);
+    this.portableConnectors = new PortableConnectorsRoute(transport);
     this.openApiConnectors = new OpenApiConnectorsApi(transport);
     this.mcpEndpointSetup = new McpEndpointSetupRoute(transport);
   }

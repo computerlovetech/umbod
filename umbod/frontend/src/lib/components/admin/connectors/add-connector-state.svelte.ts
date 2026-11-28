@@ -1,16 +1,17 @@
 import { createContext } from 'svelte';
 
-import type { UnifiedConnectorKind } from '#lib/admin/unified-connectors.js';
+import type { ExistingSetupKind, UnifiedConnectorKind } from '#lib/admin/unified-connectors.js';
 
 export type ConnectorSetupKind = UnifiedConnectorKind;
 
 type ConnectorSetupEntry = {
-  kind: ConnectorSetupKind;
   nativeAvailable: () => boolean;
   nativeUnavailable: () => boolean;
   disabled: () => boolean;
-  create: (trigger: HTMLButtonElement) => void;
-};
+} & (
+  | { kind: ExistingSetupKind; create: (trigger: HTMLButtonElement) => void }
+  | { kind: 'portable' }
+);
 
 export const [getAddConnector, provideAddConnector] = createContext<AddConnectorState>();
 
@@ -19,12 +20,14 @@ export class AddConnectorState {
   #open = $state(false);
   #handingOff = $state(false);
   #kind = $state<ConnectorSetupKind>();
+  #choosingPortable = $state(false);
   #trigger: HTMLButtonElement | undefined;
 
   get open(): boolean { return this.#open; }
   get handingOff(): boolean { return this.#handingOff; }
   get kind(): ConnectorSetupKind | undefined { return this.#kind; }
   get trigger(): HTMLButtonElement | undefined { return this.#trigger; }
+  get choosingPortable(): boolean { return this.#choosingPortable; }
 
   get entry(): ConnectorSetupEntry | undefined { return this.#entry; }
 
@@ -40,6 +43,7 @@ export class AddConnectorState {
 
   show = (): void => {
     this.#kind = undefined;
+    this.#choosingPortable = false;
     this.#open = true;
   };
 
@@ -49,7 +53,16 @@ export class AddConnectorState {
 
   reopen = (kind: ConnectorSetupKind): void => {
     this.select(kind);
+    this.#choosingPortable = false;
     this.#open = true;
+  };
+
+  choosePortable = (): void => {
+    this.#choosingPortable = true;
+  };
+
+  backToType = (): void => {
+    this.#choosingPortable = false;
   };
 
   beginHandoff(): void {
