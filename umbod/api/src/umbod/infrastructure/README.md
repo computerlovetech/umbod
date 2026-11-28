@@ -15,6 +15,7 @@ description: "Concrete storage and metrics adapters with explicit infrastructure
 - [mcp_registry/](./mcp_registry/README.md) — Official MCP Registry search driver and composition.
 - [metrics/](./metrics/README.md) — Metrics exporters, vendor clients, and HTTP scrape listeners.
 - [persistence/](./persistence/README.md) — Database drivers, schema readiness and explicit personal-discovery preparation.
+- [portable_connectors/](./portable_connectors/README.md) — Isolated Monty adapter for portable connector source.
 - [telemetry/](./telemetry/README.md) — Independently configured SQLite analytics drivers and runtime composition.
 
 # Related links

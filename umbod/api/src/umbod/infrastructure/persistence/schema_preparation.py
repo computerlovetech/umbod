@@ -44,6 +44,7 @@ from umbod.core.connectors.openapi.stores import (
     CONNECTOR_TABLE,
     CURRENT_CATALOG_HEADER_TABLE,
 )
+from umbod.core.connectors.portable.drafts.schema import PORTABLE_CONNECTOR_DRAFT_TABLES
 from umbod.core.permissions.stores.schema import (
     CAPABILITY_PERMISSION_TABLE,
     CONNECTOR_PERMISSION_TABLE,
@@ -80,6 +81,7 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     *INSTALL_CLAIM_TABLES,
     *USAGE_TABLES,
     *AGENT_BEHAVIOUR_TABLES,
+    *PORTABLE_CONNECTOR_DRAFT_TABLES,
     SYSTEM_SETTINGS_TABLE,
     CONNECTOR_PERMISSION_TABLE,
     CAPABILITY_PERMISSION_TABLE,
