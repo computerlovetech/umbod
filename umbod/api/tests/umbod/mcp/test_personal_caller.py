@@ -14,6 +14,7 @@ from umbod.config.app import (
     PersonalConnectionsConfig,
     RuntimeConfig,
 )
+from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 from umbod.core.connectors.downstream_mcp.personal.connections import CanonicalPrincipal, PersonalCaller, UnavailablePersonalCaller, ResolvedPersonalIdentity
 from umbod.core.connectors.downstream_mcp.personal.connections.principal import canonical_principal
 from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
@@ -85,7 +86,7 @@ async def test_verified_rest_and_upstream_mcp_claims_have_identical_ownership(
     )
     context = auth_context_var.set(AuthenticatedUser(token))
     try:
-        mcp = await McpPersonalCallerProvider(settings).get_caller()
+        mcp = await McpPersonalCallerProvider(settings, INHERITED_GROUP_MEMBERSHIP).get_caller()
         assert isinstance(mcp, PersonalCaller)
         assert rest == mcp.principal
         assert rest is not None
@@ -221,7 +222,7 @@ async def test_authenticated_local_mcp_matches_rest_without_mutating_global_clai
     try:
         assert authenticated_personal_mcp_claims(settings, personal_identity_policy_from_app_config(settings), claims) == rest_claims
         rest = _resolved_principal(settings, rest_claims)
-        runtime = await McpPersonalCallerProvider(settings).get_caller()
+        runtime = await McpPersonalCallerProvider(settings, INHERITED_GROUP_MEMBERSHIP).get_caller()
         assert isinstance(runtime, PersonalCaller)
         assert runtime.principal == rest
         assert runtime.groups.group_ids == expected_groups
@@ -257,7 +258,7 @@ async def test_local_mcp_rejects_original_machine_claims_before_normalization(cl
     token = AccessToken(token="authenticated", client_id="client", scopes=[], claims=claims)
     context = auth_context_var.set(AuthenticatedUser(token))
     try:
-        assert isinstance(await McpPersonalCallerProvider(_local_settings()).get_caller(), UnavailablePersonalCaller)
+        assert isinstance(await McpPersonalCallerProvider(_local_settings(), INHERITED_GROUP_MEMBERSHIP).get_caller(), UnavailablePersonalCaller)
     finally:
         auth_context_var.reset(context)
 
@@ -265,7 +266,7 @@ async def test_local_mcp_rejects_original_machine_claims_before_normalization(cl
 async def test_local_personal_mcp_still_requires_current_authenticated_context() -> None:
     context = auth_context_var.set(None)
     try:
-        assert isinstance(await McpPersonalCallerProvider(_local_settings()).get_caller(), UnavailablePersonalCaller)
+        assert isinstance(await McpPersonalCallerProvider(_local_settings(), INHERITED_GROUP_MEMBERSHIP).get_caller(), UnavailablePersonalCaller)
     finally:
         auth_context_var.reset(context)
 
@@ -286,7 +287,7 @@ async def test_disabled_policy_never_maps_claims() -> None:
 
 
 async def test_mcp_identity_is_read_from_current_context_without_caching() -> None:
-    provider = McpPersonalCallerProvider(_settings())
+    provider = McpPersonalCallerProvider(_settings(), INHERITED_GROUP_MEMBERSHIP)
     context = auth_context_var.set(None)
     try:
         assert isinstance(await provider.get_caller(), UnavailablePersonalCaller)

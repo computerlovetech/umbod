@@ -53,6 +53,7 @@ description: "Administration contracts, browser clients and feature state for co
 - [tool-output-schema.test.ts](./tool-output-schema.test.ts) — Output schema tests.
 - [filesystem](./filesystem/README.md) — Root filesystem access administration.
 - [Filesystem system settings](./system-settings/filesystem-settings-route.ts) — Validated read, set, and reset operations for the instance approval policy.
+- [Provider group mappings](./system-settings/provider-group-mappings-route.ts) — Validated read, set, and reset operations for stored OAuth claim-to-group mappings.
 - [groups](./groups/README.md) — Shared group catalogue.
 - [infrastructure](./infrastructure/README.md) — Transport and API composition.
 - [operations](./operations/README.md) — Browser mutation dispatch.

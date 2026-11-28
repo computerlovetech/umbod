@@ -1,4 +1,5 @@
 from tests.umbod.mcp.connectors.downstream_mcp.discovery_operation_support import personal_discovery_with_policy
+from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 from umbod.logging import create_application_failure_signal
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryStores, create_downstream_discovery_runtime
 from umbod.mcp.listeners import create_mcp_signals
@@ -356,7 +357,7 @@ async def test_prompt_and_resources_require_publication_and_activation(monkeypat
         {'weather': _downstream()}, ProviderOptions(None, None),
         PermitAllConnectorInvocationPolicy(), InMemoryMcpMetricsRecorder(),
         DisabledPersonalToolRuntime(), create_inmemory_runtime().database,
-        GroupDownstreamToolPermissionPolicy(permissions),
+        GroupDownstreamToolPermissionPolicy(permissions, INHERITED_GROUP_MEMBERSHIP),
     )
     monkeypatch.setattr('umbod.mcp.connectors.downstream_mcp.permissions.get_access_token', lambda : SimpleNamespace(claims={'groups': ['support']}))
     await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="tool", capability_key='forecast'), ActivationStatus.DISABLED)
@@ -456,7 +457,7 @@ async def test_group_permission_filters_listing_and_denies_direct_lookup_and_sta
         {'weather': _downstream()}, ProviderOptions(None, None),
         PermitAllConnectorInvocationPolicy(), InMemoryMcpMetricsRecorder(),
         DisabledPersonalToolRuntime(), create_inmemory_runtime().database,
-        GroupDownstreamToolPermissionPolicy(permissions),
+        GroupDownstreamToolPermissionPolicy(permissions, INHERITED_GROUP_MEMBERSHIP),
     )
     monkeypatch.setattr('umbod.mcp.connectors.downstream_mcp.permissions.get_access_token', lambda : SimpleNamespace(claims={'groups': ['engineering']}))
     stale_tool = await provider.get_tool('weather_forecast')

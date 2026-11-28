@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException
 
-from umbod.core.callers import AuthenticationProvenance, CallerContext
+from umbod.core.callers import AuthenticationProvenance, CallerContext, LegacyGroupClaimPolicy
 from umbod.core.connectors.downstream_mcp.personal.connections import (
     PersonalCaller,
     PersonalConnectionService,
@@ -13,10 +13,11 @@ from umbod.core.connectors.downstream_mcp.personal.connections import (
 )
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.core.permissions import GroupPermissionStore
-from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts, personal_group_membership
+from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_caller_context, get_verified_access_claims
+from umbod.rest.authentication.membership import RequestGroupMembershipResolver
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
@@ -30,13 +31,17 @@ Claims = Annotated[JwtClaims, Depends(get_verified_access_claims)]
 async def get_personal_caller(
     factories: Factories, claims: Claims,
     caller: Annotated[CallerContext, Depends(get_caller_context)],
+    group_membership_resolver: RequestGroupMembershipResolver,
 ) -> PersonalCaller:
     resolution = canonical_principal(personal_identity_policy_from_app_config(factories.settings), personal_identity_facts(claims.claims))
     if caller.authentication == AuthenticationProvenance.UNAVAILABLE or not isinstance(resolution, ResolvedPersonalIdentity):
         raise HTTPException(status_code=403, detail={"code": "personal_identity_unavailable"})
     return PersonalCaller(
         caller=caller, principal=resolution.principal,
-        groups=personal_group_membership(claims.claims.get(factories.settings.mcp.permission_group_claim)),
+        groups=group_membership_resolver.resolve(
+            claims.claims, (factories.settings.mcp.permission_group_claim,),
+            LegacyGroupClaimPolicy.PERSONAL, caller.authentication,
+        ),
     )
 
 

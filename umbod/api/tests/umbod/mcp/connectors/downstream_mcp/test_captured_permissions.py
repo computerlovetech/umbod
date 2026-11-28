@@ -2,6 +2,7 @@ from tests.umbod.mcp.connectors.downstream_mcp.discovery_operation_support impor
 import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperation
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -51,7 +52,7 @@ async def persistence_runtime() -> AsyncIterator[PersistenceRuntime]:
 
 class MutatingPersonalDiscovery:
     def __init__(self, runtime: DownstreamDiscoveryRuntime, mutate: Callable[[], None], permissions: InMemoryGroupConnectorToolPermissions) -> None:
-        self._operations = personal_discovery_with_policy(runtime, GroupDownstreamToolPermissionPolicy(permissions))
+        self._operations = personal_discovery_with_policy(runtime, GroupDownstreamToolPermissionPolicy(permissions, INHERITED_GROUP_MEMBERSHIP))
         self._mutate = mutate
 
     @asynccontextmanager
@@ -134,7 +135,7 @@ async def _provider(
         discovery_runtime=discovery, personal_discovery=MutatingPersonalDiscovery(discovery, personal_discovery_mutation, permissions), personal_runtime=DisabledPersonalToolRuntime(),
         definitions=MutatingDefinitionStore(database, definition_mutation), credentials=credentials,
         catalogs=catalogs, publishing=publishing, activations=activations,
-        client_factory=factory, permission_policy=GroupDownstreamToolPermissionPolicy(permissions),
+        client_factory=factory, permission_policy=GroupDownstreamToolPermissionPolicy(permissions, INHERITED_GROUP_MEMBERSHIP),
         connector_scope="", signals=signals,
         execution_pipelines=SignalToolExecutionPipelineFactory(signals, invocation_policy),
     )
@@ -162,7 +163,7 @@ def test_capture_reads_one_token_and_next_capture_observes_next_caller(monkeypat
     token = SimpleNamespace(claims={"sub": "alice", "groups": ["engineering"]})
     read_token = Mock(return_value=token)
     monkeypatch.setattr(permission_boundary, "get_access_token", read_token)
-    source = GroupDownstreamToolPermissionPolicy(_permissions())
+    source = GroupDownstreamToolPermissionPolicy(_permissions(), INHERITED_GROUP_MEMBERSHIP)
 
     captured = source.capture()
     token.claims["sub"] = "bob"
@@ -181,7 +182,7 @@ def test_capture_reads_one_token_and_next_capture_observes_next_caller(monkeypat
 def test_captured_groups_still_evaluate_current_grant_revocation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(permission_boundary, "get_access_token", lambda: SimpleNamespace(claims={"groups": ["engineering"]}))
     permissions = _permissions()
-    captured = GroupDownstreamToolPermissionPolicy(permissions).capture()
+    captured = GroupDownstreamToolPermissionPolicy(permissions, INHERITED_GROUP_MEMBERSHIP).capture()
     assert captured.allows("weather", "forecast")
 
     permissions.replace_group_permissions({}, {})
@@ -193,7 +194,7 @@ def test_captured_groups_still_evaluate_current_grant_revocation(monkeypatch: py
 def test_missing_or_malformed_authentication_does_not_grant_access(monkeypatch: pytest.MonkeyPatch, token: object) -> None:
     monkeypatch.setattr(permission_boundary, "get_access_token", lambda: token)
 
-    assert not GroupDownstreamToolPermissionPolicy(_permissions()).capture().allows("weather", "forecast")
+    assert not GroupDownstreamToolPermissionPolicy(_permissions(), INHERITED_GROUP_MEMBERSHIP).capture().allows("weather", "forecast")
 
 
 @pytest.mark.parametrize("authentication,expected", [
@@ -211,7 +212,7 @@ def test_capture_uses_same_token_and_actual_server_authentication(
     observe = Mock(wraps=permission_boundary.caller_context_from_access_token)
     monkeypatch.setattr(permission_boundary, "caller_context_from_access_token", observe)
 
-    assert GroupDownstreamToolPermissionPolicy(_permissions()).capture().allows("weather", "forecast")
+    assert GroupDownstreamToolPermissionPolicy(_permissions(), INHERITED_GROUP_MEMBERSHIP).capture().allows("weather", "forecast")
 
     observe.assert_called_once_with(token, expected)
 
@@ -365,7 +366,7 @@ def test_caller_authentication_unavailable_guard_denies_even_with_granted_groups
         authentication=AuthenticationProvenance.UNAVAILABLE, subject=UnavailableSubject(kind="unavailable"),
     ))
 
-    assert not GroupDownstreamToolPermissionPolicy(_permissions()).capture().allows("weather", "forecast")
+    assert not GroupDownstreamToolPermissionPolicy(_permissions(), INHERITED_GROUP_MEMBERSHIP).capture().allows("weather", "forecast")
 
 
 def test_unrestricted_capture_does_not_require_authentication(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -383,7 +384,7 @@ def test_unrestricted_capture_does_not_require_authentication(monkeypatch: pytes
 async def test_shared_capture_source_isolates_overlapping_callers(monkeypatch: pytest.MonkeyPatch) -> None:
     current: ContextVar[SimpleNamespace] = ContextVar("downstream_permission_test")
     monkeypatch.setattr(permission_boundary, "get_access_token", current.get)
-    source = GroupDownstreamToolPermissionPolicy(_permissions())
+    source = GroupDownstreamToolPermissionPolicy(_permissions(), INHERITED_GROUP_MEMBERSHIP)
 
     async def admitted(group: str, connector: str) -> bool:
         token = SimpleNamespace(claims={"groups": [group]})

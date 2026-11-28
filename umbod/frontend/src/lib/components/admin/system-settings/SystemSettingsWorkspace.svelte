@@ -1,19 +1,29 @@
+<script module lang="ts">
+  export type SystemSettingsSection = 'filesystem' | 'provider-group-mappings' | 'agent-diagnostics';
+</script>
+
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { agentDiagnosticsReportingHref, systemSettingsHref } from '#lib/workspace/navigation.js';
+  import { agentDiagnosticsReportingHref, providerGroupMappingsHref, systemSettingsHref } from '#lib/workspace/navigation.js';
   import AdminSplitWorkspace from '../shared/AdminSplitWorkspace.svelte';
   import AdminSettingsActions from '../shared/AdminSettingsActions.svelte';
   import AdminToggleSetting from '../shared/AdminToggleSetting.svelte';
   import Button from '../shared/Button.svelte';
   import type { FilesystemSettingsState } from './filesystem-settings-state.svelte';
 
-  let { state, section, diagnosticsAllowed, diagnostics }: {
+  let { state, section, diagnosticsAllowed, diagnostics, providerMappings }: {
     state: FilesystemSettingsState;
-    section: 'filesystem' | 'agent-diagnostics';
+    section: SystemSettingsSection;
     diagnosticsAllowed: boolean;
     diagnostics: Snippet;
+    providerMappings: Snippet;
   } = $props();
   const approvalLabel = 'Require approval for MCP file deletion';
+  const detailLabels: Record<SystemSettingsSection, string> = {
+    filesystem: 'Filesystem settings',
+    'provider-group-mappings': 'Group mapping settings',
+    'agent-diagnostics': 'Agent diagnostics settings'
+  };
 </script>
 
 {#snippet folderIcon()}
@@ -22,6 +32,10 @@
 
 {#snippet diagnosticsIcon()}
   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-7 4 14 3-7h4" /></svg>
+{/snippet}
+
+{#snippet providerMappingsIcon()}
+  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h7m-7 10h7m3-10 5 5-5 5m-3-5h8" /></svg>
 {/snippet}
 
 {#snippet sectionLink(href: string, title: string, count: number, current: 'page' | 'location' | undefined, icon: Snippet)}
@@ -33,11 +47,14 @@
   </li>
 {/snippet}
 
-<AdminSplitWorkspace ariaLabel="System settings workspace" sidebarLabel="Settings sections" sidebarHeading="Settings sections" count={diagnosticsAllowed ? 2 : 1} detailLabel={section === 'agent-diagnostics' ? 'Agent diagnostics settings' : 'Filesystem settings'}>
+<AdminSplitWorkspace ariaLabel="System settings workspace" sidebarLabel="Settings sections" sidebarHeading="Settings sections" count={1 + Number(state.canNavigateToProtectedSettings) + Number(diagnosticsAllowed)} detailLabel={detailLabels[section]}>
   {#snippet sidebar()}
     <nav aria-label="Available sections">
       <ul class="sections">
         {@render sectionLink(systemSettingsHref, 'Filesystem', 1, section === 'filesystem' ? 'page' : undefined, folderIcon)}
+        {#if state.canNavigateToProtectedSettings}
+          {@render sectionLink(providerGroupMappingsHref, 'Group mappings', 1, section === 'provider-group-mappings' ? 'location' : undefined, providerMappingsIcon)}
+        {/if}
         {#if diagnosticsAllowed}
           {@render sectionLink(agentDiagnosticsReportingHref, 'Agent diagnostics', 2, section === 'agent-diagnostics' ? 'location' : undefined, diagnosticsIcon)}
         {/if}
@@ -49,6 +66,9 @@
     {#if section === 'agent-diagnostics'}
       {@render detailHeader('Agent diagnostics', 'Controls for diagnostic reporting on this instance.', diagnosticsIcon)}
       {@render diagnostics()}
+    {:else if section === 'provider-group-mappings'}
+      {@render detailHeader('Inherited mappings with explicit overrides', 'Saved changes and resets take effect immediately.', providerMappingsIcon)}
+      {@render providerMappings()}
     {:else}
       {@render detailHeader('Filesystem', 'Controls for file operations on this instance.', folderIcon)}
       {@render filesystem()}

@@ -2,6 +2,7 @@ import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { FilesystemSettings } from '#lib/admin/system-settings/domain/filesystem-settings.js';
 import type { FilesystemSettingsAdministration } from '#lib/admin/system-settings/filesystem-settings-port.js';
+import { AuthenticationRequiredError } from '#lib/admin/infrastructure/transport.js';
 import { deferred } from '#lib/files/fixtures.test-support.js';
 import SystemSettingsWorkspace from './SystemSettingsWorkspace.svelte';
 import { FilesystemSettingsState } from './filesystem-settings-state.svelte';
@@ -26,7 +27,8 @@ function settings(value: boolean, source: ApprovalSource): FilesystemSettings {
 function mountWith(api: FilesystemSettingsAdministration): Promise<void> {
   state = new FilesystemSettingsState(api);
   const diagnostics = createRawSnippet(() => ({ render: (): string => '<h2>Agent diagnostics</h2>' }));
-  component = mount(SystemSettingsWorkspace, { target: document.body, props: { state, section: 'filesystem', diagnosticsAllowed: true, diagnostics } });
+  const providerMappings = createRawSnippet(() => ({ render: (): string => '<p>Provider mappings editor</p>' }));
+  component = mount(SystemSettingsWorkspace, { target: document.body, props: { state, section: 'filesystem', diagnosticsAllowed: true, diagnostics, providerMappings } });
   return state.load();
 }
 
@@ -42,20 +44,33 @@ function toggle(): HTMLInputElement {
   return input;
 }
 
-test('lists both settings sections and displays only Filesystem by default', async (): Promise<void> => {
+test('lists all settings sections and displays only Filesystem by default', async (): Promise<void> => {
   await mountWith({ get: async () => settings(true, 'built_in_default'), update: async () => settings(false, 'admin_override') });
   await tick();
 
   const sidebar = document.querySelector('aside[aria-label="Settings sections"]');
-  expect(sidebar?.querySelectorAll('li')).toHaveLength(2);
+  expect(sidebar?.querySelectorAll('li')).toHaveLength(3);
   expect(sidebar?.querySelector('a[aria-current="page"]')?.textContent).toMatch(/Filesystem\s*1 setting/);
   expect(sidebar?.querySelector('a[href="/admin/system-settings?section=agent-diagnostics"]')?.textContent).toMatch(/Agent diagnostics\s*2 settings/);
+  expect(sidebar?.querySelector('a[href="/admin/system-settings?section=provider-group-mappings"]')?.textContent).toMatch(/Group mappings\s*1 setting/);
   expect(document.querySelector('section[aria-label="Agent diagnostics settings"]')).toBeNull();
+  expect(document.body.textContent).not.toContain('Provider mappings editor');
   expect(document.querySelector('input[type="search"], [role="searchbox"]')).toBeNull();
   expect(document.body.textContent).not.toMatch(/Retention|Integrations/);
   const descriptionId = toggle().getAttribute('aria-describedby') ?? '';
   expect(document.getElementById(descriptionId)?.textContent).toContain('doesn’t grant delete permission or change the browser’s confirmation dialog');
   expect(button('Save changes').disabled).toBe(true);
+});
+
+test('does not offer provider mappings when the shared settings guard denies access', async (): Promise<void> => {
+  await mountWith({
+    get: async (): Promise<FilesystemSettings> => { throw new AuthenticationRequiredError(); },
+    update: async () => settings(false, 'admin_override')
+  });
+  await tick();
+
+  expect(document.querySelector('a[href="/admin/system-settings?section=provider-group-mappings"]')).toBeNull();
+  expect(document.querySelector('a[href="/admin/system-settings?section=agent-diagnostics"]')).not.toBeNull();
 });
 
 test('discards a toggle draft and sends an explicit false value only when saved', async (): Promise<void> => {

@@ -69,6 +69,14 @@ Each user then opens **Connectors**, chooses **Enable access**, and signs in to 
 
 Self-hosting? Personal connectors need [one extra setting](../self-host/operate.md#personal-connectors).
 
+## Map provider groups
+
+By default, Umbod uses values from the configured OIDC permission claim as group IDs. The inherited suggestions show registered groups, not an allowlist.
+
+If a provider value differs from the Umbod group ID, open **Administration → System settings → Group mappings**. Enter the exact provider value, select a registered group, and save. Changes apply to subsequent REST and MCP requests without a restart. These mappings do not change who can administer Umbod.
+
+To restore direct matching for a value, remove its mapping and save. To restore direct matching for all values, choose **Clear saved overrides**, then **Save changes**.
+
 ## Change or remove access
 
 | Action | Effect |

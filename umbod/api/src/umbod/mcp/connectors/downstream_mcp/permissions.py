@@ -4,10 +4,10 @@ from typing import Protocol
 from fastmcp.server.dependencies import get_access_token, get_server
 from pydantic import BaseModel, ConfigDict
 
-from umbod.core.callers import AuthenticationProvenance, CallerContext, GroupMembership
+from umbod.core.callers import AuthenticationProvenance, CallerContext, GroupMembership, LegacyGroupClaimPolicy
+from umbod.core.callers.membership import GroupMembershipResolution
 from umbod.core.permissions import ConnectorCapabilityPermission, InMemoryGroupConnectorToolPermissions
 from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
-from umbod.mcp.auth.groups import capture_runtime_permission_groups
 
 
 class DownstreamToolPermissionPolicy(Protocol):
@@ -46,28 +46,31 @@ class CapturedGroupDownstreamToolPermissionPolicy:
 
 
 class GroupDownstreamToolPermissionPolicy:
-    def __init__(self, permissions: InMemoryGroupConnectorToolPermissions) -> None:
+    def __init__(
+        self, permissions: InMemoryGroupConnectorToolPermissions,
+        resolver: GroupMembershipResolution,
+    ) -> None:
         self._permissions = permissions
+        self._resolver = resolver
 
     def capture(self) -> DownstreamToolPermissionPolicy:
         token = get_access_token()
-        authentication = _current_authentication()
+        try:
+            server = get_server()
+        except RuntimeError:
+            server = None
+        authentication = authentication_provenance(getattr(server, "auth", None))
         caller = caller_context_from_access_token(token, authentication)
         observed_claims = getattr(token, "claims", {}) if token is not None else {}
         claims = observed_claims if isinstance(observed_claims, Mapping) else {}
         snapshot = DownstreamPermissionSnapshot(
             caller=caller,
-            groups=capture_runtime_permission_groups(claims, self._permissions.group_claim_fields),
+            groups=self._resolver.resolve(
+                claims, self._permissions.group_claim_fields, LegacyGroupClaimPolicy.RUNTIME,
+                caller.authentication,
+            ),
         )
         return CapturedGroupDownstreamToolPermissionPolicy(snapshot, self._permissions)
-
-
-def _current_authentication() -> AuthenticationProvenance:
-    try:
-        server = get_server()
-    except RuntimeError:
-        return AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED
-    return authentication_provenance(server.auth) if server.auth is not None else AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED
 
 
 class _UnrestrictedCapturedDownstreamToolPermissionPolicy:

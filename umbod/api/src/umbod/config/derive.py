@@ -3,7 +3,9 @@ from pydantic import ValidationError
 from umbod.config.app import AppConfig
 from umbod.config.build import assemble_app_config
 from umbod.config.operator import OperatorSettings
-from umbod.config.personal_connection_policy import normalize_personal_connections_operator
+from umbod.config.personal_connection_policy import (
+    normalize_personal_connections_operator,
+)
 from umbod.config.server_settings import ServerRootSettings
 from umbod.config.validate import resolve_auth_recipe, validate_operator
 

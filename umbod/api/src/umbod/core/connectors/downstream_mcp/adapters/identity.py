@@ -1,7 +1,6 @@
 from collections.abc import Mapping
 
 from umbod.config.app import AppConfig
-from umbod.core.callers import GroupMembership
 
 from ..personal.connections.development_identity import local_personal_identity_enabled
 from ..personal.connections.development_identity_models import SimulatedUserIdentity
@@ -48,16 +47,6 @@ def personal_identity_facts(claims: Mapping[str, object]) -> PersonalIdentityFac
         delegated_scope=isinstance(observed_identity_string(claims.get("scp")), ObservedIdentityString),
         machine=machine_identity(claims),
     )
-
-
-def personal_group_membership(value: object) -> GroupMembership:
-    if isinstance(value, str):
-        groups = (value,) if value.strip() else ()
-    elif isinstance(value, (list, tuple)) and all(isinstance(item, str) for item in value):
-        groups = tuple(item for item in value if item.strip())
-    else:
-        groups = ()
-    return GroupMembership(group_ids=tuple(sorted(set(groups))))
 
 
 def simulated_user_claims(identity: SimulatedUserIdentity) -> dict[str, object]:

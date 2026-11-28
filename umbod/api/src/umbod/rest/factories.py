@@ -2,6 +2,7 @@ from umbod.build_identity import UMBOD_RELEASE
 from umbod.http_metadata import HttpMetadataMiddleware
 from starlette.types import ASGIApp
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
+from umbod.config.group_membership import ConfiguredGroupMembershipSource
 from umbod.core.capabilities.descriptions.factories import (
     ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory as InfrastructureConnectorCapabilityDescriptionOverrideStoreFactory,
 )
@@ -20,7 +21,7 @@ from umbod.core.permissions.factories import create_group_permission_store
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager
 from functools import cached_property
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Final, Protocol
 from umbod_sdk.connectors.discovery import load_connector_plugins
 from pydantic import TypeAdapter
 from fastapi import APIRouter, FastAPI, Request
@@ -237,8 +238,10 @@ class ConnectorApiDependencyFactories:
         openapi_json_import_max_bytes: int,
         settings: APISettings,
         persistence_runtime: PersistenceRuntime,
+        group_membership_source: ConfiguredGroupMembershipSource,
     ) -> None:
         self.settings = settings
+        self.group_membership_source: Final[ConfiguredGroupMembershipSource] = group_membership_source
         self.connector_registry = connector_registry
         self.connector_current_configuration_store = (
             connector_current_configuration_store
@@ -321,6 +324,7 @@ class ConnectorApiDependencyFactories:
             openapi_json_import_max_bytes=settings.openapi_connectors.json_import_max_bytes,
             settings=settings,
             persistence_runtime=persistence_runtime,
+            group_membership_source=ConfiguredGroupMembershipSource(settings, persistence_runtime.database),
         )
 
 

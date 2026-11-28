@@ -1,11 +1,12 @@
 ---
 type: Software Module
 title: System Settings
-description: Instance-wide settings management and effective approval policy.
+description: Instance-wide settings management, provider group mappings, and effective approval policy.
 ---
 
 # Files
 
+- [Provider group mappings](./provider_group_mappings/README.md) — Provider values, Umbod group targets, and settings precedence.
 - [__init__.py](./__init__.py) — Public settings API and service composition.
 - [errors.py](./errors.py) — Management permission and storage failures.
 - [models.py](./models.py) — Validated settings, source-aware results, and explicit update inputs.

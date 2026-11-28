@@ -2,9 +2,12 @@ import type { beforeNavigate as registerBeforeNavigate } from '$app/navigation';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { fromStore, writable } from 'svelte/store';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { GroupCatalogue } from '#lib/admin/groups/port.js';
 import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { FilesystemSettings } from '#lib/admin/system-settings/domain/filesystem-settings.js';
 import type { FilesystemSettingsAdministration } from '#lib/admin/system-settings/filesystem-settings-port.js';
+import type { ProviderGroupMappings } from '#lib/admin/system-settings/domain/provider-group-mappings.js';
+import type { ProviderGroupMappingsAdministration } from '#lib/admin/system-settings/provider-group-mappings-port.js';
 import { deferred, InMemoryAgentBehaviourApi } from '#lib/agent-behaviour/in-memory.test-support.js';
 import type { Configuration } from '#lib/agent-behaviour/domain/schemas.js';
 import SystemSettingsContent from './SystemSettingsContent.svelte';
@@ -17,6 +20,7 @@ vi.mock('$app/navigation', () => ({ beforeNavigate }));
 const origin = 'http://localhost:3010';
 const settingsPath = '/admin/system-settings';
 const reportingPath = `${settingsPath}?section=agent-diagnostics`;
+const mappingsPath = `${settingsPath}?section=provider-group-mappings`;
 const patternsPath = '/admin/agent-diagnostics';
 
 let component: ReturnType<typeof mount> | undefined;
@@ -43,13 +47,20 @@ function configuredDiagnostics(): InMemoryAgentBehaviourApi {
 
 const filesystemValue: FilesystemSettings = { require_mcp_file_deletion_approval: { value: true, source: 'built_in_default' } };
 
-function mountSettings(api: InMemoryAgentBehaviourApi, path: string, get: FilesystemSettingsAdministration['get'] = async () => filesystemValue): (nextPath: string) => void {
+type MappingsDependencies = { providerGroupMappings: ProviderGroupMappingsAdministration; groups: Pick<GroupCatalogue, 'list'> };
+
+const builtInMappings: ProviderGroupMappings = { mappings: [], source: 'built_in_default' };
+
+function mountSettings(api: InMemoryAgentBehaviourApi, path: string, get: FilesystemSettingsAdministration['get'] = async () => filesystemValue, mappings: MappingsDependencies = {
+  providerGroupMappings: { get: async () => builtInMappings, update: async () => builtInMappings },
+  groups: { list: async () => [] }
+}): (nextPath: string) => void {
   const current = writable(new URL(path, origin).searchParams);
   const query = fromStore(current);
   const filesystemSettings: FilesystemSettingsAdministration = { get, update: async () => filesystemValue };
   component = mount(SystemSettingsContent, {
     target: document.body,
-    props: { get query(): URLSearchParams { return query.current; }, filesystemSettings, diagnosticsConfiguration: api.configuration }
+    props: { get query(): URLSearchParams { return query.current; }, filesystemSettings, ...mappings, diagnosticsConfiguration: api.configuration }
   });
   return (nextPath: string): void => current.set(new URL(nextPath, origin).searchParams);
 }
@@ -285,4 +296,271 @@ test('aborts diagnostics work when the identity-scoped content is destroyed', as
   pending.resolve(api.current);
   await tick();
   expect(document.querySelector('section[aria-label="System settings workspace"]')).toBeNull();
+});
+
+const registeredGroup = { group_id: 'registered-team', label: 'Registered Team', description: '', revision: 1 };
+const savedMappings: ProviderGroupMappings = {
+  source: 'admin_override',
+  mappings: [{ external_value: ' Maintainer\nTier 2 ', group_id: registeredGroup.group_id }]
+};
+
+function mappingsAdministration(defaults: ProviderGroupMappings, initial: ProviderGroupMappings = defaults): ProviderGroupMappingsAdministration {
+  let current = initial;
+  return {
+    get: async (): Promise<ProviderGroupMappings> => current,
+    update: async (patch): Promise<ProviderGroupMappings> => {
+      current = patch.operation === 'reset' ? defaults : { mappings: patch.mappings, source: 'admin_override' };
+      return current;
+    }
+  };
+}
+
+function providerValueField(): HTMLTextAreaElement {
+  const fieldset = [...document.querySelectorAll('fieldset')].find((candidate): boolean => candidate.querySelector('legend')?.textContent === 'Mapping 1');
+  const field = [...(fieldset?.querySelectorAll('label') ?? [])].find((label): boolean => label.textContent === 'Provider value')?.control;
+  if (!(field instanceof HTMLTextAreaElement)) throw new Error('Missing provider value field');
+  return field;
+}
+
+function changeProviderValue(value: string): void {
+  const field = providerValueField();
+  field.value = value;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+test('can save an empty override or clear it to restore the built-in default', async (): Promise<void> => {
+  const providerGroupMappings = mappingsAdministration(builtInMappings, savedMappings);
+  const get = vi.spyOn(providerGroupMappings, 'get');
+  const update = vi.spyOn(providerGroupMappings, 'update');
+  const navigate = mountSettings(configuredDiagnostics(), settingsPath, undefined, {
+    providerGroupMappings, groups: { list: async () => [registeredGroup] }
+  });
+  const link = await vi.waitFor(() => element<HTMLAnchorElement>(`a[href="${mappingsPath}"]`));
+  expect(get).not.toHaveBeenCalled();
+  navigate(link.getAttribute('href') ?? settingsPath);
+
+  await vi.waitFor(() => expect(providerValueField().value).toBe(' Maintainer\nTier 2 '));
+  expect(link.getAttribute('aria-current')).toBe('location');
+  expect(document.body.textContent).toContain('Admin override');
+  expect(element('section[aria-label="Group mapping settings"] header h2').textContent).toBe('Inherited mappings with explicit overrides');
+  expect(document.body.textContent).toContain('Saved changes and resets take effect immediately.');
+  expect(document.body.textContent).not.toContain('Inherited suggestions');
+  expect(button('Save changes').disabled).toBe(true);
+
+  changeProviderValue('Edited value');
+  await tick();
+  button('Discard changes').click();
+  await tick();
+  expect(providerValueField().value).toBe(' Maintainer\nTier 2 ');
+  expect(update).not.toHaveBeenCalled();
+
+  element<HTMLButtonElement>('button[aria-label="Remove mapping 1"]').click();
+  await tick();
+  expect(document.body.textContent).toContain('No explicit mappings.');
+  button('Save changes').click();
+  await vi.waitFor(() => expect(button('Save changes').disabled).toBe(true));
+  expect(update).toHaveBeenNthCalledWith(1, { operation: 'set', mappings: [] }, expect.any(AbortSignal));
+
+  button('Clear saved overrides').click();
+  await tick();
+  expect(document.body.textContent).toContain('Save changes to remove all explicit mappings.');
+  expect(update).toHaveBeenCalledTimes(1);
+  button('Save changes').click();
+  await vi.waitFor(() => expect(document.body.textContent).toContain('Built-in default'));
+  expect(update).toHaveBeenNthCalledWith(2, { operation: 'reset' }, expect.any(AbortSignal));
+  expect(document.body.textContent).toContain('No explicit mappings.');
+});
+
+const inheritedTeam = { external_value: 'registered-team', group_id: 'registered-team' };
+const inheritedOther = { ...inheritedTeam, external_value: 'other-team', group_id: 'other-team' };
+const inheritedMappings: ProviderGroupMappings = { source: 'inherited_claim_default', mappings: [inheritedOther, inheritedTeam] };
+const overrideTeam = 'button[aria-label="Override inherited mapping 2"]';
+
+test('copies only the selected inherited suggestion into explicit rules and restores suggestions on reset', async (): Promise<void> => {
+  const providerGroupMappings = mappingsAdministration(inheritedMappings);
+  const update = vi.spyOn(providerGroupMappings, 'update');
+  mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
+    providerGroupMappings, groups: { list: async () => [registeredGroup] }
+  });
+
+  await vi.waitFor(() => expect(element<HTMLButtonElement>(overrideTeam).disabled).toBe(false));
+  expect(document.body.textContent).toContain('Inherited from OAuth configuration');
+  expect(document.body.textContent).toContain('No explicit mappings.');
+  expect(element('section[aria-label="Group mapping settings"]').querySelector('input, textarea')).toBeNull();
+  expect(button('Save changes').disabled).toBe(true);
+  element<HTMLButtonElement>(overrideTeam).click();
+  await tick();
+
+  expect(element('section[aria-label="Group mapping settings"]').querySelectorAll('input, textarea')).toHaveLength(1);
+  expect(providerValueField().value).toBe(inheritedTeam.external_value);
+  expect(document.querySelector(overrideTeam)).toBeNull();
+  expect(update).not.toHaveBeenCalled();
+  button('Save changes').click();
+  await vi.waitFor(() => expect(document.body.textContent).toContain('Admin override'));
+  expect(update).toHaveBeenCalledExactlyOnceWith({
+    operation: 'set', mappings: [inheritedTeam]
+  }, expect.any(AbortSignal));
+  expect(document.body.textContent).not.toContain('Inherited suggestions');
+  expect(document.body.textContent).toContain('Values without a matching explicit rule still use inherited OAuth mappings');
+
+  button('Clear saved overrides').click();
+  await tick();
+  button('Save changes').click();
+  await vi.waitFor(() => expect(element<HTMLButtonElement>(overrideTeam).disabled).toBe(false));
+  expect(update).toHaveBeenNthCalledWith(2, { operation: 'reset' }, expect.any(AbortSignal));
+  expect(document.body.textContent).toContain('No explicit mappings.');
+  expect(element('section[aria-label="Group mapping settings"]').querySelector('input, textarea')).toBeNull();
+});
+
+test('remaps an inherited value to a registered group before saving the override', async (): Promise<void> => {
+  const providerGroupMappings = mappingsAdministration(inheritedMappings);
+  const update = vi.spyOn(providerGroupMappings, 'update');
+  mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
+    providerGroupMappings, groups: { list: async () => [registeredGroup] }
+  });
+
+  const override = 'button[aria-label="Override inherited mapping 1"]';
+  await vi.waitFor(() => expect(element<HTMLButtonElement>(override).disabled).toBe(false));
+  element<HTMLButtonElement>(override).click();
+  await tick();
+
+  const selector = element<HTMLButtonElement>('button[role="combobox"]');
+  expect(selector.textContent).toContain('other-team (unavailable)');
+  expect(document.querySelector('input[type="checkbox"]')).toBeNull();
+  expect(button('Save changes').disabled).toBe(true);
+  expect(update).not.toHaveBeenCalled();
+
+  selector.click();
+  await tick();
+  element<HTMLElement>('[role="option"]:not([aria-disabled])').click();
+  await tick();
+  expect(selector.textContent).toContain('Registered Team (registered-team)');
+  expect(button('Save changes').disabled).toBe(false);
+  button('Save changes').click();
+
+  await vi.waitFor(() => expect(document.body.textContent).toContain('Admin override'));
+  expect(update).toHaveBeenCalledExactlyOnceWith({
+    operation: 'set', mappings: [{ ...inheritedOther, group_id: registeredGroup.group_id }]
+  }, expect.any(AbortSignal));
+});
+
+test('keeps rules visible after a catalogue failure and lets an unavailable group be replaced', async (): Promise<void> => {
+  const stale: ProviderGroupMappings = {
+    source: 'admin_override',
+    mappings: [{ external_value: 'Maintainer', group_id: 'removed-team' }]
+  };
+  const providerGroupMappings = mappingsAdministration(stale);
+  const update = vi.spyOn(providerGroupMappings, 'update');
+  const list = vi.fn<GroupCatalogue['list']>()
+    .mockRejectedValueOnce(new Error('Groups unavailable'))
+    .mockResolvedValue([registeredGroup]);
+  mountSettings(configuredDiagnostics(), mappingsPath, undefined, { providerGroupMappings, groups: { list } });
+
+  await vi.waitFor(() => expect(document.body.textContent).toContain('Could not load registered groups.'));
+  const selector = element<HTMLButtonElement>('button[role="combobox"]');
+  expect(selector.textContent).toContain('removed-team');
+  expect(selector.disabled).toBe(true);
+  expect(providerValueField().readOnly).toBe(true);
+  expect(button('Save changes').disabled).toBe(true);
+
+  button('Retry loading groups').click();
+  await vi.waitFor(() => expect(selector.textContent).toContain('removed-team (unavailable)'));
+  changeProviderValue('Support');
+  await tick();
+  expect(button('Save changes').disabled).toBe(true);
+
+  selector.click();
+  await tick();
+  const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((entry): boolean => entry.textContent?.trim() === 'Registered Team (registered-team)');
+  if (!option) throw new Error('Missing registered group option');
+  option.click();
+  await tick();
+  expect(selector.textContent).toContain('Registered Team (registered-team)');
+  button('Save changes').click();
+  await vi.waitFor(() => expect(update).toHaveBeenCalledWith({
+    operation: 'set', mappings: [{ ...stale.mappings[0], external_value: 'Support', group_id: 'registered-team' }]
+  }, expect.any(AbortSignal)));
+});
+
+test('recognizes a previously unavailable target when it is registered before returning to mappings', async (): Promise<void> => {
+  const list = vi.fn<GroupCatalogue['list']>().mockResolvedValueOnce([]).mockResolvedValue([registeredGroup]);
+  const navigate = mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
+    providerGroupMappings: mappingsAdministration(builtInMappings, savedMappings), groups: { list }
+  });
+  const selector = 'button[role="combobox"]';
+  await vi.waitFor(() => expect(element(selector).textContent).toContain('registered-team (unavailable)'));
+  navigate(settingsPath);
+  await tick();
+  navigate(mappingsPath);
+  await vi.waitFor(() => expect(element(selector).textContent).toContain('Registered Team (registered-team)'));
+  expect(list).toHaveBeenCalledTimes(2);
+});
+
+test('refreshes mappings when returning without replacing an unsaved draft', async (): Promise<void> => {
+  const providerGroupMappings = mappingsAdministration(builtInMappings, savedMappings);
+  const get = vi.spyOn(providerGroupMappings, 'get');
+  const navigate = mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
+    providerGroupMappings, groups: { list: async () => [registeredGroup] }
+  });
+  await vi.waitFor(() => expect(providerValueField().readOnly).toBe(false));
+  changeProviderValue('unsaved provider value');
+  await providerGroupMappings.update({
+    operation: 'set', mappings: [{ ...savedMappings.mappings[0], external_value: 'another admin’s provider value' }]
+  }, new AbortController().signal);
+
+  navigate(settingsPath);
+  await tick();
+  navigate(mappingsPath);
+  await vi.waitFor(() => expect(providerValueField().value).toBe('unsaved provider value'));
+  expect(get).toHaveBeenCalledTimes(1);
+
+  button('Discard changes').click();
+  navigate(settingsPath);
+  await tick();
+  navigate(mappingsPath);
+  await vi.waitFor(() => expect(providerValueField().value).toBe('another admin’s provider value'));
+  expect(get).toHaveBeenCalledTimes(2);
+});
+
+test('keeps an added draft when save fails and prevents duplicate requests while pending', async (): Promise<void> => {
+  const providerGroupMappings = mappingsAdministration(builtInMappings);
+  const pending = Promise.withResolvers<ProviderGroupMappings>();
+  const update = vi.spyOn(providerGroupMappings, 'update').mockReturnValueOnce(pending.promise);
+  mountSettings(configuredDiagnostics(), mappingsPath, undefined, {
+    providerGroupMappings, groups: { list: async () => [registeredGroup] }
+  });
+  await vi.waitFor(() => expect(button('Add mapping').disabled).toBe(false));
+  expect(document.body.textContent).toContain('Built-in default');
+
+  button('Add mapping').click();
+  await tick();
+  expect(button('Save changes').disabled).toBe(true);
+  changeProviderValue(' Level 1 Support ');
+  await tick();
+  const selector = element<HTMLButtonElement>('button[role="combobox"]');
+  expect(selector.textContent).toContain('Select a group');
+  expect(button('Save changes').disabled).toBe(true);
+  expect(update).not.toHaveBeenCalled();
+  selector.click();
+  await tick();
+  element<HTMLElement>('[role="option"]:not([aria-disabled])').click();
+  await tick();
+
+  const save = button('Save changes');
+  expect(save.disabled).toBe(false);
+  save.click();
+  save.click();
+  await tick();
+  expect(save.disabled).toBe(true);
+  expect(update).toHaveBeenCalledTimes(1);
+  pending.reject(new HttpError(503, 'Service unavailable', null));
+
+  await vi.waitFor(() => expect(element('[role="alert"]').textContent).toContain('Could not confirm that your changes were saved.'));
+  expect(providerValueField().value).toBe(' Level 1 Support ');
+  expect(save.disabled).toBe(false);
+  save.click();
+  await vi.waitFor(() => expect(document.body.textContent).toContain('Admin override'));
+  expect(update).toHaveBeenNthCalledWith(2, {
+    operation: 'set', mappings: [{ external_value: ' Level 1 Support ', group_id: 'registered-team' }]
+  }, expect.any(AbortSignal));
 });

@@ -1,10 +1,11 @@
 <script lang="ts">
   import Button from './Button.svelte';
 
-  let { busy, dirty, conflict = false, onDiscard, onSave }: {
+  let { busy, dirty, conflict = false, saveDisabled = false, onDiscard, onSave }: {
     busy: boolean;
     dirty: boolean;
     conflict?: boolean;
+    saveDisabled?: boolean;
     onDiscard: () => void;
     onSave: () => Promise<void>;
   } = $props();
@@ -16,7 +17,7 @@
     {#if dirty || conflict}
       <Button variant="secondary" disabled={busy} onclick={onDiscard}>Discard changes</Button>
     {/if}
-    <Button disabled={busy || !dirty || conflict} onclick={onSave}>Save changes</Button>
+    <Button disabled={busy || !dirty || conflict || saveDisabled} onclick={onSave}>Save changes</Button>
   </div>
 </div>
 

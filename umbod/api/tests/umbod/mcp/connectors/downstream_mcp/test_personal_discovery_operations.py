@@ -4,6 +4,7 @@ from fastmcp.server.auth import AccessToken
 from mcp.server.auth.middleware.auth_context import auth_context_var
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from tests.umbod.mcp.test_personal_caller import _settings
+from umbod.core.callers.membership import INHERITED_GROUP_MEMBERSHIP
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCallerProvider, McpPersonalToolRuntime
 from typing import cast
 from collections.abc import AsyncIterator, Sequence
@@ -301,7 +302,7 @@ async def test_public_execution_rechecks_admission_after_discovery_authorization
     execution = await execution_case(runtime_case)
     settings = _settings(namespace="trusted")
     settings = settings.model_copy(update={"mcp": settings.mcp.model_copy(update={"permission_group_claim": "groups"})})
-    callers = McpPersonalCallerProvider(settings)
+    callers = McpPersonalCallerProvider(settings, INHERITED_GROUP_MEMBERSHIP)
     runtime = McpPersonalToolRuntime(callers, runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now, "https://umbod.example")
     policy = PausedInvocationPolicy()
     provider = await provider_for(replace(execution, runtime=runtime, contexts=callers), policy, InvocationLog())

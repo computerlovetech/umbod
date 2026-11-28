@@ -30,6 +30,7 @@ export class FilesystemSettingsState {
   get sourceLabel(): string { return this.#saved ? sourceLabels[this.#saved.source] : ''; }
   get failure(): string | undefined { return this.#failure?.message; }
   get canRetry(): boolean { return this.#failure?.kind === 'read'; }
+  get canNavigateToProtectedSettings(): boolean { return !this.loading && this.#failure?.kind !== 'access'; }
 
   load = async (): Promise<void> => {
     if (this.busy || this.ready) return;

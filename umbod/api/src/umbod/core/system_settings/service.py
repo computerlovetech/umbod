@@ -9,7 +9,7 @@ from .models import (
 from .ports import SettingsNotConfigured, SystemSettingsReader, SystemSettingsWriter
 
 
-def _require_administrator(actor_role: str) -> None:
+def require_administrator(actor_role: str) -> None:
     if actor_role != "administrator":
         raise SettingsPermissionDenied()
 
@@ -44,7 +44,7 @@ class SystemSettingsService:
         )
 
     async def get_effective_settings(self, actor_role: str) -> EffectiveSystemSettings:
-        _require_administrator(actor_role)
+        require_administrator(actor_role)
         return await self._effective_settings()
 
     async def get_settings(self, actor_role: str) -> SystemSettings:
@@ -58,7 +58,7 @@ class SystemSettingsService:
     async def set_settings(
         self, actor_role: str, command: UpdateSystemSettings
     ) -> EffectiveSystemSettings:
-        _require_administrator(actor_role)
+        require_administrator(actor_role)
         updated = await self._writer.update(command)
         return EffectiveSystemSettings(
             settings=updated, source=SettingsSource.ADMIN_OVERRIDE
@@ -67,7 +67,7 @@ class SystemSettingsService:
     async def reset_mcp_file_deletion_approval(
         self, actor_role: str
     ) -> EffectiveSystemSettings:
-        _require_administrator(actor_role)
+        require_administrator(actor_role)
         fallback = await self._fallback()
         await self._writer.reset_mcp_file_deletion_approval()
         return fallback

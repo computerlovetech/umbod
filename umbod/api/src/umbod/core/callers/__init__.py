@@ -1,5 +1,5 @@
 from .constants import LOCAL_DEVELOPMENT_ISSUER
-from .groups import group_membership_from_values
+from .groups import LegacyGroupClaimPolicy
 from .models import (
     AuthenticationProvenance,
     CallerContext,
@@ -18,7 +18,7 @@ __all__ = [
     "CallerSnapshot",
     "DeclaredIssuer",
     "GroupMembership",
-    "group_membership_from_values",
+    "LegacyGroupClaimPolicy",
     "SubjectIdentity",
     "UnavailableIssuer",
     "UnavailableSubject",
