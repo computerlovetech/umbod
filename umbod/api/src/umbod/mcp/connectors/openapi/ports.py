@@ -1,8 +1,8 @@
 from typing import Protocol
 
 from umbod.core.invocation.tools.execution import ToolExecutionPipeline
+from umbod.core.network.http import AsyncHttpClient
 from umbod.core.connectors.openapi.execution import (
-    AsyncStreamingHttpClient,
     OpenApiCapabilityExecutionResult,
     OpenApiExecutionResponse,
     OpenApiOperationInput,
@@ -22,7 +22,7 @@ class OpenApiExecutionServiceFactory(Protocol):
         self,
         store: OpenApiConnectorStore,
         permission_reader: GroupPermissionLookup,
-        client: AsyncStreamingHttpClient,
+        client: AsyncHttpClient,
         execution_pipeline: ToolExecutionPipeline[OpenApiExecutionResponse],
     ) -> OpenApiExecutionService: ...
 
@@ -36,4 +36,4 @@ class GroupPermissionReaderFactory(Protocol):
 
 
 class OutboundHttpClientFactoryPort(Protocol):
-    def create(self) -> AsyncStreamingHttpClient: ...
+    def create(self) -> AsyncHttpClient: ...

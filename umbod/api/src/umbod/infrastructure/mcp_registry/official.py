@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator, Iterable
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -48,8 +48,8 @@ class OfficialMcpRegistry:
 
 @asynccontextmanager
 async def open_official_mcp_registry() -> AsyncIterator[McpRegistry]:
-    factory = OutboundHttpClientFactory(3.0, 5.0, 5.0, 3.0)
-    async with factory.create_for_origin(OFFICIAL_REGISTRY_ORIGIN) as client:
+    factory = OutboundHttpClientFactory.hardened(3.0, 5.0, 5.0, 3.0)
+    async with aclosing(factory.create_for_origin(OFFICIAL_REGISTRY_ORIGIN)) as client:
         yield OfficialMcpRegistry(AsyncJsonHttpClient(client, limits=JsonHttpLimits()))
 
 

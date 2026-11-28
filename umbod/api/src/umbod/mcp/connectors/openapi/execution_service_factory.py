@@ -2,13 +2,13 @@ from fastmcp import FastMCP
 
 from umbod.core.capabilities import AvailabilityAwareCapabilityAuthorizer
 from umbod.core.invocation.tools.execution import ToolExecutionPipeline
+from umbod.core.network.http import AsyncHttpClient
 from umbod.core.connectors.openapi.execution import (
     AggregateOpenApiOperationResolver,
-    AsyncStreamingHttpClient,
     BearerOpenApiRequestAuthenticator,
     ExactGroupOpenApiCapabilityAuthorizer,
     ExactHttpsDestinationPolicy,
-    HttpxOutboundOperationAdapter,
+    StreamingOutboundOperationAdapter,
     IdentityOpenApiResponseNormalizer,
     OpenApiCapabilityExecutionService,
     OpenApiExecutionLimits,
@@ -29,7 +29,7 @@ class OpenApiCapabilityExecutionServiceFactory:
         self,
         store: OpenApiConnectorStore,
         permission_reader: GroupPermissionLookup,
-        client: AsyncStreamingHttpClient,
+        client: AsyncHttpClient,
         execution_pipeline: ToolExecutionPipeline[OpenApiExecutionResponse],
     ) -> OpenApiCapabilityExecutionService:
         availability = openapi_availability_reader(self._server, store)
@@ -44,7 +44,7 @@ class OpenApiCapabilityExecutionServiceFactory:
             authorizer=authorizer,
             resolver=AggregateOpenApiOperationResolver(),
             compiler=StrictOpenApiRequestCompiler(ExactHttpsDestinationPolicy()),
-            transport=HttpxOutboundOperationAdapter(client),
+            transport=StreamingOutboundOperationAdapter(client),
             normalizer=IdentityOpenApiResponseNormalizer(),
             limits=OpenApiExecutionLimits(
                 timeout_seconds=self._server.openapi_execution_timeout_seconds,

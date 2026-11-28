@@ -12,12 +12,12 @@ from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.invocation.tools.execution import PreparedToolExecution, ToolExecutionPipeline, ToolExecutionRequest
 from umbod.core.connectors.openapi.execution import (
-    AsyncStreamingHttpClient,
     OpenApiCapabilityExecutionResult,
     OpenApiExecutionResponse,
     OpenApiOperationInput,
 )
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
+from umbod.core.network.http import AsyncHttpClient
 from umbod.core.permissions.ports import GroupPermissionReader
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode import (
     OpenApiCodeModeInvocation,
@@ -134,7 +134,7 @@ class ExecutionServiceFactory:
         self,
         store: OpenApiConnectorStore,
         permission_reader: GroupPermissionReader,
-        client: AsyncStreamingHttpClient,
+        client: AsyncHttpClient,
         execution_pipeline: ToolExecutionPipeline[OpenApiExecutionResponse],
     ) -> ExecutionService:
         service = ExecutionService(self._result, execution_pipeline)

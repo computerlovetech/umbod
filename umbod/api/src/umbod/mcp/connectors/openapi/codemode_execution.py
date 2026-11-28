@@ -1,4 +1,5 @@
 import inspect
+from contextlib import AsyncExitStack
 
 from fastmcp import FastMCP
 from pydantic import JsonValue, TypeAdapter
@@ -52,20 +53,19 @@ class OpenApiCodeModeExecutionAdapter:
         self._execution_services = execution_services
 
     async def execute(self, invocation: OpenApiCodeModeInvocation) -> JsonValue:
-        permissions = await capture_openapi_permissions(self._server)
-        store = await self._server.openapi_connector_store_factory.create()
-        client = self._server.openapi_outbound_http_client_factory.create()
-        try:
+        async with AsyncExitStack() as store_scope, AsyncExitStack() as invocation_scope:
+            permissions = await capture_openapi_permissions(self._server)
+            invocation_scope.push_async_callback(_close_resource, permissions.reader)
+            store = await self._server.openapi_connector_store_factory.create()
+            store_scope.push_async_callback(_close_resource, store)
+            client = self._server.openapi_outbound_http_client_factory.create()
+            invocation_scope.push_async_callback(_close_resource, client)
             connector_name = await self._connector_display_name(store, invocation)
             execution_pipeline = self._execution_pipelines.create(connector_name, openapi_response_is_error)
             service = await self._execution_services.create(store, permissions.reader, client, execution_pipeline)
             operation_input = self._operation_input(invocation)
             result = await service.execute(operation_input, permissions.groups)
             return result.model_dump(mode='json')
-        finally:
-            await _close_resource(client)
-            await _close_resource(permissions.reader)
-            await _close_resource(store)
 
     @staticmethod
     def _operation_input(invocation: OpenApiCodeModeInvocation) -> OpenApiOperationInput:

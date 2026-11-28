@@ -8,13 +8,13 @@ from fastmcp.server.auth import AccessToken
 
 from umbod.logging import create_application_failure_signal
 from umbod.core.connectors.openapi.execution import (
-    AsyncStreamingHttpClient,
     OpenApiCapabilityExecutionResult,
     OpenApiExecutionResponse,
     OpenApiOperationInput,
 )
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
 from umbod.core.invocation.tools.execution import ToolExecutionPipeline
+from umbod.core.network.http import AsyncHttpClient
 from umbod.core.permissions.ports import GroupPermissionReader
 from umbod.mcp.connectors.openapi import OpenApiCodeModeExecutionAdapter
 from umbod.mcp.connectors.openapi import deps
@@ -70,7 +70,7 @@ async def test_retained_executor_captures_groups_before_awaits_and_isolates_over
             self,
             store: OpenApiConnectorStore,
             permission_reader: GroupPermissionReader,
-            client: AsyncStreamingHttpClient,
+            client: AsyncHttpClient,
             execution_pipeline: ToolExecutionPipeline[OpenApiExecutionResponse],
         ) -> RecordingExecutionService:
             return RecordingExecutionService()

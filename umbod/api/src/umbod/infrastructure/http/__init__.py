@@ -3,6 +3,7 @@ from .client import (
     HttpRequestError,
     JsonHttpLimits,
     OutboundHttpClientFactory,
+    OutboundHttpClientOptions,
 )
 
 __all__ = [
@@ -10,4 +11,5 @@ __all__ = [
     "HttpRequestError",
     "JsonHttpLimits",
     "OutboundHttpClientFactory",
+    "OutboundHttpClientOptions",
 ]

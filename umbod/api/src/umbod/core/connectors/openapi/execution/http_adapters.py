@@ -1,10 +1,16 @@
-import ssl
-from contextlib import AbstractAsyncContextManager
-from typing import AsyncIterator, Protocol
-
-import httpx
+from typing import Protocol
 from pydantic import ConfigDict, PositiveFloat, PositiveInt
 
+from umbod.core.network.http import (
+    AsyncHttpClient,
+    HttpRedirectPolicy,
+    HttpRequest,
+    HttpTimeoutError,
+    HttpTlsError,
+    HttpTransportError,
+    JsonHttpBody,
+    NoHttpBody,
+)
 from umbod.proxies import Model
 from umbod.core.invocation.failure_evidence import (
     InvocationFailureOrigin,
@@ -19,19 +25,6 @@ from umbod.core.connectors.openapi.execution.service import (
     OutboundTransportError,
     TrustedBearerAuthorization,
 )
-
-
-class AsyncHttpStreamResponse(Protocol):
-    status_code: int
-    headers: httpx.Headers
-
-    def aiter_bytes(self) -> AsyncIterator[bytes]: ...
-
-
-class AsyncStreamingHttpClient(Protocol):
-    def stream(
-        self, method: str, url: str, **kwargs: object
-    ) -> AbstractAsyncContextManager[AsyncHttpStreamResponse]: ...
 
 
 class OutboundPolicyError(OutboundTransportError):
@@ -54,7 +47,7 @@ class OutboundTlsError(OutboundTransportError):
     code = "outbound_tls_failed"
 
 
-class HttpxOutboundOperationAdapter:
+class StreamingOutboundOperationAdapter:
     _safe_response_headers = frozenset(
         {"cache-control", "content-language", "etag", "expires", "last-modified", "retry-after"}
     )
@@ -79,7 +72,7 @@ class HttpxOutboundOperationAdapter:
         }
     )
 
-    def __init__(self, client: AsyncStreamingHttpClient) -> None:
+    def __init__(self, client: AsyncHttpClient) -> None:
         self._client = client
         self._policy = ExactHttpsDestinationPolicy()
 
@@ -101,15 +94,17 @@ class HttpxOutboundOperationAdapter:
             safe_request_headers["Authorization"] = (
                 f"Bearer {request.authorization.token.get_secret_value()}"
             )
-        arguments: dict[str, object] = {
-            "headers": safe_request_headers,
-            "timeout": request.timeout_seconds,
-            "follow_redirects": False,
-        }
-        if request.has_json_body:
-            arguments["json"] = request.json_body
+        outgoing = HttpRequest(
+            method=request.method,
+            url=destination,
+            headers=safe_request_headers,
+            query={},
+            body=JsonHttpBody(request.json_body) if request.has_json_body else NoHttpBody(),
+            timeout=request.timeout_seconds,
+            redirects=HttpRedirectPolicy.DENY,
+        )
         try:
-            async with self._client.stream(request.method, destination, **arguments) as response:
+            async with self._client.stream(outgoing) as response:
                 if 300 <= response.status_code < 400:
                     raise OutboundRedirectError()
                 body = bytearray()
@@ -121,13 +116,10 @@ class HttpxOutboundOperationAdapter:
                         truncated = True
                         break
                     body.extend(chunk)
-                content_type = (
-                    response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-                )
+                headers = {name.lower(): value for name, value in response.headers.items()}
+                content_type = headers.get("content-type", "").split(";", 1)[0].strip().lower()
                 safe_headers = {
-                    name.lower(): value
-                    for name, value in response.headers.items()
-                    if name.lower() in self._safe_response_headers
+                    name: value for name, value in headers.items() if name in self._safe_response_headers
                 }
                 return OpenApiExecutionResponse(
                     status=response.status_code,
@@ -136,29 +128,13 @@ class HttpxOutboundOperationAdapter:
                     body=bytes(body),
                     truncated=truncated,
                 )
-        except OutboundTransportError:
-            raise
-        except httpx.TimeoutException as error:
-            capture_invocation_exception(error, InvocationFailureOrigin.OPENAPI)
-            raise OutboundTimeoutError() from None
-        except httpx.ConnectError as error:
-            capture_invocation_exception(error, InvocationFailureOrigin.OPENAPI)
-            if self._has_tls_cause(error):
+        except HttpTransportError as error:
+            capture_invocation_exception(error.__cause__ or error, InvocationFailureOrigin.OPENAPI)
+            if isinstance(error, HttpTimeoutError):
+                raise OutboundTimeoutError() from None
+            if isinstance(error, HttpTlsError):
                 raise OutboundTlsError() from None
             raise OutboundNetworkError() from None
-        except httpx.HTTPError as error:
-            capture_invocation_exception(error, InvocationFailureOrigin.OPENAPI)
-            raise OutboundNetworkError() from None
-
-    def _has_tls_cause(self, error: BaseException) -> bool:
-        current: BaseException | None = error
-        visited: set[int] = set()
-        while current is not None and id(current) not in visited:
-            if isinstance(current, (ssl.SSLError, ssl.CertificateError)):
-                return True
-            visited.add(id(current))
-            current = current.__cause__ if current.__cause__ is not None else current.__context__
-        return False
 
 
 class SpecificationFetchRequest(Model):
@@ -174,18 +150,25 @@ class SpecificationFetcher(Protocol):
     async def fetch(self, request: SpecificationFetchRequest) -> bytes: ...
 
 
-class HttpxSpecificationFetcher:
+class StreamingSpecificationFetcher:
     def __init__(
-        self, client: AsyncStreamingHttpClient, policy: ExactHttpsDestinationPolicy
+        self, client: AsyncHttpClient, policy: ExactHttpsDestinationPolicy
     ) -> None:
         self._client = client
         self._policy = policy
 
     async def fetch(self, request: SpecificationFetchRequest) -> bytes:
         url = self._policy.validate(request.url, request.approved_hosts)
-        async with self._client.stream(
-            "GET", url, timeout=request.timeout_seconds, follow_redirects=False
-        ) as response:
+        outgoing = HttpRequest(
+            method="GET",
+            url=url,
+            headers={},
+            query={},
+            body=NoHttpBody(),
+            timeout=request.timeout_seconds,
+            redirects=HttpRedirectPolicy.DENY,
+        )
+        async with self._client.stream(outgoing) as response:
             if response.status_code < 200 or response.status_code >= 300:
                 raise ValueError("Specification fetch failed")
             body = bytearray()

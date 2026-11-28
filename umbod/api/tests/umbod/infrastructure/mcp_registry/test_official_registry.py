@@ -17,6 +17,7 @@ from umbod.infrastructure.http import (
     JsonHttpLimits,
     OutboundHttpClientFactory,
 )
+from umbod.infrastructure.http.httpx_client import HttpxClientProxy
 from umbod.infrastructure.mcp_registry import (
     OFFICIAL_REGISTRY_ORIGIN,
     OfficialMcpRegistry,
@@ -63,7 +64,7 @@ async def _registry(
     handler: Callable[[httpx.Request], httpx.Response],
 ) -> AsyncIterator[McpRegistry]:
     async with _http_client(handler) as client:
-        yield OfficialMcpRegistry(AsyncJsonHttpClient(client, limits=JsonHttpLimits()))
+        yield OfficialMcpRegistry(AsyncJsonHttpClient(HttpxClientProxy(client), limits=JsonHttpLimits()))
 
 
 @pytest.mark.asyncio
@@ -263,9 +264,9 @@ async def test_open_official_registry_sets_origin_and_closes_client(
 
     def create_for_origin(
         factory: OutboundHttpClientFactory, base_url: str
-    ) -> httpx.AsyncClient:
+    ) -> HttpxClientProxy:
         origins.append(base_url)
-        return client
+        return HttpxClientProxy(client)
 
     monkeypatch.setattr(
         OutboundHttpClientFactory, "create_for_origin", create_for_origin

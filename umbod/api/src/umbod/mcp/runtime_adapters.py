@@ -17,7 +17,14 @@ class OpenApiRuntimeAdapters:
 
 def create_configured_openapi_runtime_adapters(settings: MCPAppSettings) -> OpenApiRuntimeAdapters:
     openapi_config = settings.openapi_connectors
-    return OpenApiRuntimeAdapters(outbound_http_client_factory=OutboundHttpClientFactory(connect_timeout_seconds=openapi_config.execution_connect_timeout_seconds, read_timeout_seconds=openapi_config.execution_read_timeout_seconds, write_timeout_seconds=openapi_config.execution_write_timeout_seconds, pool_timeout_seconds=openapi_config.execution_pool_timeout_seconds))
+    return OpenApiRuntimeAdapters(
+        outbound_http_client_factory=OutboundHttpClientFactory.hardened(
+            connect_timeout_seconds=openapi_config.execution_connect_timeout_seconds,
+            read_timeout_seconds=openapi_config.execution_read_timeout_seconds,
+            write_timeout_seconds=openapi_config.execution_write_timeout_seconds,
+            pool_timeout_seconds=openapi_config.execution_pool_timeout_seconds,
+        ),
+    )
 
 
 async def create_configured_downstream_client_factory(settings: MCPAppSettings, database: Database) -> DownstreamClientFactory:

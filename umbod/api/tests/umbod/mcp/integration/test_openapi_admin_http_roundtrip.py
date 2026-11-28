@@ -8,7 +8,7 @@ from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.mcp.runtime_options import StoreBackedConnectorRuntimeStateSourceStrategy
 import json
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -27,6 +27,7 @@ from umbod.core.capabilities import (
     UnrestrictedCapabilityReadiness,
 )
 from umbod.core.connectors.openapi.catalog import StoreBackedOpenApiCapabilityCatalog
+from umbod.core.network.http import HttpRedirectPolicy, HttpRequest, NoHttpBody
 from umbod.core.permissions import CapabilityPermissionCatalog, ConnectorToolRef, SaveGroupPermissionsRequest
 from umbod.core.permissions.management import GroupPermissionManagementService
 from tests.mcp_fixtures import empty_connector_plugins
@@ -37,7 +38,7 @@ from umbod.rest.settings import APISettings
 
 class RecordingResponse:
     status_code = 200
-    headers = httpx.Headers({'content-type': 'application/json', 'x-outbound-secret': 'response-secret'})
+    headers: Mapping[str, str] = {'content-type': 'application/json', 'x-outbound-secret': 'response-secret'}
 
     async def aiter_bytes(self) -> AsyncIterator[bytes]:
         yield json.dumps({'inventory': 'available', 'secret': 'response-secret'}).encode()
@@ -49,10 +50,10 @@ async def _response_context() -> AsyncIterator[RecordingResponse]:
 class RecordingOutboundHttpClient:
 
     def __init__(self) -> None:
-        self.requests: list[tuple[str, str, dict[str, object]]] = []
+        self.requests: list[HttpRequest] = []
 
-    def stream(self, method: str, url: str, **kwargs: object) -> AbstractAsyncContextManager[RecordingResponse]:
-        self.requests.append((method, url, kwargs))
+    def stream(self, request: HttpRequest) -> AbstractAsyncContextManager[RecordingResponse]:
+        self.requests.append(request)
         return _response_context()
 
     async def aclose(self) -> None:
@@ -156,7 +157,14 @@ async def test_admin_openapi_connector_roundtrips_through_public_mcp_http(runtim
     assert executed.structured_content['final_value'] == {'status': 'success', 'code': None, 'message': 'OpenAPI capability executed.', 'http_status': 200, 'content_type': 'application/json', 'response_size_bytes': 55, 'truncated': False}
     assert bearer_secret not in json.dumps(executed.structured_content)
     assert 'response-secret' not in json.dumps(executed.structured_content)
-    assert outbound_factory.client.requests == [('GET', 'https://inventory.example.test/items/item-7?expand=supplier', {'headers': {'x-trace': 'trace-9', 'Authorization': f'Bearer {bearer_secret}'}, 'timeout': settings.openapi_connectors.execution_read_timeout_seconds, 'follow_redirects': False})]
+    outbound_request, = outbound_factory.client.requests
+    assert outbound_request.method == 'GET'
+    assert outbound_request.url == 'https://inventory.example.test/items/item-7?expand=supplier'
+    assert outbound_request.headers == {'x-trace': 'trace-9', 'Authorization': f'Bearer {bearer_secret}'}
+    assert outbound_request.query == {}
+    assert isinstance(outbound_request.body, NoHttpBody)
+    assert outbound_request.timeout == settings.openapi_connectors.execution_read_timeout_seconds
+    assert outbound_request.redirects is HttpRedirectPolicy.DENY
     assert disabled.status_code == 200
     assert unavailable_search.structured_content == {'matches': []}
     assert stale.structured_content['final_value']['code'] == 'capability_unavailable'

@@ -9,14 +9,12 @@ import asyncio
 import json
 from typing import Optional
 
-import httpx
-
 from umbod.core.connectors.openapi.execution import (
-    HttpxOutboundOperationAdapter,
     IdentityOpenApiResponseNormalizer,
     OpenApiRequestAuthenticator,
     OpenApiResponseNormalizer,
     OutboundOperationTransport,
+    StreamingOutboundOperationAdapter,
 )
 from umbod.core.invocation.failure_evidence import (
     InvocationExceptionEvidence,
@@ -29,6 +27,7 @@ from umbod.core.invocation.tools.execution import (
     ToolExecutionRequest,
     ToolExecutionFailed,
 )
+from umbod.core.network.http import HttpTimeoutError
 from umbod.mcp.signals import ConnectorInvocationSignalInterceptor, McpInvocationPublisher
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.logging import McpAuditRecorder
@@ -432,7 +431,7 @@ class FailureEvidenceRecorder:
     "stage,error,expected_origin,expected_type,expected_code",
     [
         ("transport", OutboundTimeoutError(), "downstream_openapi", "OutboundTimeoutError", "outbound_timeout"),
-        ("http", httpx.ReadTimeout("private-exception-canary"), "downstream_openapi", "ReadTimeout", "outbound_timeout"),
+        ("http", HttpTimeoutError("private-exception-canary"), "downstream_openapi", "HttpTimeoutError", "outbound_timeout"),
         ("transport", RuntimeError("private-exception-canary"), "internal", "RuntimeError", "outbound_failed"),
         ("authenticator", RuntimeError("private-exception-canary"), "internal", "RuntimeError", "outbound_failed"),
         ("normalizer", RuntimeError("private-exception-canary"), "internal", "RuntimeError", "outbound_failed"),
@@ -462,7 +461,7 @@ async def test_openapi_failure_evidence_preserves_origin_and_one_safe_completion
     if stage == "transport":
         transport = RecordingTransport(events, error)
     elif stage == "http":
-        transport = HttpxOutboundOperationAdapter(RaisingAsyncHttpClient(error))
+        transport = StreamingOutboundOperationAdapter(RaisingAsyncHttpClient(error))
     elif stage == "authenticator":
         authenticator = FailingAuthenticator(error)
     else:
@@ -554,7 +553,7 @@ async def test_openapi_http_error_status_is_a_successful_completion_without_fail
     service = OpenApiCapabilityExecutionService(
         store, RecordingAuthorizer(events, True), AggregateOpenApiOperationResolver(),
         RecordingCompiler(events),
-        HttpxOutboundOperationAdapter(
+        StreamingOutboundOperationAdapter(
             RecordingAsyncHttpClient(FakeStreamResponse(status, {}, (b"private-response-canary",)))
         ),
         IdentityOpenApiResponseNormalizer(),

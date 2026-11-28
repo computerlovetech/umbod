@@ -7,10 +7,10 @@ from umbod.core.persistence import PersistenceRuntime
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 import json
+from collections.abc import Mapping
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator
-import httpx
 import jwt
 import pytest
 from fastapi import Request
@@ -28,6 +28,7 @@ from umbod.core.capabilities import (
 from umbod.core.connectors.native.runtime import ConnectorRuntime
 from umbod.core.connectors.native.runtime.tools import ConcreteConnectorToolMapping
 from umbod.core.connectors.openapi.catalog import StoreBackedOpenApiCapabilityCatalog
+from umbod.core.network.http import HttpRedirectPolicy, HttpRequest, NoHttpBody
 from umbod.core.permissions import CapabilityPermissionCatalog, ConnectorPermissionUpdate, ConnectorToolRef, SaveGroupPermissionsRequest, ToolPermissionUpdate, UpdateGroupPermissionsRequest
 from umbod.core.permissions.management import GroupPermissionManagementService
 from umbod.mcp.auth import MCPAuthProviderFactory
@@ -41,7 +42,7 @@ from umbod.rest.settings import APISettings
 
 class FakeStreamResponse:
     status_code = 200
-    headers = httpx.Headers({'content-type': 'application/json', 'etag': 'safe-etag', 'x-secret': 'response-canary'})
+    headers: Mapping[str, str] = {'content-type': 'application/json', 'etag': 'safe-etag', 'x-secret': 'response-canary'}
 
     async def aiter_bytes(self) -> AsyncIterator[bytes]:
         yield json.dumps({'items': ['x' * 5000]}).encode()
@@ -53,10 +54,10 @@ async def _fake_stream_context() -> AsyncIterator[FakeStreamResponse]:
 class RecordingOutboundHttpClient:
 
     def __init__(self) -> None:
-        self.requests: list[tuple[str, str, dict[str, object]]] = []
+        self.requests: list[HttpRequest] = []
 
-    def stream(self, method: str, url: str, **kwargs: object) -> AbstractAsyncContextManager[FakeStreamResponse]:
-        self.requests.append((method, url, kwargs))
+    def stream(self, request: HttpRequest) -> AbstractAsyncContextManager[FakeStreamResponse]:
+        self.requests.append(request)
         return _fake_stream_context()
 
     async def aclose(self) -> None:
@@ -197,7 +198,14 @@ async def test_admin_to_codemode_execution_enforces_live_state() -> None:
         assert executed.structured_content['outcome'] == 'success'
         result = executed.structured_content['final_value']
         assert result == {'status': 'success', 'code': None, 'message': 'OpenAPI capability executed.', 'http_status': 200, 'content_type': 'application/json', 'response_size_bytes': 4096, 'truncated': True}
-        assert outbound_factory.client.requests == [('GET', 'https://api.example.test/items/safe-item?filter=raw-request-canary', {'headers': {'x-trace': 'secret-canary', 'Authorization': 'Bearer runtime-token'}, 'timeout': settings.openapi_connectors.execution_read_timeout_seconds, 'follow_redirects': False})]
+        outbound_request, = outbound_factory.client.requests
+        assert outbound_request.method == 'GET'
+        assert outbound_request.url == 'https://api.example.test/items/safe-item?filter=raw-request-canary'
+        assert outbound_request.headers == {'x-trace': 'secret-canary', 'Authorization': 'Bearer runtime-token'}
+        assert outbound_request.query == {}
+        assert isinstance(outbound_request.body, NoHttpBody)
+        assert outbound_request.timeout == settings.openapi_connectors.execution_read_timeout_seconds
+        assert outbound_request.redirects is HttpRedirectPolicy.DENY
         assert admin.put(activation_path, json=disabled_activation).status_code == 200
         await reconcile_openapi_discovery(mcp)
         targets = admin.get('/api/admin/mcp-permissions/assignable-targets').json()

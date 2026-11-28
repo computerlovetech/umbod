@@ -99,6 +99,7 @@ def test_infrastructure_package_exports_public_kernel() -> None:
 def test_infrastructure_public_surface_is_composition_only() -> None:
     assert set(infrastructure.__all__) == {
         'OutboundHttpClientFactory',
+        'OutboundHttpClientOptions',
         'open_anonymous_mcp_initialization',
         'open_official_mcp_registry',
         'migrate_local_content',

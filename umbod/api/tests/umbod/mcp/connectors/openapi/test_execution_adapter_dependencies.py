@@ -7,13 +7,13 @@ import pytest
 
 from tests.support.application_failures import CapturingApplicationFailures
 from umbod.core.connectors.openapi.execution import (
-    AsyncStreamingHttpClient,
     OpenApiCapabilityExecutionResult,
     OpenApiExecutionResponse,
     OpenApiOperationInput,
 )
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
 from umbod.core.invocation.tools.execution import ToolExecutionPipeline
+from umbod.core.network.http import AsyncHttpClient
 from umbod.core.permissions.ports import GroupPermissionReader
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode import OpenApiCodeModeInvocation
 from umbod.mcp.connectors.openapi import OpenApiCodeModeExecutionAdapter
@@ -47,7 +47,7 @@ class RecordingExecutionServiceFactory:
         self._entered = entered
         self._release = release
         self.resources: list[tuple[
-            OpenApiConnectorStore, GroupPermissionReader, AsyncStreamingHttpClient,
+            OpenApiConnectorStore, GroupPermissionReader, AsyncHttpClient,
             ToolExecutionPipeline[OpenApiExecutionResponse],
         ]] = []
         self.services: list[RecordingExecutionService] = []
@@ -56,7 +56,7 @@ class RecordingExecutionServiceFactory:
         self,
         store: OpenApiConnectorStore,
         permission_reader: GroupPermissionReader,
-        client: AsyncStreamingHttpClient,
+        client: AsyncHttpClient,
         execution_pipeline: ToolExecutionPipeline[OpenApiExecutionResponse],
     ) -> RecordingExecutionService:
         self.resources.append((store, permission_reader, client, execution_pipeline))
